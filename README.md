@@ -398,12 +398,26 @@ edit `helm/php-demo/templates/configmap.yaml` and re-run `deploy.sh` (or
 ## Removing the deployment
 
 ```bash
-helm uninstall php-demo --namespace php-demo
+helm uninstall php-demo --namespace bpa-demo
 
 # Optionally remove persistent data and the namespace
-kubectl delete pvc -n php-demo --all
-kubectl delete namespace php-demo
+kubectl delete pvc -n bpa-demo --all
+kubectl delete namespace bpa-demo
 ```
+
+## Resetting the database
+
+`helm upgrade` preserves the MariaDB PVC across releases to protect existing
+data.  To wipe the database and reseed from scratch (e.g. after schema changes):
+
+```bash
+helm uninstall php-demo -n bpa-demo
+kubectl delete pvc php-demo-php-demo-mariadb-data -n bpa-demo
+./scripts/deploy.sh
+```
+
+MariaDB will reinitialise automatically from the SQL files embedded in the
+`db-init` ConfigMap (`helm/php-demo/sql/schema.sql` + `seed.sql`).
 
 ---
 
