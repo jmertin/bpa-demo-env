@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Copy this file to .config and fill in real values.
+# .config is excluded from git via .gitignore and must never be committed.
+
+# ── Docker Registry ──────────────────────────────────────────────────────────
+REGISTRY="registry.example.com"
+REGISTRY_USER="admin"
+REGISTRY_PASSWORD="changeme"
+
+# ── Image settings ───────────────────────────────────────────────────────────
+IMAGE_PREFIX="php-demo"
+IMAGE_TAG="1.0.0"
+BUILD_PLATFORM="linux/amd64"
+
+# ── MariaDB credentials ───────────────────────────────────────────────────────
+MARIADB_ROOT_PASSWORD="changeme_root"
+MARIADB_DATABASE="phpapp"
+MARIADB_USER="phpuser"
+MARIADB_PASSWORD="changeme_user"
+
+# ── Kubernetes / Helm deployment ──────────────────────────────────────────────
+APP_NAMESPACE="php-demo"
+APP_HOSTNAME="php-demo.example.com"
+TLS_CLUSTER_ISSUER="letsencrypt-prod"
+INGRESS_CLASS_NAME="nginx"          # e.g. nginx, traefik, haproxy, alb
+KUBECONFIG="${HOME}/.kube/config"

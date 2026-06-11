@@ -1,0 +1,42 @@
+PHP Demo deployed successfully.
+
+  Release namespace : {{ .Release.Namespace }}
+  Release name      : {{ .Release.Name }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pod layout (single pod, three containers sharing network namespace):
+
+  ┌─────────────────────────────────────────────────┐
+  │  Pod: {{ include "php-demo.fullname" . }}                        │
+  │                                                 │
+  │  [nginx]      port 8080  (public-facing)        │
+  │     │ fastcgi → 127.0.0.1:9000                  │
+  │  [php-fpm]    port 9000                         │
+  │     │ PDO    → 127.0.0.1:3306                   │
+  │  [mariadb]    port 3306                         │
+  └─────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{- if .Values.ingress.enabled }}
+Application URL (requires valid DNS and TLS certificate via cert-manager):
+
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}/
+{{- end }}
+{{- else }}
+Ingress is disabled.  Port-forward to reach the application:
+
+  kubectl port-forward -n {{ .Release.Namespace }} \
+    svc/{{ include "php-demo.fullname" . }} 8080:8080
+
+  Then open http://localhost:8080/
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+To watch pod startup:
+
+  kubectl get pods -n {{ .Release.Namespace }} -l \
+    "app.kubernetes.io/instance={{ .Release.Name }}" -w

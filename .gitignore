@@ -1,0 +1,19 @@
+# Secret configuration - never commit
+.config
+
+# Generated app archives
+docker/php-fpm/app.tar.gz
+docker/nginx/app.tar.gz
+
+# Helm local overrides
+helm/php-demo/values.local.yaml
+
+# Claude Code internal files
+.claude/
+RESUME
+
+# Editor / OS artifacts
+.DS_Store
+*.swp
+*.swo
+*~

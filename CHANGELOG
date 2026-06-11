@@ -1,0 +1,245 @@
+CHANGELOG – php-demo / BPA-Demo
+================================
+
+All changes are listed in reverse chronological order.
+Format: YYYY-MM-DD @ HH:MM  <summary>
+
+------------------------------------------------------------------------------
+2026-06-11 @ 14:00  BPA-Demo web shop application (Phase 5)
+
+  Full smart-home device web shop built on top of the existing Kubernetes
+  pod platform.  Three brands (Shelly, SonOff, Tuya), 150 products, full
+  basket and checkout flow, admin panel, and monitoring HTTP headers.
+
+  New files – PHP application (app/src/):
+  - index.php              Front-controller; routes via ?page=<slug>
+  - config/app.php         Session bootstrap, CSRF token helpers
+  - config/database.php    PDO singleton, reads credentials from environment
+  - lib/validate.php       Type/size validators (string, int, email, price,
+                           CC number / Luhn, expiry, CVV, username, password)
+  - lib/page_id.php        set_monitoring_headers() emits X-Page-ID,
+                           X-User-Role, X-Basket-Total, X-Alert, X-Use-Case
+  - lib/auth.php           Login with $SETUP$<plain> → bcrypt upgrade on first
+                           login; session-fixation prevention; role helpers
+  - lib/product.php        product_list() with filters (brand, capability,
+                           search, price range, pagination); product_get_by_slug/id
+  - lib/basket.php         Session-based basket; basket_total() forces 0.00
+                           for empty_basket use-case users
+  - lib/order.php          order_create() with DB transaction; order_get();
+                           order_list_for_user()
+  - lib/usecase.php        File-based use-case loader; admin assign/unassign;
+                           usecase_available() scans usecases/ directory
+  - pages/shop.php         Product grid with filter bar and pagination
+  - pages/product.php      Single product detail page
+  - pages/basket.php       Basket view/edit (POST–Redirect–GET pattern)
+  - pages/checkout.php     Billing + fake CC payment form with full validation
+  - pages/order.php        Order confirmation + order history list
+  - pages/login.php        Login form with CSRF protection
+  - pages/logout.php       Session destroy + redirect
+  - pages/admin.php        Admin dashboard: stats, user list, use-case assignment
+  - templates/layout.php   Full HTML page shell with embedded CSS:
+                           dark sidebar, sticky topbar, product grid,
+                           basket table, checkout card layout, admin table,
+                           badge/pill components, responsive breakpoints
+  - templates/footer.php   Closing </main>, page-wrapper, and <footer>
+  - usecases/trouble.php   5000 sequential DB reads (simulates slow session)
+  - usecases/empty_basket.php  No-op; basket_total() handles forced-zero logic
+  - setup/init_users.php   CLI-only DB connectivity and seed check script
+
+  New files – Database SQL (helm/php-demo/sql/):
+  - schema.sql             8 tables: brands, capabilities, products,
+                           product_capabilities, users, user_usecases,
+                           orders, order_items
+  - seed.sql               3 brands, 6 capabilities, 150 products (50 × brand),
+                           product_capabilities mappings, 13 demo users
+                           (admin, trouble, empty, alice … jack) with
+                           $SETUP$demo123 passwords, pre-assigned use cases
+
+  New files – Helm chart:
+  - helm/php-demo/templates/db-init-configmap.yaml
+                           ConfigMap embedding schema.sql + seed.sql via
+                           .Files.Get; mounted to /docker-entrypoint-initdb.d/
+                           in the mariadb container for first-start auto-init
+
+  Modified files – Helm chart:
+  - helm/php-demo/templates/deployment.yaml
+                           Added db-init volume mount (mariadb container) and
+                           db-init volume (ConfigMap) in the volumes section
+
+  Modified files – Docker:
+  - docker/php-fpm/Dockerfile
+                           Added php-mbstring to apt-get install (required by
+                           mb_strlen() in validate.php)
+  - docker/nginx/config/default.conf
+                           Added  location ^~ /setup/ { deny all; return 403; }
+                           before the catch-all to block web access to CLI tools
+
+  Modified files – Scripts:
+  - scripts/deploy.sh      Added post-deploy kubectl exec step that runs
+                           setup/init_users.php inside the php-fpm container
+                           to verify DB connectivity and seed state
+
+  Modified files – Repository:
+  - .gitignore             Added .claude/ and RESUME exclusions
+  - README.md              Updated with BPA-Demo application documentation
+  - CHANGELOG              This entry
+
+  Special users (all login with password demo123):
+    admin    – role admin; access to admin panel
+    trouble  – use case 'trouble' (5000 sequential DB reads)
+    empty    – use case 'empty_basket' (basket total forced to 0.00)
+    alice, bob, charlie, diana, eve, frank, grace, henry, iris, jack – regular users
+
+  Monitoring HTTP headers on every response:
+    X-Page-ID       MODULE-ACTION-TARGET
+    X-User-Role     anonymous | user | admin
+    X-Basket-Total  float (EUR, 2 decimals)
+    X-Alert         set on login failure, validation errors
+    X-Use-Case      name of active use case (if any)
+
+------------------------------------------------------------------------------
+2026-06-11 @ 12:42  Ingress class name configurable from .config
+
+  Problem: ingress.className was hardcoded to "nginx" in values.yaml and
+  never written into values.local.yaml by deploy.sh, making it impossible
+  to target a different ingress controller (traefik, haproxy, alb, etc.)
+  without editing the checked-in chart.
+
+  Modified files:
+  - .config.example
+      Added INGRESS_CLASS_NAME variable (default "nginx") with a comment
+      listing common alternatives.
+  - scripts/deploy.sh
+      Added className: "${INGRESS_CLASS_NAME}" to the ingress block written
+      into values.local.yaml so the value flows from .config at deploy time.
+  - helm/php-demo/values.yaml
+      Set ingress.className default to "" (empty) with a comment directing
+      operators to set INGRESS_CLASS_NAME in .config.
+  - README.md
+      Added INGRESS_CLASS_NAME to the .config example block; updated the
+      Helm values table to show the empty default and its source.
+
+------------------------------------------------------------------------------
+2026-06-11 @ 11:28  Added CHANGELOG
+
+  - Created this file documenting the full change history of the project.
+
+------------------------------------------------------------------------------
+2026-06-11 @ 11:25  Updated README.md with all latest changes
+
+  - Rewrote README.md as a single coherent document (replaced piecemeal
+    additions from previous sessions).
+  - Added dedicated "Registry credentials" section with full flow diagram
+    explaining the .config → values.local.yaml → Secret → ServiceAccount →
+    Pod chain.
+  - Documented automountServiceAccountToken: false and its security rationale.
+  - Step 3 (push) now explains why printf '%s' is used instead of echo.
+  - Step 4 (deploy) now includes a table of all Kubernetes resources created
+    by Helm.
+  - Helm values table reorganised with imageCredentials.* rows at the top.
+
+------------------------------------------------------------------------------
+2026-06-11 @ 11:22  Registry credentials via Kubernetes ServiceAccount
+
+  New files:
+  - helm/php-demo/templates/serviceaccount.yaml
+      Dedicated ServiceAccount for the pod with automountServiceAccountToken
+      set to false.  imagePullSecrets is conditionally set to the registry
+      pull secret when credentials are provided.
+  - helm/php-demo/templates/registry-secret.yaml
+      kubernetes.io/dockerconfigjson Secret built from imageCredentials.*
+      values.  Only rendered when username and password are both non-empty,
+      keeping the chart usable against public registries without credentials.
+
+  Modified files:
+  - helm/php-demo/templates/_helpers.tpl
+      Added php-demo.registrySecretName helper and php-demo.dockerconfigjson
+      helper that encodes base64(<username>:<password>) into the auth field.
+  - helm/php-demo/templates/deployment.yaml
+      Replaced pod-level imagePullSecrets block with serviceAccountName
+      referencing the new ServiceAccount.  Pull credentials are now inherited
+      automatically by the kubelet for all three containers.
+  - helm/php-demo/values.yaml
+      Replaced imagePullSecrets: [] with imageCredentials stanza
+      (registry / username / password, all empty by default).
+  - scripts/deploy.sh
+      Added imageCredentials block (sourced from .config) to the generated
+      values.local.yaml so credentials reach Helm at deploy time.
+  - scripts/push.sh
+      Fixed docker login: replaced echo with printf '%s' when piping the
+      password to --password-stdin.  echo appends a trailing newline that
+      some registry daemons reject as an invalid credential.
+
+------------------------------------------------------------------------------
+2026-06-10 @ 15:55  Created README.md
+
+  - Added full project README covering: project structure, architecture
+    diagram, design decisions table, prerequisites, quick-start workflow
+    (configure → build → push → deploy → verify), application deployment
+    detail, security update cron job explanation, Helm chart reference with
+    values table and manual install example, config-without-rebuild note,
+    and teardown instructions.
+
+------------------------------------------------------------------------------
+2026-06-10 @ 15:45  Initial project creation
+
+  Created the complete project from scratch with the following structure:
+
+  Application source (app/src/):
+  - index.php   Front-controller and home page showing pod layout.
+  - db.php      Live MariaDB connectivity test (server version, uptime).
+  - info.php    PHP runtime details (version, loaded extensions).
+
+  Docker build context – php-fpm (docker/php-fpm/):
+  - Dockerfile       Ubuntu 26.04 minimal base.  Installs php-fpm and
+                     php-mysql only.  PHP version auto-discovered at build
+                     time; stable symlinks created for config and binary so
+                     the entrypoint is version-agnostic.  Application
+                     deployed from app.tar.gz archive as required.
+  - entrypoint.sh    Starts cron daemon then launches php-fpm -F -R.
+  - config/php-fpm.conf   Global PHP-FPM config (no daemon, stderr logging).
+  - config/www.conf        Pool config: TCP listen 0.0.0.0:9000, dynamic PM,
+                           workers run as www-data.
+  - config/security-updates  cron.d rule: daily apt security upgrade at 03:15.
+
+  Docker build context – nginx (docker/nginx/):
+  - Dockerfile       Ubuntu 26.04 minimal base.  Installs nginx only.
+                     Temp paths moved to /tmp so worker can run without root
+                     privileges on the filesystem.
+  - entrypoint.sh    Validates config, starts cron, then runs nginx in
+                     foreground (daemon off).
+  - config/nginx.conf      Main nginx config; access/error log to
+                           stdout/stderr via /proc/self/fd.
+  - config/default.conf    Virtual host: listen 8080, all requests proxied
+                           to PHP-FPM at 127.0.0.1:9000 via FastCGI with
+                           SCRIPT_FILENAME pointing to the php-fpm
+                           container's /var/www/html.
+  - config/security-updates  cron.d rule: daily apt security upgrade at 03:30.
+
+  Build and deployment scripts (scripts/):
+  - package-app.sh   Creates docker/php-fpm/app.tar.gz from app/src/.
+  - build.sh         Calls package-app.sh then docker build for both images
+                     using --no-cache --pull.
+  - push.sh          Authenticates with the registry and pushes both images.
+  - deploy.sh        Generates values.local.yaml from .config, runs
+                     helm upgrade --install, then deletes values.local.yaml.
+
+  Helm chart (helm/php-demo/):
+  - Chart.yaml
+  - values.yaml           Checked-in defaults; no secrets.
+  - .helmignore           Excludes values.local.yaml.
+  - templates/_helpers.tpl
+  - templates/deployment.yaml   Single pod with nginx, php-fpm, and mariadb
+                                 containers sharing the network namespace.
+  - templates/service.yaml      ClusterIP service on port 8080.
+  - templates/ingress.yaml      TLS ingress with cert-manager annotation.
+  - templates/configmap.yaml    nginx and PHP-FPM runtime configs mounted
+                                 over image defaults.
+  - templates/secret.yaml       MariaDB credentials as Opaque Secret.
+  - templates/pvc.yaml          1 Gi PersistentVolumeClaim for MariaDB data.
+  - templates/NOTES.txt
+
+  Root files:
+  - .gitignore        Excludes .config, generated tar archives, and
+                      values.local.yaml.
+  - .config.example   Safe-to-commit template for the .config file.
