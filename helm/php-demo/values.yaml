@@ -8,13 +8,13 @@ image:
   phpfpm:
     repository: registry.example.com/php-demo/php-fpm
     tag: "1.0.0"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always   # custom image – always pull so retagged builds are picked up
   nginx:
     repository: registry.example.com/php-demo/nginx
     tag: "1.0.0"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always   # custom image – always pull so retagged builds are picked up
   mariadb:
-    # Major version is pinned; patch updates come from the upstream tag stream.
+    # Pinned upstream tag; IfNotPresent avoids redundant pulls on every restart.
     repository: mariadb
     tag: "11"
     pullPolicy: IfNotPresent
