@@ -9,6 +9,8 @@ REGISTRY_PASSWORD="changeme"
 
 # ── Image settings ───────────────────────────────────────────────────────────
 IMAGE_PREFIX="php-demo"
+# Base version only – build.sh appends b<N> automatically (e.g. 1.0.0b4).
+# The counter is stored in .build_number and updated on every build.sh run.
 IMAGE_TAG="1.0.0"
 BUILD_PLATFORM="linux/amd64"
 
