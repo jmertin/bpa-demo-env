@@ -5,6 +5,18 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-11 @ 14:45  Set imagePullPolicy Always for custom images
+
+  Problem: redeploying a rebuilt image with the same tag had no effect because
+  Kubernetes found the tag already cached on the node and skipped the pull
+  (imagePullPolicy: IfNotPresent).
+
+  Modified file: helm/php-demo/values.yaml
+  - phpfpm.pullPolicy: IfNotPresent → Always
+  - nginx.pullPolicy:  IfNotPresent → Always
+  - mariadb.pullPolicy remains IfNotPresent (pinned upstream tag, no local rebuilds)
+
+------------------------------------------------------------------------------
 2026-06-11 @ 14:30  Fix MariaDB stale lock crash loop
 
   Problem: MariaDB entered a crash loop with error 11 (EAGAIN) on
