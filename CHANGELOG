@@ -5,6 +5,27 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-11 @ 15:10  Auto-increment build number in image tag
+
+  Problem: redeploying with the same IMAGE_TAG caused Kubernetes to skip the
+  pull even with imagePullPolicy: Always when the node already had a cached
+  image with that exact tag and digest.
+
+  Solution: build.sh now maintains a local .build_number counter and appends
+  b<N> to IMAGE_TAG on every build (e.g. 1.0.0 → 1.0.0b1 → 1.0.0b2).
+  The updated full tag is written back into .config so push.sh and deploy.sh
+  pick it up automatically with no changes required.
+
+  Modified files:
+  - scripts/build.sh   Reads .build_number (creates at 0 if absent), increments
+                       it, strips any existing b<N> suffix from IMAGE_TAG, writes
+                       <base>b<N> back to .config, then re-sources .config before
+                       running docker build.
+  - .gitignore         Added .build_number (local counter, not committed).
+  - .config.example    Added comment explaining the base-version / auto-suffix
+                       convention.
+
+------------------------------------------------------------------------------
 2026-06-11 @ 14:45  Set imagePullPolicy Always for custom images
 
   Problem: redeploying a rebuilt image with the same tag had no effect because

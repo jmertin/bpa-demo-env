@@ -1,5 +1,6 @@
-# Secret configuration - never commit
+# Secret configuration and local build state - never commit
 .config
+.build_number
 
 # Generated app archives
 docker/php-fpm/app.tar.gz
