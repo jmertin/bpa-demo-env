@@ -79,3 +79,8 @@ data:
     access.log           = /proc/self/fd/2
     catch_workers_output = yes
     decorate_workers_output = no
+    env[MARIADB_HOST]     = $MARIADB_HOST
+    env[MARIADB_PORT]     = $MARIADB_PORT
+    env[MARIADB_DATABASE] = $MARIADB_DATABASE
+    env[MARIADB_USER]     = $MARIADB_USER
+    env[MARIADB_PASSWORD] = $MARIADB_PASSWORD
