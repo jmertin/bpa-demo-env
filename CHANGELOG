@@ -5,6 +5,28 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-11 @ 15:30  Fix PHP-FPM environment variable isolation
+
+  Problem: PHP-FPM's compiled-in default is clear_env = yes, which strips
+  ALL environment variables before spawning worker processes.  getenv() in
+  PHP scripts therefore always returned false, the ?: '' fallback in
+  database.php produced an empty string, and PDO/mysqlnd sent no password
+  to MariaDB ("using password: NO").
+
+  Fix: add explicit env[VAR] = $VAR lines to the PHP-FPM pool config so
+  only the required variables are forwarded to workers.  This is preferable
+  to clear_env = no because it exposes nothing beyond what the app needs.
+
+  Modified files:
+  - docker/php-fpm/config/www.conf           Added env[] for MARIADB_HOST,
+    MARIADB_PORT, MARIADB_DATABASE, MARIADB_USER, MARIADB_PASSWORD.
+  - helm/php-demo/templates/configmap.yaml   Same env[] lines in the
+    ConfigMap that overrides www.conf at runtime in Kubernetes.
+
+  Both files must stay in sync; the ConfigMap takes effect immediately on
+  the next deploy without a new image build.
+
+------------------------------------------------------------------------------
 2026-06-11 @ 15:10  Auto-increment build number in image tag
 
   Problem: redeploying with the same IMAGE_TAG caused Kubernetes to skip the
