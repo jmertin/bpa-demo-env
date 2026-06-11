@@ -5,6 +5,34 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-11 @ 14:30  Fix MariaDB stale lock crash loop
+
+  Problem: MariaDB entered a crash loop with error 11 (EAGAIN) on
+  aria_log_control and ibdata1.  fcntl locks are process-bound but on some
+  container runtimes the replacement container starts before the previous
+  process's OS resources are fully reaped, causing the new MariaDB to see a
+  held lock and abort.
+
+  Root cause: no graceful shutdown hook + no lock cleanup on restart.
+
+  Modified file: helm/php-demo/templates/deployment.yaml
+  - Added terminationGracePeriodSeconds: 60 to the pod spec so MariaDB
+    receives SIGTERM with enough runway before SIGKILL.
+  - Added initContainer mariadb-lock-cleanup (uses the same mariadb image)
+    that removes aria_log_control, aria_log.00000001, multi-master.info and
+    any *.pid files before the main container starts.  Removing
+    aria_log_control is safe because all schema tables use InnoDB; MariaDB
+    recreates the file and runs Aria crash recovery automatically.
+  - Added lifecycle.preStop exec hook on the mariadb container:
+    mariadb-admin shutdown flushes InnoDB/Aria and releases file locks
+    cleanly before the kubelet sends SIGTERM.
+
+  Immediate remediation (existing deployment):
+    helm uninstall php-demo -n bpa-demo
+    kubectl delete pvc php-demo-php-demo-mariadb-data -n bpa-demo
+    ./scripts/deploy.sh
+
+------------------------------------------------------------------------------
 2026-06-11 @ 14:00  BPA-Demo web shop application (Phase 5)
 
   Full smart-home device web shop built on top of the existing Kubernetes

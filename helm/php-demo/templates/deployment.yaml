@@ -23,9 +23,39 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 
-      # Give MariaDB time to initialise before containers are considered
-      # failed; individual readiness probes gate traffic independently.
-      initContainers: []
+      # 60 s grace period lets MariaDB flush and close files cleanly
+      # before the kubelet escalates to SIGKILL.
+      terminationGracePeriodSeconds: 60
+
+      initContainers:
+        # Remove stale Aria lock file left by an unclean shutdown (SIGKILL).
+        # fcntl locks are process-bound and released on exit, but on some
+        # container runtimes the new container starts before the previous
+        # process's OS resources are fully reaped.  Removing aria_log_control
+        # is safe here because all schema tables use InnoDB; MariaDB will
+        # recreate the file and run Aria crash recovery on first start.
+        - name: mariadb-lock-cleanup
+          image: "{{ .Values.image.mariadb.repository }}:{{ .Values.image.mariadb.tag }}"
+          imagePullPolicy: {{ .Values.image.mariadb.pullPolicy }}
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              DATA=/var/lib/mysql
+              for f in aria_log_control aria_log.00000001 \
+                        multi-master.info *.pid; do
+                target="${DATA}/${f}"
+                # use glob-safe removal
+                ls ${target} 2>/dev/null | xargs -r rm -f
+              done
+              echo "Lock cleanup complete."
+          volumeMounts:
+            - name: mariadb-data
+              mountPath: /var/lib/mysql
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false
 
       containers:
 
@@ -147,6 +177,16 @@ spec:
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          lifecycle:
+            preStop:
+              exec:
+                # Flush and shut down MariaDB gracefully before SIGTERM arrives.
+                # This ensures InnoDB/Aria write the final checkpoint and release
+                # all file locks cleanly, preventing stale locks on the next start.
+                command:
+                  - bash
+                  - -c
+                  - mariadb-admin -u root -p"${MARIADB_ROOT_PASSWORD}" shutdown 2>/dev/null || true
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: false   # official mariadb image initialises as root then drops
