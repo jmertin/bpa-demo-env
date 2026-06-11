@@ -1,0 +1,169 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "php-demo.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "php-demo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "php-demo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "php-demo.labels" . | nindent 8 }}
+    spec:
+      # Pull credentials are attached to the ServiceAccount; the pod inherits
+      # them automatically without listing the secret here.
+      serviceAccountName: {{ include "php-demo.fullname" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      # Give MariaDB time to initialise before containers are considered
+      # failed; individual readiness probes gate traffic independently.
+      initContainers: []
+
+      containers:
+
+        # ── nginx ─────────────────────────────────────────────────────────────
+        - name: nginx
+          image: "{{ .Values.image.nginx.repository }}:{{ .Values.image.nginx.tag }}"
+          imagePullPolicy: {{ .Values.image.nginx.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # Mount ConfigMap-managed config over the image defaults so nginx
+          # settings can be changed without a new image build.
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+            - name: tmp-nginx
+              mountPath: /tmp
+          {{- with .Values.resources.nginx }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.probes.nginx.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.probes.nginx.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # nginx writes temp files to /tmp
+            runAsNonRoot: false             # nginx master needs to bind/manage workers
+
+        # ── php-fpm ───────────────────────────────────────────────────────────
+        - name: php-fpm
+          image: "{{ .Values.image.phpfpm.repository }}:{{ .Values.image.phpfpm.tag }}"
+          imagePullPolicy: {{ .Values.image.phpfpm.pullPolicy }}
+          ports:
+            - name: fastcgi
+              containerPort: 9000
+              protocol: TCP
+          env:
+            # Expose MariaDB connection details to PHP via environment.
+            # The application reads these from getenv().
+            - name: MARIADB_HOST
+              value: "127.0.0.1"
+            - name: MARIADB_PORT
+              value: "3306"
+            - name: MARIADB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "php-demo.secretName" . }}
+                  key: MARIADB_DATABASE
+            - name: MARIADB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "php-demo.secretName" . }}
+                  key: MARIADB_USER
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "php-demo.secretName" . }}
+                  key: MARIADB_PASSWORD
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/php-fpm-pool.d/www.conf
+              subPath: www.conf
+              readOnly: true
+          {{- with .Values.resources.phpfpm }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.probes.phpfpm.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.probes.phpfpm.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false   # master process needs root; workers drop to www-data
+
+        # ── mariadb ───────────────────────────────────────────────────────────
+        - name: mariadb
+          image: "{{ .Values.image.mariadb.repository }}:{{ .Values.image.mariadb.tag }}"
+          imagePullPolicy: {{ .Values.image.mariadb.pullPolicy }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ include "php-demo.secretName" . }}
+          volumeMounts:
+            - name: mariadb-data
+              mountPath: /var/lib/mysql
+            - name: db-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+          {{- with .Values.resources.mariadb }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.probes.mariadb.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.probes.mariadb.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false   # official mariadb image initialises as root then drops
+
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ include "php-demo.configmapName" . }}
+        - name: tmp-nginx
+          emptyDir: {}
+        - name: mariadb-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "php-demo.pvcName" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: db-init
+          configMap:
+            name: {{ include "php-demo.fullname" . }}-db-init

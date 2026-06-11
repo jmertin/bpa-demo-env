@@ -1,0 +1,12 @@
+apiVersion: v2
+name: php-demo
+description: Demo pod – nginx + PHP-FPM + MariaDB in a single Kubernetes pod
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - php
+  - nginx
+  - mariadb
+maintainers:
+  - name: platform-team

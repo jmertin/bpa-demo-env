@@ -1,0 +1,15 @@
+{{- /* ConfigMap that holds the MariaDB init SQL files.
+       MariaDB runs them in alphabetical order from /docker-entrypoint-initdb.d/
+       only on the very first start (when the data directory is empty). */ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "php-demo.fullname" . }}-db-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "php-demo.labels" . | nindent 4 }}
+data:
+  01-schema.sql: |
+{{ .Files.Get "sql/schema.sql" | indent 4 }}
+  02-seed.sql: |
+{{ .Files.Get "sql/seed.sql" | indent 4 }}

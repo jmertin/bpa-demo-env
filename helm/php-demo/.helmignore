@@ -1,0 +1,5 @@
+# Helm ignore file – patterns relative to the chart root.
+values.local.yaml
+*.local.yaml
+.DS_Store
+*.swp
