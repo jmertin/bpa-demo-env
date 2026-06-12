@@ -107,9 +107,12 @@ img{max-width:100%;display:block}
 }
 .product-card:hover{box-shadow:0 8px 24px rgba(0,0,0,.14);transform:translateY(-3px)}
 .product-card-img{
-  height:140px;display:flex;align-items:center;justify-content:center;
-  font-size:3rem;background:linear-gradient(135deg,#e8eaf6,#c5cae9);
+  height:160px;display:flex;align-items:center;justify-content:center;
+  overflow:hidden;background:linear-gradient(135deg,#e8eaf6,#c5cae9);
+  position:relative;
 }
+.product-card-img img{width:100%;height:100%;object-fit:contain;padding:8px}
+.product-card-img span{font-size:3rem}
 .product-card-body{padding:.9rem;flex:1;display:flex;flex-direction:column;gap:.4rem}
 .product-brand{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
 .product-name{font-size:.9rem;font-weight:600;color:#1a1a2e;line-height:1.3}
