@@ -113,7 +113,16 @@ require __DIR__ . '/../templates/layout.php';
   <?php foreach ($result['products'] as $p): ?>
   <div class="product-card">
     <div class="product-card-img" style="background:linear-gradient(135deg,#<?= $p['brand_color'] ?>22,#<?= $p['brand_color'] ?>44)">
-      <?= $brandIcon[$p['brand_slug']] ?? '📦' ?>
+      <?php if (!empty($p['image_url'])): ?>
+        <img src="<?= htmlspecialchars($p['image_url']) ?>"
+             alt="<?= htmlspecialchars($p['name']) ?>"
+             style="width:100%;height:100%;object-fit:contain;padding:8px"
+             loading="lazy"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <span style="display:none;font-size:2.5rem"><?= $brandIcon[$p['brand_slug']] ?? '📦' ?></span>
+      <?php else: ?>
+        <span style="font-size:2.5rem"><?= $brandIcon[$p['brand_slug']] ?? '📦' ?></span>
+      <?php endif ?>
     </div>
     <div class="product-card-body">
       <div class="product-brand" style="color:#<?= htmlspecialchars($p['brand_color']) ?>">

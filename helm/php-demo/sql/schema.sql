@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS products (
     description VARCHAR(500),
     price       DECIMAL(8,2)      NOT NULL,
     stock       SMALLINT UNSIGNED NOT NULL DEFAULT 50,
+    image_url   VARCHAR(500)      DEFAULT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_products_slug (slug),
     KEY idx_products_brand (brand_id),

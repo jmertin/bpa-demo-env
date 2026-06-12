@@ -42,7 +42,15 @@ require __DIR__ . '/../templates/layout.php';
 <div class="product-detail">
   <div class="product-detail-header">
     <div class="product-detail-img" style="background:linear-gradient(135deg,#<?= $product['brand_color'] ?>22,#<?= $product['brand_color'] ?>44)">
-      <?= $brandIcon[$product['brand_slug']] ?? '📦' ?>
+      <?php if (!empty($product['image_url'])): ?>
+        <img src="<?= htmlspecialchars($product['image_url']) ?>"
+             alt="<?= htmlspecialchars($product['name']) ?>"
+             style="width:100%;height:100%;object-fit:contain;padding:12px"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <span style="display:none;font-size:4rem"><?= $brandIcon[$product['brand_slug']] ?? '📦' ?></span>
+      <?php else: ?>
+        <span style="font-size:4rem"><?= $brandIcon[$product['brand_slug']] ?? '📦' ?></span>
+      <?php endif ?>
     </div>
     <div class="product-detail-meta">
       <div class="product-detail-brand" style="color:#<?= htmlspecialchars($product['brand_color']) ?>">

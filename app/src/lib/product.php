@@ -57,7 +57,7 @@ function product_list(array $filters = []): array
     $total = (int)$countStmt->fetchColumn();
 
     $sql = "
-        SELECT p.id, p.name, p.slug, p.description, p.price, p.stock,
+        SELECT p.id, p.name, p.slug, p.description, p.price, p.stock, p.image_url,
                b.id AS brand_id, b.name AS brand_name, b.slug AS brand_slug, b.color AS brand_color,
                GROUP_CONCAT(c.name ORDER BY c.name SEPARATOR ',') AS caps,
                GROUP_CONCAT(c.slug ORDER BY c.name SEPARATOR ',') AS cap_slugs,
@@ -90,7 +90,7 @@ function product_list(array $filters = []): array
 function product_get_by_slug(string $slug): ?array
 {
     $stmt = db()->prepare("
-        SELECT p.id, p.name, p.slug, p.description, p.price, p.stock,
+        SELECT p.id, p.name, p.slug, p.description, p.price, p.stock, p.image_url,
                b.id AS brand_id, b.name AS brand_name, b.slug AS brand_slug, b.color AS brand_color,
                GROUP_CONCAT(c.name ORDER BY c.name SEPARATOR ',') AS caps,
                GROUP_CONCAT(c.slug ORDER BY c.name SEPARATOR ',') AS cap_slugs,
@@ -113,7 +113,7 @@ function product_get_by_slug(string $slug): ?array
 function product_get_by_id(int $id): ?array
 {
     $stmt = db()->prepare("
-        SELECT p.id, p.name, p.slug, p.description, p.price, p.stock,
+        SELECT p.id, p.name, p.slug, p.description, p.price, p.stock, p.image_url,
                b.id AS brand_id, b.name AS brand_name, b.slug AS brand_slug, b.color AS brand_color,
                GROUP_CONCAT(c.name ORDER BY c.name SEPARATOR ',') AS caps,
                GROUP_CONCAT(c.slug ORDER BY c.name SEPARATOR ',') AS cap_slugs,
