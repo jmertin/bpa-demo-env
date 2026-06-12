@@ -1,0 +1,57 @@
+---
+# BPA-Demo – Docker Compose deployment (no TLS)
+# Image tags and credentials are supplied via environment variables.
+# Use scripts/compose.sh to source .config automatically, or export manually:
+#   export REGISTRY IMAGE_PREFIX IMAGE_TAG
+#   export MARIADB_ROOT_PASSWORD MARIADB_DATABASE MARIADB_USER MARIADB_PASSWORD
+services:
+
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE:      ${MARIADB_DATABASE}
+      MARIADB_USER:          ${MARIADB_USER}
+      MARIADB_PASSWORD:      ${MARIADB_PASSWORD}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      # Schema and seed are applied once on first container creation.
+      # Delete the named volume (docker compose down -v) to re-initialise.
+      - ./helm/php-demo/sql/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./helm/php-demo/sql/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1",
+             "-u", "root", "--password=${MARIADB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout:  5s
+      retries:  6
+      start_period: 30s
+    restart: unless-stopped
+
+  phpfpm:
+    image: ${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}
+    environment:
+      MARIADB_HOST:     mariadb
+      MARIADB_PORT:     "3306"
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER:     ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  nginx:
+    image: ${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}
+    ports:
+      - "8080:8080"
+    volumes:
+      # Override the default vhost with a Compose-aware config that routes
+      # FastCGI to the phpfpm service rather than 127.0.0.1 (pod-local).
+      - ./docker/nginx/config/default-compose.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - phpfpm
+    restart: on-failure
+
+volumes:
+  mariadb_data:
