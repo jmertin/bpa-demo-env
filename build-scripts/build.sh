@@ -50,7 +50,7 @@ docker build \
     --pull \
     --no-cache \
     -t "${PHP_FPM_IMAGE}" \
-    "${ROOT_DIR}/docker/php-fpm/"
+    "${ROOT_DIR}/src/php-fpm/"
 echo ""
 
 # ── Step 3: build nginx image ────────────────────────────────────────────────
@@ -60,11 +60,11 @@ docker build \
     --pull \
     --no-cache \
     -t "${NGINX_IMAGE}" \
-    "${ROOT_DIR}/docker/nginx/"
+    "${ROOT_DIR}/src/nginx/"
 echo ""
 
 # ── Cleanup intermediate artifacts ──────────────────────────────────────────
-rm -f "${ROOT_DIR}/docker/php-fpm/app.tar.gz"
+rm -f "${ROOT_DIR}/src/php-fpm/app.tar.gz"
 
 echo "=== All images built successfully ==="
 echo "  ${PHP_FPM_IMAGE}"

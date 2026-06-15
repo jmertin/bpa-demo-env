@@ -10,7 +10,7 @@ ROOT_DIR="${SCRIPT_DIR}/.."
 source "${ROOT_DIR}/.config"
 
 APP_SRC="${ROOT_DIR}/app/src"
-ARCHIVE="${ROOT_DIR}/docker/php-fpm/app.tar.gz"
+ARCHIVE="${ROOT_DIR}/src/php-fpm/app.tar.gz"
 
 if [[ ! -d "${APP_SRC}" ]]; then
     echo "ERROR: Application source directory not found: ${APP_SRC}" >&2
