@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Copy this file to .config and fill in real values.
-# .config is excluded from git via .gitignore and must never be committed.
+# .config is excluded from git via .gitignore and must NEVER be committed.
+# All build, push, deploy, and compose scripts read exclusively from this file.
 
-# ── Docker Registry ──────────────────────────────────────────────────────────
+# ── Docker Registry ───────────────────────────────────────────────────────────
 REGISTRY="registry.example.com"
 REGISTRY_USER="admin"
 REGISTRY_PASSWORD="changeme"
 
-# ── Image settings ───────────────────────────────────────────────────────────
+# ── Image settings ────────────────────────────────────────────────────────────
 IMAGE_PREFIX="php-demo"
-# Base version only – build.sh appends b<N> automatically (e.g. 1.0.0b4).
+# Base version only – build.sh appends b<N> automatically (e.g. 1.0.0 → 1.0.0b4).
 # The counter is stored in .build_number and updated on every build.sh run.
 IMAGE_TAG="1.0.0"
 BUILD_PLATFORM="linux/amd64"
@@ -26,3 +27,27 @@ APP_HOSTNAME="php-demo.example.com"
 TLS_CLUSTER_ISSUER="letsencrypt-prod"
 INGRESS_CLASS_NAME="nginx"          # e.g. nginx, traefik, haproxy, alb
 KUBECONFIG="${HOME}/.kube/config"
+
+# Path to the Helm chart directory.  Defaults to helm/php-demo relative to the
+# project root when this variable is absent or empty.
+HELM_CHART_PATH=""
+
+# ── Broadcom DX O2 Agent (APMIA) ─────────────────────────────────────────────
+# These variables configure the Broadcom Infrastructure Agent container
+# (dx-o2-agents image) and are also forwarded to the PHP-FPM and NGINX
+# containers for opportunistic probe/plugin injection.
+#
+# APMIA_EM_HOST: Hostname or IP of the Broadcom Enterprise Manager (required
+#   when the dx-o2-agents container is enabled).
+# APMIA_EM_PORT: EM collector port (default 5001 for unsecured, 5443 for TLS).
+# APMIA_AGENT_NAME: Logical agent name shown in the EM console.
+# APMIA_APP_NAME:   Application name used to group metrics in the console.
+# APMIA_LOG_LEVEL:  Agent log verbosity: DEBUG, INFO, WARN, or ERROR.
+#
+# Leave APMIA_EM_HOST empty to deploy without DX O2 monitoring; all other
+# containers start cleanly without the agent volume mounted.
+APMIA_EM_HOST=""
+APMIA_EM_PORT="5001"
+APMIA_AGENT_NAME="bpa-demo-agent"
+APMIA_APP_NAME="BPA-Demo"
+APMIA_LOG_LEVEL="INFO"

@@ -5,6 +5,96 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-15 @ 17:15 - [Phase 4 – Build System Hardening & DX O2 Pipeline Integration]:
+  Rewrote all build-scripts/ shell scripts to OpenWaterFoundation Shell Best
+  Practices (OWF), wired the DX O2 agents image into the push/deploy pipeline,
+  and extended .config.example with DX O2 and Helm configuration variables.
+
+  Task 4.1 – build.sh (OWF rewrite):
+  - Full function-based structure: usage(), info(), fatal(),
+    check_prerequisites(), load_config(), compute_build_tag(), build_image(),
+    package_app(), cleanup().
+  - check_prerequisites() verifies docker binary and live daemon (docker info).
+  - load_config() sources .config and validates REGISTRY, IMAGE_PREFIX,
+    IMAGE_TAG, and BUILD_PLATFORM with ${:?} parameter expansion; fatal on
+    any missing variable.
+  - compute_build_tag() increments .build_number, strips any existing b<N>
+    suffix from IMAGE_TAG, derives FULL_TAG, persists it back to .config via
+    sed, and re-sources the file so the current shell is in sync.
+  - build_image() centralises docker build invocation: --platform, --pull,
+    --no-cache flags; human-readable label in log output.
+  - Step 4 (dx-o2-agents) is skipped gracefully with an informative message
+    when no apmia-*.tar.gz installer is found; builds 1–3 are unaffected.
+  - New --push flag: invokes push.sh automatically after a successful build.
+  - All variables that should not be rebound are declared readonly; all
+    function-local variables are declared with local [-r].
+
+  Task 4.2 – package-app.sh (OWF rewrite):
+  - Function-based: usage(), info(), fatal(), check_prerequisites(),
+    load_config(), create_archive().
+  - check_prerequisites() validates the tar binary.
+  - create_archive() validates app/src/ exists before archiving; reports
+    output archive path and size.
+  - Adds -h/--help flag.
+
+  Task 4.3 – push.sh (OWF rewrite):
+  - Function-based: usage(), info(), fatal(), check_prerequisites(),
+    load_config(), registry_login(), push_image(), registry_logout().
+  - load_config() validates REGISTRY, REGISTRY_USER, REGISTRY_PASSWORD,
+    IMAGE_PREFIX, IMAGE_TAG.
+  - registry_login() uses `printf '%s' | docker login --password-stdin`
+    to avoid passing credentials on the command line.
+  - push_image() checks local image existence via docker image inspect before
+    pushing; emits a clear warning (not a fatal error) when an image is
+    absent so a partial push does not abort the remaining images.
+  - registry_logout() clears stored credentials from the Docker credential
+    store after all pushes complete.
+  - New --skip-dxo2 flag: skips the dx-o2-agents push (e.g. when the
+    installer was absent during build and the image was not produced).
+  - Adds -h/--help flag.
+
+  Task 4.4 – deploy.sh (OWF rewrite):
+  - Function-based: usage(), info(), fatal(), check_prerequisites(),
+    load_config(), resolve_chart_path(), generate_values(), ensure_namespace(),
+    run_deploy(), post_deploy_init().
+  - check_prerequisites() validates helm and kubectl binaries; verifies cluster
+    reachability via `kubectl cluster-info`.
+  - load_config() validates all 14 required deployment variables.
+  - resolve_chart_path() honours HELM_CHART_PATH from .config (falls back to
+    helm/php-demo); fatal if the directory does not exist.
+  - generate_values() emits a transient values.local.yaml with:
+      image.dxo2.repository / .tag (new – covers dx-o2-agents image)
+      dxo2.enabled / .emHost / .emPort / .agentName / .appName / .logLevel
+        (new – wired from APMIA_* .config variables; enabled: false when
+        APMIA_EM_HOST is empty)
+  - values.local.yaml is always deleted after the Helm command completes so
+    registry credentials and MariaDB passwords do not persist on disk.
+  - post_deploy_init() resolves the php-demo pod by label and runs
+    init_users.php via kubectl exec; non-fatal (logs a warning on miss).
+  - New --skip-init flag to bypass the post-deploy DB check.
+  - Adds -h/--help flag.
+
+  Task 4.5 – compose.sh (OWF rewrite):
+  - Function-based: usage(), info(), fatal(), check_prerequisites(),
+    load_config(), images_present(), build_images().
+  - check_prerequisites() verifies docker binary and compose plugin.
+  - load_config() validates required variables and exports DX O2 vars with
+    safe defaults so docker-compose.yml can reference them even when the
+    APMIA section of .config is omitted.
+  - -h/--help handled before load_config() so it works without .config.
+  - readonly applied to SCRIPT_DIR, ROOT_DIR, SCRIPT_NAME constants.
+
+  Task 4.6 – .config.example (extended):
+  - Added HELM_CHART_PATH variable (empty = project default helm/php-demo).
+  - Added full DX O2 / APMIA section with five variables:
+      APMIA_EM_HOST, APMIA_EM_PORT, APMIA_AGENT_NAME, APMIA_APP_NAME,
+      APMIA_LOG_LEVEL.
+  - Inline comments document the default port, accepted log-level values,
+    and the graceful-degradation behaviour when APMIA_EM_HOST is empty.
+
+  All scripts: set -euo pipefail; #!/usr/bin/env bash shebang; chmod +x.
+
+------------------------------------------------------------------------------
 2026-06-15 @ 16:30 - [Phase 3 – Hardened Containerisation & Agent Integration]:
   Rebased all container images to ubuntu:22.04 (Jammy LTS), introduced a
   combined DX O2 monitoring container, and wired opportunistic PHP probe and
