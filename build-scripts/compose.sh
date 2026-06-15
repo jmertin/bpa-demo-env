@@ -3,12 +3,12 @@
 # are built before commands that need them.
 #
 # Usage:
-#   ./scripts/compose.sh build       – package app + build images locally
-#   ./scripts/compose.sh up -d       – start stack (builds if images missing)
-#   ./scripts/compose.sh logs -f     – tail logs
-#   ./scripts/compose.sh down        – stop and remove containers
-#   ./scripts/compose.sh down -v     – also delete the mariadb data volume
-#   ./scripts/compose.sh ps          – show running services
+#   ./build-scripts/compose.sh build       – package app + build images locally
+#   ./build-scripts/compose.sh up -d       – start stack (builds if images missing)
+#   ./build-scripts/compose.sh logs -f     – tail logs
+#   ./build-scripts/compose.sh down        – stop and remove containers
+#   ./build-scripts/compose.sh down -v     – also delete the mariadb data volume
+#   ./build-scripts/compose.sh ps          – show running services
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

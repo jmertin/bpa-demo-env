@@ -5,6 +5,28 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-15 @ 14:00 - [Phase 1 – Repository Setup]: Confirmed git repository
+  initialised on branch master with full commit history.
+
+2026-06-15 @ 14:05 - [Phase 1 – Compatibility Analysis]: Produced
+  COMPATIBILITY.md version matrix cross-referencing current ubuntu:26.04 base
+  image against Broadcom DX O2 agent requirements.  Conclusion: rebase to
+  ubuntu:22.04 LTS (Jammy) in Phase 3 — PHP 8.1 ≤ agent ceiling PHP 8.4;
+  NGINX 1.18 ≤ BPA plugin ceiling NGINX 1.29.x; Infra Agent .deb confirmed
+  for Ubuntu 22.04 glibc 2.35 ABI.
+
+2026-06-15 @ 14:10 - [Phase 1 – Directory Structuring]: Migrated project to
+  production-grade layout using git mv (history preserved):
+    docker/php-fpm/  → src/php-fpm/
+    docker/nginx/    → src/nginx/
+    scripts/         → build-scripts/
+  Created placeholder directories:
+    src/dx-o2-agents/   (populated in Phase 3)
+    helm/php-app-chart/ (populated in Phase 5)
+  Updated all internal path references in build-scripts/ and docker-compose.yml.
+  Updated .gitignore archive exclusion to src/php-fpm/app.tar.gz.
+
+------------------------------------------------------------------------------
 2026-06-11 @ 15:30  Fix PHP-FPM environment variable isolation
 
   Problem: PHP-FPM's compiled-in default is clear_env = yes, which strips
