@@ -14,6 +14,15 @@ spec:
     metadata:
       labels:
         {{- include "php-demo.labels" . | nindent 8 }}
+      annotations:
+        # Force pod recreation when the ConfigMap changes.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- if .Values.dxo2.enabled }}
+        # Record agent coordinates for observability tooling.
+        dxo2.broadcom.com/em-host: {{ .Values.dxo2.emHost | quote }}
+        dxo2.broadcom.com/agent-name: {{ .Values.dxo2.agentName | quote }}
+        {{- end }}
     spec:
       # Pull credentials are attached to the ServiceAccount; the pod inherits
       # them automatically without listing the secret here.
@@ -28,6 +37,30 @@ spec:
       terminationGracePeriodSeconds: 60
 
       initContainers:
+
+        {{- if .Values.dxo2.enabled }}
+        # Populate the shared emptyDir with the pre-installed APMIA agent tree
+        # so that the php-fpm and nginx containers can perform opportunistic probe
+        # and plugin injection at their own startup without pulling extra images.
+        - name: dxo2-init
+          image: "{{ .Values.image.dxo2.repository }}:{{ .Values.image.dxo2.tag }}"
+          imagePullPolicy: {{ .Values.image.dxo2.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "[dxo2-init] Copying APMIA agent tree to shared volume..."
+              cp -a /opt/apmia/. /apmia-share/
+              echo "[dxo2-init] Done – $(find /apmia-share -maxdepth 1 | wc -l) entries in /apmia-share"
+          volumeMounts:
+            - name: apmia-share
+              mountPath: /apmia-share
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false   # APMIA installer creates root-owned files; cp requires same owner
+        {{- end }}
+
         # Remove stale Aria lock file left by an unclean shutdown (SIGKILL).
         # fcntl locks are process-bound and released on exit, but on some
         # container runtimes the new container starts before the previous
@@ -59,6 +92,36 @@ spec:
 
       containers:
 
+        # ── dx-o2-agent sidecar ───────────────────────────────────────────────
+        # Runs the Broadcom Infrastructure Agent daemon (Java process) and the
+        # BTL binary.  Enabled only when dxo2.enabled=true; the php-fpm and
+        # nginx containers start without it if this block is absent.
+        {{- if .Values.dxo2.enabled }}
+        - name: dx-o2-agent
+          image: "{{ .Values.image.dxo2.repository }}:{{ .Values.image.dxo2.tag }}"
+          imagePullPolicy: {{ .Values.image.dxo2.pullPolicy }}
+          env:
+            - name: APMIA_HOME
+              value: "/opt/apmia"
+            - name: APMIA_EM_HOST
+              value: {{ .Values.dxo2.emHost | required "dxo2.emHost is required when dxo2.enabled=true" | quote }}
+            - name: APMIA_EM_PORT
+              value: {{ .Values.dxo2.emPort | quote }}
+            - name: APMIA_AGENT_NAME
+              value: {{ .Values.dxo2.agentName | quote }}
+            - name: APMIA_APP_NAME
+              value: {{ .Values.dxo2.appName | quote }}
+            - name: APMIA_LOG_LEVEL
+              value: {{ .Values.dxo2.logLevel | quote }}
+          {{- with .Values.dxo2.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: false   # APMIA agent daemon writes to /opt/apmia/logs owned by root
+        {{- end }}
+
         # ── nginx ─────────────────────────────────────────────────────────────
         - name: nginx
           image: "{{ .Values.image.nginx.repository }}:{{ .Values.image.nginx.tag }}"
@@ -67,8 +130,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
-          # Mount ConfigMap-managed config over the image defaults so nginx
-          # settings can be changed without a new image build.
+          {{- if .Values.dxo2.enabled }}
+          env:
+            - name: APMIA_HOME
+              value: "/opt/apmia"
+          {{- end }}
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/nginx.conf
@@ -80,6 +146,12 @@ spec:
               readOnly: true
             - name: tmp-nginx
               mountPath: /tmp
+            {{- if .Values.dxo2.enabled }}
+            # Populated by dxo2-init; entrypoint reads BPA module from here.
+            - name: apmia-share
+              mountPath: /opt/apmia
+              readOnly: true
+            {{- end }}
           {{- with .Values.resources.nginx }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -127,11 +199,21 @@ spec:
                 secretKeyRef:
                   name: {{ include "php-demo.secretName" . }}
                   key: MARIADB_PASSWORD
+            {{- if .Values.dxo2.enabled }}
+            - name: APMIA_HOME
+              value: "/opt/apmia"
+            {{- end }}
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/php-fpm-pool.d/www.conf
               subPath: www.conf
               readOnly: true
+            {{- if .Values.dxo2.enabled }}
+            # Populated by dxo2-init; entrypoint injects PHP probe from here.
+            - name: apmia-share
+              mountPath: /opt/apmia
+              readOnly: true
+            {{- end }}
           {{- with .Values.resources.phpfpm }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -207,3 +289,9 @@ spec:
         - name: db-init
           configMap:
             name: {{ include "php-demo.fullname" . }}-db-init
+        {{- if .Values.dxo2.enabled }}
+        # Shared agent tree: dxo2-init populates this at pod startup; nginx and
+        # php-fpm mount it read-only for opportunistic probe/plugin injection.
+        - name: apmia-share
+          emptyDir: {}
+        {{- end }}
