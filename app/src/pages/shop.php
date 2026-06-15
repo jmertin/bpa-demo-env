@@ -9,36 +9,36 @@ $minPrice  = validate_price($_GET['min_price'] ?? '') ?? null;
 $maxPrice  = validate_price($_GET['max_price'] ?? '') ?? null;
 $pageNum   = validate_int($_GET['p'] ?? 1, 1, 9999) ?? 1;
 
-// Resolve brand_id from slug
+// Resolve brand_id from slug.
 $brandId = null;
 if ($brandSlug !== '') {
-    foreach (product_get_brands() as $b) {
-        if ($b['slug'] === $brandSlug) {
-            $brandId = (int)$b['id'];
-            break;
-        }
+  foreach (product_get_brands() as $b) {
+    if ($b['slug'] === $brandSlug) {
+      $brandId = (int) $b['id'];
+      break;
     }
+  }
 }
 
-// Resolve cap_id from slug
+// Resolve cap_id from slug.
 $capId = null;
 if ($capSlug !== '') {
-    foreach (product_get_capabilities() as $c) {
-        if ($c['slug'] === $capSlug) {
-            $capId = (int)$c['id'];
-            break;
-        }
+  foreach (product_get_capabilities() as $c) {
+    if ($c['slug'] === $capSlug) {
+      $capId = (int) $c['id'];
+      break;
     }
+  }
 }
 
 $result = product_list([
-    'brand_id'  => $brandId,
-    'cap_id'    => $capId,
-    'search'    => $search,
-    'min_price' => $minPrice,
-    'max_price' => $maxPrice,
-    'page'      => $pageNum,
-    'per_page'  => 24,
+  'brand_id'  => $brandId,
+  'cap_id'    => $capId,
+  'search'    => $search,
+  'min_price' => $minPrice,
+  'max_price' => $maxPrice,
+  'page'      => $pageNum,
+  'per_page'  => 24,
 ]);
 
 // ── Monitoring headers ─────────────────────────────────────────────────────────
@@ -46,21 +46,23 @@ $user    = auth_user();
 $usecase = $_SESSION['usecase'] ?? '';
 $target  = $brandSlug ?: ($capSlug ?: 'all');
 set_monitoring_headers(
-    'SHOP', 'LIST', $target,
-    $user ? $user['role'] : 'anonymous',
-    basket_total(),
-    '',
-    $usecase
+  'SHOP', 'LIST', $target,
+  $user ? $user['role'] : 'anonymous',
+  basket_total(),
+  '',
+  $usecase
 );
 
 // ── Build page title ───────────────────────────────────────────────────────────
 $pageTitle = APP_NAME . ' – Shop';
 if ($brandSlug) {
-    $pageTitle = APP_NAME . ' – ' . ucfirst($brandSlug);
-} elseif ($capSlug) {
-    $pageTitle = APP_NAME . ' – ' . ucfirst($capSlug) . ' devices';
-} elseif ($search) {
-    $pageTitle = APP_NAME . ' – Search: ' . htmlspecialchars($search);
+  $pageTitle = APP_NAME . ' – ' . ucfirst($brandSlug);
+}
+elseif ($capSlug) {
+  $pageTitle = APP_NAME . ' – ' . ucfirst($capSlug) . ' devices';
+}
+elseif ($search) {
+  $pageTitle = APP_NAME . ' – Search: ' . htmlspecialchars($search);
 }
 
 // ── Brand icon map ─────────────────────────────────────────────────────────────
@@ -88,18 +90,18 @@ require __DIR__ . '/../templates/layout.php';
 <form method="get" class="filter-bar">
   <input type="hidden" name="page" value="shop">
   <?php if ($brandSlug): ?><input type="hidden" name="brand" value="<?= htmlspecialchars($brandSlug) ?>"><?php endif ?>
-  <?php if ($capSlug):   ?><input type="hidden" name="cap"   value="<?= htmlspecialchars($capSlug) ?>"><?php endif ?>
+  <?php if ($capSlug): ?><input type="hidden" name="cap"   value="<?= htmlspecialchars($capSlug) ?>"><?php endif ?>
   <div class="filter-group" style="flex:2;min-width:180px">
     <label>Search</label>
     <input type="text" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Product name…">
   </div>
   <div class="filter-group">
     <label>Min price €</label>
-    <input type="text" name="min_price" value="<?= $minPrice !== null ? htmlspecialchars((string)$minPrice) : '' ?>" placeholder="0">
+    <input type="text" name="min_price" value="<?= $minPrice !== null ? htmlspecialchars((string) $minPrice) : '' ?>" placeholder="0">
   </div>
   <div class="filter-group">
     <label>Max price €</label>
-    <input type="text" name="max_price" value="<?= $maxPrice !== null ? htmlspecialchars((string)$maxPrice) : '' ?>" placeholder="999">
+    <input type="text" name="max_price" value="<?= $maxPrice !== null ? htmlspecialchars((string) $maxPrice) : '' ?>" placeholder="999">
   </div>
   <button type="submit" class="btn btn-primary">Filter</button>
   <a href="?page=shop" class="btn btn-secondary">Reset</a>
@@ -139,15 +141,15 @@ require __DIR__ . '/../templates/layout.php';
           <span class="cap-pill" style="background:#<?= htmlspecialchars($cap['color']) ?>"><?= htmlspecialchars($cap['name']) ?></span>
         <?php endforeach ?>
       </div>
-      <div class="product-price">€<?= number_format((float)$p['price'], 2) ?></div>
-      <div class="product-stock">Stock: <?= (int)$p['stock'] ?></div>
+      <div class="product-price">€<?= number_format((float) $p['price'], 2) ?></div>
+      <div class="product-stock">Stock: <?= (int) $p['stock'] ?></div>
     </div>
     <div class="product-card-footer">
       <a href="?page=product&slug=<?= htmlspecialchars($p['slug']) ?>" class="btn btn-secondary btn-sm" style="flex:1;text-align:center">Details</a>
       <form method="post" action="?page=basket" style="flex:1">
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action"     value="add">
-        <input type="hidden" name="product_id" value="<?= (int)$p['id'] ?>">
+        <input type="hidden" name="product_id" value="<?= (int) $p['id'] ?>">
         <button type="submit" class="btn btn-primary btn-sm" style="width:100%">Add 🛒</button>
       </form>
     </div>
