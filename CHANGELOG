@@ -5,6 +5,79 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-15 @ 16:30 - [Phase 3 – Hardened Containerisation & Agent Integration]:
+  Rebased all container images to ubuntu:22.04 (Jammy LTS), introduced a
+  combined DX O2 monitoring container, and wired opportunistic PHP probe and
+  BPA WebServer Plugin injection into the PHP-FPM and NGINX entrypoints.
+
+  Task 3.1 – Combined DX O2 Monitoring Image (src/dx-o2-agents/):
+  - New Dockerfile based on ubuntu:22.04 with openjdk-11-jre-headless for
+    the BTL component and any Java-based agent extension.
+  - Expects the Broadcom Infrastructure Agent tar.gz (apmia-*.tar.gz) in
+    src/dx-o2-agents/installers/ (git-ignored).  Build fails with a clear
+    error message when the installer is absent rather than silently producing
+    a broken image.
+  - Installs the agent to /opt/apmia via the bundled install.sh (silent
+    mode).  This populates extensions/PHPAgent/ and
+    extensions/WebServerPlugin/ which the other containers consume.
+  - New entrypoint.sh: validates APMIA_EM_HOST, renders
+    IntroscopeAgent.profile from the template via envsubst, starts the
+    Infrastructure Agent, starts the BTL binary if present as a separate
+    process, handles SIGTERM/SIGINT for graceful Kubernetes pod shutdown.
+  - New config/IntroscopeAgent.profile.template: Java properties template
+    with EM host/port, agent name, application name, log level, and
+    extension directory all overridable via environment variables.
+  - VOLUME ["/opt/apmia"] declared so PHP-FPM and NGINX containers can
+    mount the agent directory at runtime (Kubernetes emptyDir init-container
+    pattern or Docker Compose named volume).
+  - .gitignore extended: src/dx-o2-agents/installers/* excluded (licensed
+    binary, never committed), .gitkeep preserves the directory in the tree.
+
+  Task 3.2 – PHP-FPM Hardening & Probe Injection (src/php-fpm/):
+  - Dockerfile rewritten as a two-stage build:
+      Stage 1 (app-builder): ubuntu:22.04 + tar + ca-certificates only.
+        Extracts app.tar.gz; no PHP, no web server in this stage.
+      Stage 2 (runtime): ubuntu:22.04 + php8.1-fpm + php8.1-mysql +
+        php8.1-mbstring + cron + ca-certificates only.
+        Application copied from builder via COPY --from=app-builder.
+        No archive tools, no package manager state in the final image.
+  - PHP pinned to 8.1 (ubuntu:22.04 default; within DX O2 PHP Agent ≤8.4).
+  - Stable symlinks created at /usr/local/bin/php-fpm-run pointing to
+    /usr/sbin/php-fpm8.1 (version-agnostic entrypoint invocation).
+  - entrypoint.sh rewritten with PHP probe injection block:
+      Checks APMIA_HOME/extensions/PHPAgent/wily_php_agent.ini.
+      Copies wily_php_agent.so into PHP's extension_dir.
+      Installs wily_php_agent.ini to /etc/php/8.1/fpm/conf.d/99-wily_php_agent.ini.
+      Runs the probe install helper script if present.
+      Logs a clear message when probe is absent; starts cleanly without it.
+
+  Task 3.3 – NGINX Hardening & BPA Plugin Injection (src/nginx/):
+  - Dockerfile rebased to ubuntu:22.04 with nginx 1.18 (ubuntu:22.04 default;
+    within BPA WebServer Plugin ceiling ≤1.29.x).
+  - Pessimistic cleanup: removes all distro default vhosts, all conf.d
+    content, all snippets, all modules-enabled symlinks.
+    Only project-supplied configurations remain active.
+  - /etc/nginx/modules-enabled/ directory created and kept empty until
+    the BPA entrypoint writes bpa.conf at runtime.
+  - entrypoint.sh rewritten with BPA module injection block:
+      Checks APMIA_HOME/extensions/WebServerPlugin/
+        ngx_http_ca_plugin_filter_module.so.
+      Writes load_module directive to /etc/nginx/modules-enabled/bpa.conf.
+      Copies webserver_plugin.ini if present.
+      Cleans up stale bpa.conf when volume is absent; starts without BPA.
+  - nginx.conf updated: include /etc/nginx/modules-enabled/*.conf; added at
+    the top-level scope (before events {}) as required by NGINX for dynamic
+    module loading.  No-op when the directory is empty.
+
+  Build system:
+  - build.sh updated with a Step 4 for the dx-o2-agents image.  The step
+    is skipped gracefully (with an informative message) when no apmia-*.tar.gz
+    installer is found, so the php-fpm and nginx images continue to build
+    independently.
+  - Build summary table updated to show whether the DX O2 image was built or
+    skipped.
+
+------------------------------------------------------------------------------
 2026-06-15 @ 15:30 - [Phase 2 – Backdrop CMS Coding Standards]: Refactored all
   22 PHP source files under app/src/ to strictly comply with Backdrop CMS PHP
   coding standards:
