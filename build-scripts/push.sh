@@ -1,32 +1,156 @@
 #!/usr/bin/env bash
-# Push built images to the configured registry.
-# Images must be built first via build.sh.
+# push.sh – Authenticate with the container registry and push built images.
+#
+# Images must be built first by running build.sh.
+# Registry credentials are read exclusively from .config – they are never
+# passed on the command line or embedded in any tracked file.
+#
+# Usage:
+#   build-scripts/push.sh [--skip-dxo2] [-h|--help]
+#
+# Options:
+#   --skip-dxo2  Skip pushing the dx-o2-agents image even if it exists locally.
+#   -h, --help   Print this help message and exit.
+#
+# Prerequisites:
+#   docker     Must be installed and the daemon must be running.
+#   .config    Must exist in the project root (copy from .config.example).
+#              REGISTRY, REGISTRY_USER, REGISTRY_PASSWORD, IMAGE_PREFIX, and
+#              IMAGE_TAG must all be set.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="${SCRIPT_DIR}/.."
+# ── Constants ──────────────────────────────────────────────────────────────────
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly ROOT_DIR="${SCRIPT_DIR}/.."
+readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
-# shellcheck source=../.config
-source "${ROOT_DIR}/.config"
+# ── Functions ──────────────────────────────────────────────────────────────────
 
-PHP_FPM_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}"
-NGINX_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}"
+## Print usage information.
+usage() {
+    sed -n '/^# Usage:/,/^[^#]/{ /^[^#]/d; s/^# \{0,1\}//; p }' "${BASH_SOURCE[0]}"
+}
 
-echo "=== Authenticating with registry: ${REGISTRY} ==="
-# printf '%s' avoids the trailing newline that echo appends, which some
-# registry daemons reject when reading credentials from stdin.
-printf '%s' "${REGISTRY_PASSWORD}" | \
-    docker login "${REGISTRY}" \
-        --username "${REGISTRY_USER}" \
-        --password-stdin
+## Print a formatted informational message to stdout.
+info() {
+    echo "[push] $*"
+}
 
+## Print a fatal error message to stderr and exit with status 1.
+fatal() {
+    echo "[push] ERROR: $*" >&2
+    exit 1
+}
+
+## Verify that required tools are installed and accessible.
+check_prerequisites() {
+    local -r required_tools=("docker")
+    local tool
+    for tool in "${required_tools[@]}"; do
+        command -v "${tool}" >/dev/null 2>&1 || \
+            fatal "Required tool not found in PATH: ${tool}"
+    done
+
+    docker info >/dev/null 2>&1 || \
+        fatal "Docker daemon is not running or not accessible."
+}
+
+## Load and validate the .config file.
+load_config() {
+    local -r config_file="${ROOT_DIR}/.config"
+    [[ -f "${config_file}" ]] || \
+        fatal ".config not found in project root. Copy .config.example to .config."
+    # shellcheck source=../.config
+    source "${config_file}"
+
+    : "${REGISTRY:?REGISTRY must be set in .config}"
+    : "${REGISTRY_USER:?REGISTRY_USER must be set in .config}"
+    : "${REGISTRY_PASSWORD:?REGISTRY_PASSWORD must be set in .config}"
+    : "${IMAGE_PREFIX:?IMAGE_PREFIX must be set in .config}"
+    : "${IMAGE_TAG:?IMAGE_TAG must be set in .config}"
+}
+
+## Authenticate with the registry.
+# Uses printf instead of echo to avoid the trailing newline that some registry
+# daemons reject as part of the credential stream.
+registry_login() {
+    info "Authenticating with registry: ${REGISTRY}"
+    printf '%s' "${REGISTRY_PASSWORD}" | \
+        docker login "${REGISTRY}" \
+            --username "${REGISTRY_USER}" \
+            --password-stdin
+    info "Authentication successful."
+    echo ""
+}
+
+## Push a single image if it exists locally; skip with a warning if it does not.
+# Arguments: image reference string.
+push_image() {
+    local -r image_ref="$1"
+
+    if docker image inspect "${image_ref}" >/dev/null 2>&1; then
+        info "Pushing ${image_ref} ..."
+        docker push "${image_ref}"
+        info "Push complete."
+    else
+        info "WARNING: Image not found locally – skipped: ${image_ref}"
+        info "         Run build.sh first to create the image."
+    fi
+    echo ""
+}
+
+## Log out from the registry to avoid leaving credentials in the docker
+## credential store on shared build machines.
+registry_logout() {
+    docker logout "${REGISTRY}" >/dev/null 2>&1 || true
+    info "Logged out from ${REGISTRY}."
+}
+
+# ── Argument parsing ───────────────────────────────────────────────────────────
+OPT_SKIP_DXO2=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --skip-dxo2)  OPT_SKIP_DXO2=true ;;
+        -h|--help)    usage; exit 0       ;;
+        *)            fatal "Unknown option: $1. Use --help for usage." ;;
+    esac
+    shift
+done
+
+# ── Main ───────────────────────────────────────────────────────────────────────
+check_prerequisites
+load_config
+
+readonly PHP_FPM_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}"
+readonly NGINX_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}"
+readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
+
+echo "=== BPA-Demo image push ==="
+echo "  Registry : ${REGISTRY}"
+echo "  Tag      : ${IMAGE_TAG}"
 echo ""
-echo "── Pushing ${PHP_FPM_IMAGE} ──"
-docker push "${PHP_FPM_IMAGE}"
 
-echo ""
-echo "── Pushing ${NGINX_IMAGE} ──"
-docker push "${NGINX_IMAGE}"
+# Authenticate once for all pushes.
+registry_login
 
-echo ""
-echo "=== All images pushed successfully ==="
+# Push application images.
+push_image "${PHP_FPM_IMAGE}"
+push_image "${NGINX_IMAGE}"
+
+# Push DX O2 agents image conditionally.
+if [[ "${OPT_SKIP_DXO2}" == "true" ]]; then
+    info "dx-o2-agents push: SKIPPED (--skip-dxo2 flag set)."
+    echo ""
+else
+    push_image "${DXO2_IMAGE}"
+fi
+
+# Clean up registry credentials from the local credential store.
+registry_logout
+
+echo "=== Push complete ==="
+echo "  ${PHP_FPM_IMAGE}"
+echo "  ${NGINX_IMAGE}"
+if [[ "${OPT_SKIP_DXO2}" == "false" ]]; then
+    echo "  ${DXO2_IMAGE}"
+fi
