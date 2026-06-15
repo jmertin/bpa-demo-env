@@ -1,9 +1,9 @@
 ---
-# BPA-Demo – Docker Compose deployment (no TLS)
-# Image tags and credentials are supplied via environment variables.
-# Use scripts/compose.sh to source .config automatically, or export manually:
-#   export REGISTRY IMAGE_PREFIX IMAGE_TAG
-#   export MARIADB_ROOT_PASSWORD MARIADB_DATABASE MARIADB_USER MARIADB_PASSWORD
+# BPA-Demo – Docker Compose deployment (no TLS, local images)
+# Use scripts/compose.sh – it sources .config, packages the app, and builds
+# images locally when they are not already present in the local Docker store.
+# The two app services use pull_policy: never so Docker never contacts the
+# registry; images must be built locally first (compose.sh handles this).
 services:
 
   mariadb:
@@ -30,6 +30,9 @@ services:
 
   phpfpm:
     image: ${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}
+    build:
+      context: ./docker/php-fpm   # app.tar.gz must exist here before building
+    pull_policy: never             # use local image only – compose.sh builds it
     environment:
       MARIADB_HOST:     mariadb
       MARIADB_PORT:     "3306"
@@ -43,6 +46,9 @@ services:
 
   nginx:
     image: ${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}
+    build:
+      context: ./docker/nginx
+    pull_policy: never             # use local image only – compose.sh builds it
     ports:
       - "8080:8080"
     volumes:
