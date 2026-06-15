@@ -13,6 +13,10 @@ image:
     repository: registry.example.com/php-demo/nginx
     tag: "1.0.0"
     pullPolicy: Always   # custom image – always pull so retagged builds are picked up
+  dxo2:
+    repository: registry.example.com/php-demo/dx-o2-agents
+    tag: "1.0.0"
+    pullPolicy: Always   # custom image – always pull so retagged builds are picked up
   mariadb:
     # Pinned upstream tag; IfNotPresent avoids redundant pulls on every restart.
     repository: mariadb
@@ -132,3 +136,30 @@ probes:
           - "mariadb -h 127.0.0.1 -u ${MARIADB_USER} -p${MARIADB_PASSWORD} -e 'SELECT 1'"
       initialDelaySeconds: 10
       periodSeconds: 10
+
+# ── Broadcom DX O2 Agent (APMIA) ─────────────────────────────────────────────
+# When enabled, an initContainer (dxo2-init) copies the pre-installed APMIA
+# agent tree from the dx-o2-agents image to a shared emptyDir volume.  The
+# php-fpm and nginx containers mount this volume at /opt/apmia so their
+# entrypoints can inject the PHP probe and BPA WebServer Plugin at runtime
+# without baking agent binaries into the application images.
+#
+# The dx-o2-agent sidecar container then runs the Infrastructure Agent daemon
+# (Java process) and the BTL binary for the duration of the pod's lifetime.
+#
+# Set enabled: false (the default) to run without any DX O2 instrumentation.
+# All application containers start cleanly in that mode.
+dxo2:
+  enabled: false
+  emHost: ""              # Enterprise Manager hostname or IP (required when enabled)
+  emPort: "5001"          # EM collector port (5001 plain-text, 5443 TLS)
+  agentName: "bpa-demo-agent"
+  appName: "BPA-Demo"
+  logLevel: "INFO"        # DEBUG | INFO | WARN | ERROR
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "50m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"

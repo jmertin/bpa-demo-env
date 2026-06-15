@@ -2,20 +2,38 @@ PHP Demo deployed successfully.
 
   Release namespace : {{ .Release.Namespace }}
   Release name      : {{ .Release.Name }}
+  DX O2 monitoring  : {{ if .Values.dxo2.enabled }}ENABLED (EM: {{ .Values.dxo2.emHost }}:{{ .Values.dxo2.emPort }}){{ else }}disabled{{ end }}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Pod layout (single pod, three containers sharing network namespace):
+Pod layout (single pod, containers sharing network namespace):
 
-  ┌─────────────────────────────────────────────────┐
-  │  Pod: {{ include "php-demo.fullname" . }}                        │
-  │                                                 │
-  │  [nginx]      port 8080  (public-facing)        │
-  │     │ fastcgi → 127.0.0.1:9000                  │
-  │  [php-fpm]    port 9000                         │
-  │     │ PDO    → 127.0.0.1:3306                   │
-  │  [mariadb]    port 3306                         │
-  └─────────────────────────────────────────────────┘
+{{- if .Values.dxo2.enabled }}
+  ┌─────────────────────────────────────────────────────┐
+  │  Pod: {{ include "php-demo.fullname" . }}                          │
+  │                                                     │
+  │  initContainer: dxo2-init  (populates /opt/apmia)  │
+  │                                                     │
+  │  [dx-o2-agent]  Java daemon → EM {{ .Values.dxo2.emHost }}     │
+  │  [nginx]        port 8080  (public-facing)          │
+  │     │ BPA plugin ← /opt/apmia (emptyDir)            │
+  │     │ fastcgi → 127.0.0.1:9000                      │
+  │  [php-fpm]      port 9000                           │
+  │     │ PHP probe ← /opt/apmia (emptyDir)             │
+  │     │ PDO      → 127.0.0.1:3306                     │
+  │  [mariadb]      port 3306                           │
+  └─────────────────────────────────────────────────────┘
+{{- else }}
+  ┌─────────────────────────────────────────────────────┐
+  │  Pod: {{ include "php-demo.fullname" . }}                          │
+  │                                                     │
+  │  [nginx]      port 8080  (public-facing)            │
+  │     │ fastcgi → 127.0.0.1:9000                      │
+  │  [php-fpm]    port 9000                             │
+  │     │ PDO    → 127.0.0.1:3306                       │
+  │  [mariadb]    port 3306                             │
+  └─────────────────────────────────────────────────────┘
+{{- end }}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -40,3 +58,11 @@ To watch pod startup:
 
   kubectl get pods -n {{ .Release.Namespace }} -l \
     "app.kubernetes.io/instance={{ .Release.Name }}" -w
+
+{{- if not .Values.dxo2.enabled }}
+
+To enable DX O2 monitoring, set in .config:
+  APMIA_EM_HOST="<your-em-hostname>"
+  APMIA_EM_PORT="5001"
+Then re-run: build-scripts/deploy.sh
+{{- end }}

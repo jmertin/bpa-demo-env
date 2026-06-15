@@ -5,6 +5,81 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-15 @ 18:00 - [Phase 5 – Helm Chart DX O2 Integration & Security Hardening]:
+  Extended the php-demo Helm chart (helm/php-demo/) with conditional Broadcom
+  DX O2 agent injection via the Kubernetes init-container pattern, and applied
+  container-level security context hardening throughout.
+
+  Task 5.1 – DX O2 Agent Sidecar (deployment.yaml):
+  - New initContainer dxo2-init: runs the dx-o2-agents image, copies
+    /opt/apmia/ → emptyDir volume /apmia-share using `cp -a` (preserves
+    permissions and symlinks).  Logs entry count on completion.
+    Enabled only when dxo2.enabled=true.
+  - New sidecar container dx-o2-agent: runs the actual Infrastructure Agent
+    daemon (APMIA Java process + BTL binary) for the lifetime of the pod.
+    Receives APMIA_HOME, APMIA_EM_HOST, APMIA_EM_PORT, APMIA_AGENT_NAME,
+    APMIA_APP_NAME, APMIA_LOG_LEVEL as environment variables from values.
+    dxo2.emHost is validated via Helm `required` so deployment fails fast
+    when enabled=true but the EM host is not configured.
+    Enabled only when dxo2.enabled=true.
+  - nginx container: conditionally sets APMIA_HOME env var and mounts
+    apmia-share at /opt/apmia (readOnly: true) when dxo2.enabled=true.
+    Entrypoint's BPA plugin injection block reads from this mount.
+  - php-fpm container: conditionally sets APMIA_HOME env var and mounts
+    apmia-share at /opt/apmia (readOnly: true) when dxo2.enabled=true.
+    Entrypoint's PHP probe injection block reads from this mount.
+  - New emptyDir volume apmia-share: declared only when dxo2.enabled=true.
+  - Pod annotations: adds dxo2.broadcom.com/em-host and /agent-name
+    annotations when dxo2.enabled=true for observability tooling discovery.
+  - ConfigMap checksum annotation added so pods are automatically recreated
+    when nginx or PHP-FPM configuration changes.
+
+  Task 5.2 – Container Security Contexts:
+  - allowPrivilegeEscalation: false applied to all containers and init-
+    containers: nginx, php-fpm, mariadb, dxo2-init, dx-o2-agent,
+    mariadb-lock-cleanup.
+  - readOnlyRootFilesystem: false retained for nginx (writes temp files to
+    /tmp emptyDir) and php-fpm (probe install writes to /etc/php/8.1/).
+  - runAsNonRoot documented with justification comments on all containers:
+      nginx:    false – master must bind ports and manage workers
+      php-fpm:  false – master starts as root then drops to www-data
+      mariadb:  false – official image initialises as root then drops
+      dxo2:     false – APMIA installer creates root-owned files in
+                        /opt/apmia/logs and /opt/apmia/config
+
+  Task 5.3 – values.yaml (extended):
+  - Added image.dxo2 section: repository, tag, pullPolicy (Always).
+  - Added top-level dxo2 section:
+      enabled:    false (default – no agent, no emptyDir, no sidecar)
+      emHost:     "" (empty = disabled; set via .config → values.local.yaml)
+      emPort:     "5001"
+      agentName:  "bpa-demo-agent"
+      appName:    "BPA-Demo"
+      logLevel:   "INFO"
+      resources:  requests 256Mi/50m, limits 512Mi/500m
+  - Inline comments explain the emptyDir sharing pattern and the graceful
+    degradation behaviour when enabled=false.
+
+  Task 5.4 – ConfigMap (nginx.conf):
+  - Added `include /etc/nginx/modules-enabled/*.conf;` at the top-level
+    scope before worker_processes (required by NGINX for dynamic module
+    loading).  This matches the directive added to src/nginx/config/nginx.conf
+    in Phase 3.  Without it the ConfigMap-supplied nginx.conf would suppress
+    the image-level include and BPA module injection would silently fail.
+
+  Task 5.5 – NOTES.txt:
+  - Post-install notes show DX O2 status (enabled/disabled) and EM endpoint.
+  - Pod layout ASCII updated with DX O2 sidecar and emptyDir annotations
+    when dxo2.enabled=true; shows baseline three-container layout otherwise.
+  - When disabled, notes include the .config variables to set to activate
+    monitoring on the next deploy.
+
+  Task 5.6 – Chart.yaml:
+  - Bumped chart version 0.1.0 → 0.2.0.
+  - Updated description to mention the DX O2 sidecar.
+  - Added broadcom, dx-o2, apmia keywords.
+
+------------------------------------------------------------------------------
 2026-06-15 @ 17:15 - [Phase 4 – Build System Hardening & DX O2 Pipeline Integration]:
   Rewrote all build-scripts/ shell scripts to OpenWaterFoundation Shell Best
   Practices (OWF), wired the DX O2 agents image into the push/deploy pipeline,
