@@ -1,0 +1,49 @@
+# ════════════════════════════════════════════════════════════════════════════
+# Broadcom DX APM – Infrastructure Agent Profile
+# Template: rendered at container startup by entrypoint.sh via envsubst.
+# All ${VAR} placeholders are replaced with values from environment variables.
+# ════════════════════════════════════════════════════════════════════════════
+
+# ── Enterprise Manager connection ─────────────────────────────────────────────
+introscope.agent.enterprisemanager.transport.tcp.host.DEFAULT=${APMIA_EM_HOST}
+introscope.agent.enterprisemanager.transport.tcp.port.DEFAULT=${APMIA_EM_PORT}
+
+# SSL: set to true and configure the keystore if your EM uses TLS.
+introscope.agent.enterprisemanager.transport.tcp.socketfactory.DEFAULT=\
+    com.wily.isengard.postofficehub.link.net.DefaultSocketFactory
+
+# ── Agent identification ──────────────────────────────────────────────────────
+introscope.agent.agentName=${APMIA_AGENT_NAME}
+introscope.agent.applicationName=${APMIA_APP_NAME}
+introscope.agent.hostName=
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+# Direct log output to stdout so the container runtime captures it.
+log4j.logger.IntroscopeAgent=${APMIA_LOG_LEVEL}, logfile, console
+
+log4j.appender.console=org.apache.log4j.ConsoleAppender
+log4j.appender.console.layout=org.apache.log4j.PatternLayout
+log4j.appender.console.layout.ConversionPattern=%d{ISO8601} [%-5p] [%c] %m%n
+
+log4j.appender.logfile=org.apache.log4j.RollingFileAppender
+log4j.appender.logfile.File=${APMIA_HOME}/logs/IntroscopeAgent.log
+log4j.appender.logfile.MaxFileSize=50MB
+log4j.appender.logfile.MaxBackupIndex=3
+log4j.appender.logfile.layout=org.apache.log4j.PatternLayout
+log4j.appender.logfile.layout.ConversionPattern=%d{ISO8601} [%-5p] [%c] %m%n
+
+# ── Extensions ────────────────────────────────────────────────────────────────
+# Extension auto-discovery: the agent scans the extensions/ directory on start.
+introscope.agent.extensions.directory=${APMIA_HOME}/extensions
+
+# PHP Agent probe extension (loaded by the PHP-FPM container, not here).
+# This flag prevents the Infrastructure Agent from attempting to manage the
+# PHP probe lifecycle directly when running inside a dedicated container.
+introscope.agent.php.agentEnabled=false
+
+# ── Data reporting ────────────────────────────────────────────────────────────
+introscope.agent.defaultMetricFrequency=15
+introscope.agent.metricFrequency=15
+
+# Credential handling: do not store credentials in this file.
+# Pass them via environment variables referenced in the EM URL if needed.

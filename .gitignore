@@ -5,6 +5,11 @@
 # Generated app archives
 src/php-fpm/app.tar.gz
 
+# Broadcom DX O2 agent installers (binary, licensed, gitignored)
+# Download from https://support.broadcom.com/ and place in this directory.
+src/dx-o2-agents/installers/*
+!src/dx-o2-agents/installers/.gitkeep
+
 # Helm local overrides
 helm/php-demo/values.local.yaml
 
