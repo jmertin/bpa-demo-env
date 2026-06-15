@@ -5,6 +5,69 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-15 @ 18:45 - [Phase 6 – README Rewrite & CHANGELOG Audit]:
+  Replaced the outdated README.md with a complete, accurate reference for the
+  current project state, and audited the CHANGELOG for completeness.
+
+  README.md rewrite:
+  - Title updated: "on Kubernetes" suffix dropped; Compose also documented.
+  - Product count corrected: 150 → 300 total (100 per brand) to match the
+    expanded seed catalogue introduced in commit 749acd5.
+  - Base image corrected throughout: ubuntu:26.04 → ubuntu:22.04 (Jammy).
+  - Project structure tree updated:
+      docker/php-fpm/ → src/php-fpm/ (Phase 1 rename)
+      docker/nginx/   → src/nginx/   (Phase 1 rename)
+      scripts/        → build-scripts/ (Phase 1 rename)
+      Added src/dx-o2-agents/ with full sub-tree (Phase 3)
+      Added docker-compose.yml at root
+      Added build-scripts/compose.sh
+      Helm chart version corrected: 0.2.0 (Phase 5 bump)
+      sql/seed.sql description: 150 → 300 products, 13 demo users
+  - Architecture section split into two diagrams:
+      Kubernetes (production) – with and without DX O2 sidecar annotations
+      Docker Compose (local) – separate containers, phpfpm:9000 by hostname
+  - Design decisions table: added multi-stage build, PHP 8.1 pin, NGINX 1.18
+    pin, pessimistic NGINX hardening, DX O2 opportunistic injection, Backdrop
+    CMS coding standards, OpenWaterFoundation shell scripting standards, and
+    build versioning (b<N> suffix).  Removed references to ubuntu:26.04.
+  - Prerequisites table: added Docker Compose plugin v2 note.
+  - Configuration section: shows full .config.example variable set including
+    new HELM_CHART_PATH and APMIA_* DX O2 variables (Phase 4 additions).
+  - Kubernetes deployment section:
+      Step 1 (build): documents --push flag, dx-o2-agents conditional step,
+        .build_number counter and IMAGE_TAG update.
+      Step 2 (DX O2): new step explaining installer placement.
+      Step 3 (push): documents --skip-dxo2 flag and registry logout.
+      Step 4 (deploy): documents --skip-init flag, transient values.local.yaml.
+      Step 5 (resources table): added db-init ConfigMap; noted dx-o2 sidecar.
+      Script paths updated: scripts/ → build-scripts/.
+  - New section: "Local development with Docker Compose" – documents all
+    compose.sh subcommands, .config requirements, and localhost:8080 endpoint.
+  - New section: "DX O2 agent setup" – explains opportunistic injection
+    mechanism (4-step initContainer → sidecar → entrypoint flow), enabling
+    steps (installer → .config → build → push → deploy), and manual Helm
+    override example.
+  - Registry credentials flow diagram: updated script path scripts/ →
+    build-scripts/.
+  - Helm chart reference: version updated to 0.2.0; added image.dxo2.tag and
+    all five dxo2.* values (enabled, emHost, emPort, agentName, appName,
+    logLevel) to the values table.
+  - Removing deployment section: namespace corrected php-demo/bpa-demo mix.
+  - BPA-Demo application section: product count table updated 50 → 100 per
+    brand.  Kept all other account/route/header/use-case documentation.
+  - Database schema block: reformatted with consistent column widths.
+
+  CHANGELOG audit findings:
+  - All six phases (1–6) are present and detailed.
+  - Pre-Phase-1 entries (2026-06-10 and 2026-06-11) preserved as-is; they
+    correctly document the project under its original directory layout and are
+    historical records, not errors.
+  - The "Phase 5" label on the 2026-06-11 @ 14:00 entry refers to the
+    application build step from a prior phase numbering — it predates the
+    formal Phase 1–6 system and is correct in its historical context.
+  - No entries were found to be missing or inaccurate relative to commits.
+
+------------------------------------------------------------------------------
 2026-06-15 @ 18:00 - [Phase 5 – Helm Chart DX O2 Integration & Security Hardening]:
   Extended the php-demo Helm chart (helm/php-demo/) with conditional Broadcom
   DX O2 agent injection via the Kubernetes init-container pattern, and applied
