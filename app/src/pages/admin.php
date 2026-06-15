@@ -3,56 +3,57 @@ require_once __DIR__ . '/../lib/usecase.php';
 
 auth_require_admin();
 
-$user    = auth_user();
-$usecase = $_SESSION['usecase'] ?? '';
-$flash   = '';
+$user      = auth_user();
+$usecase   = $_SESSION['usecase'] ?? '';
+$flash     = '';
 $flashType = 'success';
 
 // ── Handle POST actions ────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_verify();
-    $action       = validate_string($_POST['action']       ?? '', 1, 30)  ?? '';
-    $targetUserId = validate_int($_POST['target_user_id']  ?? null, 1)     ?? 0;
-    $usecaseName  = validate_string($_POST['usecase_name'] ?? '', 0, 100) ?? '';
+  csrf_verify();
+  $action       = validate_string($_POST['action']       ?? '', 1, 30)  ?? '';
+  $targetUserId = validate_int($_POST['target_user_id']  ?? null, 1)    ?? 0;
+  $usecaseName  = validate_string($_POST['usecase_name'] ?? '', 0, 100) ?? '';
 
-    if ($targetUserId > 0) {
-        if ($action === 'assign' && $usecaseName !== '') {
-            usecase_assign($targetUserId, $usecaseName, (int)$user['id']);
-            $flash = "Use case assigned.";
-        } elseif ($action === 'unassign') {
-            usecase_unassign($targetUserId);
-            $flash = "Use case removed.";
-        }
+  if ($targetUserId > 0) {
+    if ($action === 'assign' && $usecaseName !== '') {
+      usecase_assign($targetUserId, $usecaseName, (int) $user['id']);
+      $flash = 'Use case assigned.';
     }
-    header('Location: ?page=admin');
-    exit;
+    elseif ($action === 'unassign') {
+      usecase_unassign($targetUserId);
+      $flash = 'Use case removed.';
+    }
+  }
+  header('Location: ?page=admin');
+  exit;
 }
 
-// ── Load data ─────────────────────────────────────────────────────────────────
+// ── Load data ──────────────────────────────────────────────────────────────────
 $flash = $_GET['flash'] ?? '';
 
 $users = db()->query("
-    SELECT u.id, u.username, u.full_name, u.email, u.role, u.created_at,
-           uu.usecase_name
-    FROM users u
-    LEFT JOIN user_usecases uu ON uu.user_id = u.id
-    ORDER BY u.id
+  SELECT u.id, u.username, u.full_name, u.email, u.role, u.created_at,
+         uu.usecase_name
+  FROM users u
+  LEFT JOIN user_usecases uu ON uu.user_id = u.id
+  ORDER BY u.id
 ")->fetchAll();
 
 $availableUsecases = usecase_available();
 
 $stats = [
-    'products' => (int)db()->query("SELECT COUNT(*) FROM products")->fetchColumn(),
-    'orders'   => (int)db()->query("SELECT COUNT(*) FROM orders")->fetchColumn(),
-    'users'    => (int)db()->query("SELECT COUNT(*) FROM users")->fetchColumn(),
+  'products' => (int) db()->query('SELECT COUNT(*) FROM products')->fetchColumn(),
+  'orders'   => (int) db()->query('SELECT COUNT(*) FROM orders')->fetchColumn(),
+  'users'    => (int) db()->query('SELECT COUNT(*) FROM users')->fetchColumn(),
 ];
 
 set_monitoring_headers(
-    'ADMIN', 'PANEL', 'DASHBOARD',
-    'admin',
-    basket_total(),
-    '',
-    $usecase
+  'ADMIN', 'PANEL', 'DASHBOARD',
+  'admin',
+  basket_total(),
+  '',
+  $usecase
 );
 
 $pageTitle = APP_NAME . ' – Admin';
@@ -94,7 +95,7 @@ require __DIR__ . '/../templates/layout.php';
     <tbody>
       <?php foreach ($users as $u): ?>
       <tr>
-        <td><?= (int)$u['id'] ?></td>
+        <td><?= (int) $u['id'] ?></td>
         <td><strong><?= htmlspecialchars($u['username']) ?></strong></td>
         <td><?= htmlspecialchars($u['full_name'] ?? '') ?></td>
         <td style="font-size:.8rem;color:#607d8b"><?= htmlspecialchars($u['email'] ?? '') ?></td>
@@ -115,7 +116,7 @@ require __DIR__ . '/../templates/layout.php';
           <form method="post" style="display:inline-flex;gap:.3rem">
             <input type="hidden" name="csrf_token"      value="<?= csrf_token() ?>">
             <input type="hidden" name="action"          value="assign">
-            <input type="hidden" name="target_user_id"  value="<?= (int)$u['id'] ?>">
+            <input type="hidden" name="target_user_id"  value="<?= (int) $u['id'] ?>">
             <select name="usecase_name" style="font-size:.8rem;padding:.2rem .4rem;border:1px solid #cfd8dc;border-radius:4px">
               <option value="">— assign —</option>
               <?php foreach ($availableUsecases as $uc): ?>
@@ -131,7 +132,7 @@ require __DIR__ . '/../templates/layout.php';
           <form method="post" style="display:inline-flex;margin-left:.3rem">
             <input type="hidden" name="csrf_token"     value="<?= csrf_token() ?>">
             <input type="hidden" name="action"         value="unassign">
-            <input type="hidden" name="target_user_id" value="<?= (int)$u['id'] ?>">
+            <input type="hidden" name="target_user_id" value="<?= (int) $u['id'] ?>">
             <button type="submit" class="btn btn-danger btn-sm">✕</button>
           </form>
           <?php endif ?>

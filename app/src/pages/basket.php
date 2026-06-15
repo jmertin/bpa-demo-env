@@ -1,49 +1,49 @@
 <?php
-// Handle POST actions first (before any output)
+// Handle POST actions first (before any output).
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_verify();
-    $action    = validate_string($_POST['action'] ?? '', 1, 20) ?? '';
-    $productId = validate_int($_POST['product_id'] ?? null, 1) ?? 0;
+  csrf_verify();
+  $action    = validate_string($_POST['action'] ?? '', 1, 20) ?? '';
+  $productId = validate_int($_POST['product_id'] ?? null, 1) ?? 0;
 
-    if ($productId > 0) {
-        switch ($action) {
-            case 'add':
-                $qty = validate_int($_POST['qty'] ?? 1, 1, 99) ?? 1;
-                basket_add($productId, $qty);
-                break;
-            case 'remove':
-                basket_remove($productId);
-                break;
-            case 'update':
-                $qty = validate_int($_POST['qty'] ?? 1, 0, 99) ?? 0;
-                basket_set_qty($productId, $qty);
-                break;
-        }
+  if ($productId > 0) {
+    switch ($action) {
+      case 'add':
+        $qty = validate_int($_POST['qty'] ?? 1, 1, 99) ?? 1;
+        basket_add($productId, $qty);
+        break;
+      case 'remove':
+        basket_remove($productId);
+        break;
+      case 'update':
+        $qty = validate_int($_POST['qty'] ?? 1, 0, 99) ?? 0;
+        basket_set_qty($productId, $qty);
+        break;
     }
-    if ($action === 'clear') {
-        basket_clear();
-    }
+  }
+  if ($action === 'clear') {
+    basket_clear();
+  }
 
-    // POST–Redirect–GET to prevent double-submit
-    header('Location: ?page=basket');
-    exit;
+  // POST–Redirect–GET to prevent double-submit.
+  header('Location: ?page=basket');
+  exit;
 }
 
-// ── GET: display basket ───────────────────────────────────────────────────────
+// ── GET: display basket ────────────────────────────────────────────────────────
 $user    = auth_user();
 $usecase = $_SESSION['usecase'] ?? '';
 $total   = basket_total();
 
 set_monitoring_headers(
-    'BASKET', 'VIEW', 'CART',
-    $user ? $user['role'] : 'anonymous',
-    $total,
-    '',
-    $usecase
+  'BASKET', 'VIEW', 'CART',
+  $user ? $user['role'] : 'anonymous',
+  $total,
+  '',
+  $usecase
 );
 
 $pageTitle = APP_NAME . ' – Basket';
-$items = basket_items();
+$items     = basket_items();
 
 require __DIR__ . '/../templates/layout.php';
 ?>
@@ -87,13 +87,13 @@ require __DIR__ . '/../templates/layout.php';
         </a>
       </td>
       <td><span class="product-brand" style="color:#<?= htmlspecialchars($item['product']['brand_color']) ?>"><?= htmlspecialchars($item['product']['brand_name']) ?></span></td>
-      <td>€<?= number_format((float)$item['product']['price'], 2) ?></td>
+      <td>€<?= number_format((float) $item['product']['price'], 2) ?></td>
       <td>
         <form method="post" style="display:flex;gap:.3rem">
           <input type="hidden" name="csrf_token"  value="<?= csrf_token() ?>">
           <input type="hidden" name="action"      value="update">
-          <input type="hidden" name="product_id"  value="<?= (int)$item['product']['id'] ?>">
-          <input type="number" name="qty" value="<?= (int)$item['qty'] ?>" min="0" max="99" class="qty-input">
+          <input type="hidden" name="product_id"  value="<?= (int) $item['product']['id'] ?>">
+          <input type="number" name="qty" value="<?= (int) $item['qty'] ?>" min="0" max="99" class="qty-input">
           <button type="submit" class="btn btn-secondary btn-sm">↻</button>
         </form>
       </td>
@@ -102,7 +102,7 @@ require __DIR__ . '/../templates/layout.php';
         <form method="post">
           <input type="hidden" name="csrf_token"  value="<?= csrf_token() ?>">
           <input type="hidden" name="action"      value="remove">
-          <input type="hidden" name="product_id"  value="<?= (int)$item['product']['id'] ?>">
+          <input type="hidden" name="product_id"  value="<?= (int) $item['product']['id'] ?>">
           <button type="submit" class="btn btn-danger btn-sm">✕</button>
         </form>
       </td>

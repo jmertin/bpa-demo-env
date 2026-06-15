@@ -5,6 +5,50 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-15 @ 15:30 - [Phase 2 – Backdrop CMS Coding Standards]: Refactored all
+  22 PHP source files under app/src/ to strictly comply with Backdrop CMS PHP
+  coding standards:
+
+  Style changes applied universally:
+  - Indentation changed from 4 spaces to 2 spaces throughout.
+  - Opening braces moved to the same line as the function signature
+    (function foo(): void {) in line with Backdrop/Drupal K&R style.
+  - Single quotes used for all string literals that contain no interpolation.
+  - 'else {' and 'catch {' placed on their own line after the closing '}'
+    of the preceding block.
+
+  PHPDoc headers added to every function (new or extended):
+  - config/app.php       – csrf_token(), csrf_verify()
+  - config/database.php  – db()
+  - lib/auth.php         – auth_login(), auth_logout(), auth_user(),
+                           auth_require_login(), auth_require_admin(),
+                           auth_is_admin()
+  - lib/basket.php       – basket_add(), basket_remove(), basket_set_qty(),
+                           basket_clear(), basket_items(), basket_total(),
+                           basket_count()
+  - lib/order.php        – order_create(), order_get(), order_list_for_user()
+  - lib/page_id.php      – set_page_id(), set_monitoring_headers()
+  - lib/product.php      – product_get_brands(), product_get_capabilities(),
+                           product_list(), product_get_by_slug(),
+                           product_get_by_id(), _product_where(),
+                           _product_decode_caps()
+  - lib/usecase.php      – usecase_run(), usecase_assign(), usecase_unassign(),
+                           usecase_available(), usecase_get_for_user()
+  - lib/validate.php     – all 11 validate_*/input_* functions (headers
+                           extended with full @param/@return documentation)
+  - usecases/trouble.php       – usecase_trouble()
+  - usecases/empty_basket.php  – usecase_empty_basket()
+
+  Mixed PHP/HTML page and template files (no function definitions):
+  - pages/shop.php, product.php, basket.php, checkout.php, order.php,
+    login.php, logout.php, admin.php  – PHP block indentation normalised.
+  - templates/layout.php, footer.php  – PHP block indentation normalised.
+  - db.php, index.php, setup/init_users.php  – indentation normalised.
+
+  Also: usecase_trouble() updated to cycle over 300 products (matching the
+  expanded seed catalogue) instead of the previous 150.
+
+------------------------------------------------------------------------------
 2026-06-15 @ 14:00 - [Phase 1 – Repository Setup]: Confirmed git repository
   initialised on branch master with full commit history.
 

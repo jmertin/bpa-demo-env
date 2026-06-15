@@ -7,48 +7,48 @@ $items   = basket_items();
 $total   = basket_total();
 
 if (empty($items)) {
-    header('Location: ?page=basket');
-    exit;
+  header('Location: ?page=basket');
+  exit;
 }
 
 $errors = [];
 $values = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_verify();
+  csrf_verify();
 
-    $values['billing_name']  = validate_string($_POST['billing_name']  ?? '', 2, 200);
-    $values['billing_email'] = validate_email($_POST['billing_email']  ?? '');
-    $values['cc_number']     = validate_cc_number($_POST['cc_number']  ?? '');
-    $values['cc_expiry']     = validate_cc_expiry($_POST['cc_expiry']  ?? '');
-    $values['cc_cvv']        = validate_cvv($_POST['cc_cvv']           ?? '');
+  $values['billing_name']  = validate_string($_POST['billing_name']  ?? '', 2, 200);
+  $values['billing_email'] = validate_email($_POST['billing_email']  ?? '');
+  $values['cc_number']     = validate_cc_number($_POST['cc_number']  ?? '');
+  $values['cc_expiry']     = validate_cc_expiry($_POST['cc_expiry']  ?? '');
+  $values['cc_cvv']        = validate_cvv($_POST['cc_cvv']           ?? '');
 
-    if ($values['billing_name']  === null) $errors['billing_name']  = 'Enter a valid name (2-200 chars).';
-    if ($values['billing_email'] === null) $errors['billing_email'] = 'Enter a valid email address.';
-    if ($values['cc_number']     === null) $errors['cc_number']     = 'Enter a valid card number (Luhn check failed).';
-    if ($values['cc_expiry']     === null) $errors['cc_expiry']     = 'Enter a valid expiry (MM/YY, not in the past).';
-    if ($values['cc_cvv']        === null) $errors['cc_cvv']        = 'Enter a valid CVV (3-4 digits).';
+  if ($values['billing_name']  === null) { $errors['billing_name']  = 'Enter a valid name (2-200 chars).'; }
+  if ($values['billing_email'] === null) { $errors['billing_email'] = 'Enter a valid email address.'; }
+  if ($values['cc_number']     === null) { $errors['cc_number']     = 'Enter a valid card number (Luhn check failed).'; }
+  if ($values['cc_expiry']     === null) { $errors['cc_expiry']     = 'Enter a valid expiry (MM/YY, not in the past).'; }
+  if ($values['cc_cvv']        === null) { $errors['cc_cvv']        = 'Enter a valid CVV (3-4 digits).'; }
 
-    if (empty($errors)) {
-        $ccLast4  = substr(preg_replace('/\s+/', '', $values['cc_number']), -4);
-        $userId   = $user ? (int)$user['id'] : null;
-        $orderId  = order_create(
-            $userId,
-            $values['billing_name'],
-            $values['billing_email'],
-            $ccLast4
-        );
-        header("Location: ?page=order&id={$orderId}");
-        exit;
-    }
+  if (empty($errors)) {
+    $ccLast4 = substr(preg_replace('/\s+/', '', $values['cc_number']), -4);
+    $userId  = $user ? (int) $user['id'] : null;
+    $orderId = order_create(
+      $userId,
+      $values['billing_name'],
+      $values['billing_email'],
+      $ccLast4
+    );
+    header("Location: ?page=order&id={$orderId}");
+    exit;
+  }
 }
 
 set_monitoring_headers(
-    'CHECKOUT', 'FORM', 'PAYMENT',
-    $user ? $user['role'] : 'anonymous',
-    $total,
-    empty($errors) ? '' : 'VALIDATION_ERRORS',
-    $usecase
+  'CHECKOUT', 'FORM', 'PAYMENT',
+  $user ? $user['role'] : 'anonymous',
+  $total,
+  empty($errors) ? '' : 'VALIDATION_ERRORS',
+  $usecase
 );
 
 $pageTitle = APP_NAME . ' – Checkout';
@@ -136,7 +136,7 @@ require __DIR__ . '/../templates/layout.php';
       <div class="order-summary">
         <?php foreach ($items as $item): ?>
         <div class="order-summary-row">
-          <span><?= htmlspecialchars($item['product']['name']) ?> ×<?= (int)$item['qty'] ?></span>
+          <span><?= htmlspecialchars($item['product']['name']) ?> ×<?= (int) $item['qty'] ?></span>
           <span>€<?= number_format($item['subtotal'], 2) ?></span>
         </div>
         <?php endforeach ?>

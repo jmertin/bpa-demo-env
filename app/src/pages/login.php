@@ -1,29 +1,31 @@
 <?php
-// Redirect if already logged in
+// Redirect if already logged in.
 if (auth_user()) {
-    header('Location: ?page=shop');
-    exit;
+  header('Location: ?page=shop');
+  exit;
 }
 
 $error  = '';
 $values = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_verify();
+  csrf_verify();
 
-    $username = validate_username($_POST['username'] ?? '');
-    $password = validate_password($_POST['password'] ?? '');
-    $values['username'] = $username ?? '';
+  $username = validate_username($_POST['username'] ?? '');
+  $password = validate_password($_POST['password'] ?? '');
+  $values['username'] = $username ?? '';
 
-    if ($username === null || $password === null) {
-        $error = 'Invalid username or password format.';
-    } elseif (!auth_login($username, $password)) {
-        $error = 'Invalid username or password.';
-    } else {
-        $redirect = validate_slug($_GET['from'] ?? 'shop') ?? 'shop';
-        header("Location: ?page={$redirect}");
-        exit;
-    }
+  if ($username === null || $password === null) {
+    $error = 'Invalid username or password format.';
+  }
+  elseif (!auth_login($username, $password)) {
+    $error = 'Invalid username or password.';
+  }
+  else {
+    $redirect = validate_slug($_GET['from'] ?? 'shop') ?? 'shop';
+    header("Location: ?page={$redirect}");
+    exit;
+  }
 }
 
 set_monitoring_headers('AUTH', 'LOGIN', 'FORM', 'anonymous', 0, $error ? 'LOGIN_FAILED' : '');

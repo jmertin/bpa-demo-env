@@ -217,7 +217,7 @@ footer span{color:#7c83ff}
 </head>
 <body>
 
-<?php /* ── Top navigation bar ───────────────────────────────────────────────── */ ?>
+<?php /* ── Top navigation bar ──────────────────────────────────────────────── */ ?>
 <header class="topbar">
   <a href="?" class="topbar-brand">🏠 <?= APP_NAME ?></a>
   <div class="topbar-right">
@@ -243,7 +243,7 @@ footer span{color:#7c83ff}
 
 <div class="page-wrapper">
 
-<?php /* ── Sidebar ──────────────────────────────────────────────────────────── */ ?>
+<?php /* ── Sidebar ─────────────────────────────────────────────────────────── */ ?>
 <aside class="sidebar">
   <div class="sidebar-section">
     <h3>Brands</h3>
