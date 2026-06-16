@@ -8,9 +8,11 @@
 introscope.agent.enterprisemanager.transport.tcp.host.DEFAULT=${APMIA_EM_HOST}
 introscope.agent.enterprisemanager.transport.tcp.port.DEFAULT=${APMIA_EM_PORT}
 
-# SSL: set to true and configure the keystore if your EM uses TLS.
+# WSS (WebSocket Secure) transport – default for DX APM modern deployments.
+# For plain TCP (Isengard, port 5001, lab/unsecured only): DefaultSocketFactory
+# For legacy TLS-over-TCP (port 5443): SSLSocketFactory
 introscope.agent.enterprisemanager.transport.tcp.socketfactory.DEFAULT=\
-    com.wily.isengard.postofficehub.link.net.DefaultSocketFactory
+    com.wily.isengard.postofficehub.link.net.WSSSocketFactory
 
 # ── Agent identification ──────────────────────────────────────────────────────
 introscope.agent.agentName=${APMIA_AGENT_NAME}
@@ -40,6 +42,13 @@ introscope.agent.extensions.directory=${APMIA_HOME}/extensions
 # This flag prevents the Infrastructure Agent from attempting to manage the
 # PHP probe lifecycle directly when running inside a dedicated container.
 introscope.agent.php.agentEnabled=false
+
+# ── PHP probe IPC endpoint ────────────────────────────────────────────────────
+# Address on which the Infrastructure Agent's PHP collector socket listens.
+# The PHP probe extension (wily_php_agent.so) in php-fpm connects here.
+# In Kubernetes (same pod) this is always 127.0.0.1 – containers share the
+# pod loopback.  Override via APMIA_PHP_COLLECTOR_HOST / APMIA_PHP_COLLECTOR_PORT.
+introscope.agent.php.collectorAddress=${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT}
 
 # ── Data reporting ────────────────────────────────────────────────────────────
 introscope.agent.defaultMetricFrequency=15
