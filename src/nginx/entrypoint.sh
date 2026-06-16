@@ -8,6 +8,9 @@ APMIA_HOME="${APMIA_HOME:-/opt/apmia}"
 BPA_MODULE_DIR="${APMIA_HOME}/extensions/WebServerPlugin"
 BPA_MODULE="${BPA_MODULE_DIR}/ngx_http_ca_plugin_filter_module.so"
 BPA_MODULE_CONF="/etc/nginx/modules-enabled/bpa.conf"
+# IPC address where the BPA plugin reaches the Business Transaction Listener (same pod).
+APMIA_BTL_HOST="${APMIA_BTL_HOST:-127.0.0.1}"
+APMIA_BTL_PORT="${APMIA_BTL_PORT:-9001}"
 
 # ── BPA WebServer Plugin Injection ────────────────────────────────────────────
 # Checks for the Broadcom BPA shared module in the agent volume mounted at
@@ -30,6 +33,19 @@ if [[ -f "${BPA_MODULE}" ]]; then
     if [[ -f "${BPA_PLUGIN_INI}" ]]; then
         cp "${BPA_PLUGIN_INI}" /etc/nginx/bpa_plugin.ini
         echo "[entrypoint]   Copied BPA plugin config → /etc/nginx/bpa_plugin.ini"
+
+        # Patch the BTL connection so the plugin reaches the dx-o2-agent sidecar.
+        # In Kubernetes, all pod containers share 127.0.0.1 (same network namespace).
+        # Replace collectorHost/collectorPort if present; append the block if absent.
+        local bpa_ini="/etc/nginx/bpa_plugin.ini"
+        if grep -qE '^[[:space:]]*collectorHost' "${bpa_ini}"; then
+            sed -i "s|^[[:space:]]*collectorHost=.*|collectorHost=${APMIA_BTL_HOST}|" "${bpa_ini}"
+            sed -i "s|^[[:space:]]*collectorPort=.*|collectorPort=${APMIA_BTL_PORT}|" "${bpa_ini}"
+        else
+            printf '\n[Collector]\ncollectorHost=%s\ncollectorPort=%s\n' \
+                "${APMIA_BTL_HOST}" "${APMIA_BTL_PORT}" >> "${bpa_ini}"
+        fi
+        echo "[entrypoint]   BTL address: ${APMIA_BTL_HOST}:${APMIA_BTL_PORT}"
     fi
 
     echo "[entrypoint] BPA WebServer Plugin active – BPA instrumentation enabled."

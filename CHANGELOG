@@ -5,6 +5,54 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-16 @ 11:30 - [WSS default + same-pod IPC addressing for DX O2 probes]:
+  Changed EM connection protocol to WSS (WebSocket Secure) as default.
+  Added explicit same-pod IPC addressing so the PHP probe and BPA WebServer
+  Plugin can reach the Infrastructure Agent and BTL without hardcoded addresses.
+
+  src/dx-o2-agents/config/IntroscopeAgent.profile.template:
+  - Replaced DefaultSocketFactory with WSSSocketFactory (WSS default, port 8443).
+  - Added introscope.agent.php.collectorAddress property rendered from
+    APMIA_PHP_COLLECTOR_HOST / APMIA_PHP_COLLECTOR_PORT env vars.
+
+  src/dx-o2-agents/entrypoint.sh:
+  - APMIA_EM_PORT default changed from 5001 to 8443 (WSS).
+  - Added APMIA_PHP_COLLECTOR_HOST (127.0.0.1), APMIA_PHP_COLLECTOR_PORT (55512),
+    APMIA_BTL_HOST (127.0.0.1), APMIA_BTL_PORT (9001) env vars with defaults.
+  - All four new vars exported and included in envsubst rendering call.
+
+  src/php-fpm/entrypoint.sh:
+  - Reads APMIA_PHP_COLLECTOR_HOST / PORT (default 127.0.0.1:55512).
+  - After copying wily_php_agent.ini, patches or appends
+    introscope.agent.php.collectorAddress with the resolved IPC endpoint.
+
+  src/nginx/entrypoint.sh:
+  - Reads APMIA_BTL_HOST / PORT (default 127.0.0.1:9001).
+  - After copying webserver_plugin.ini, patches collectorHost / collectorPort
+    or appends a [Collector] block to set the BTL address.
+
+  helm/php-demo/templates/deployment.yaml:
+  - dx-o2-agent: added APMIA_PHP_COLLECTOR_* and APMIA_BTL_* env vars; added
+    named container ports php-collector (55512) and btl (9001) for observability.
+  - nginx: added APMIA_BTL_HOST and APMIA_BTL_PORT env vars (dxo2.enabled block).
+  - php-fpm: added APMIA_PHP_COLLECTOR_HOST and APMIA_PHP_COLLECTOR_PORT env vars.
+
+  helm/php-demo/values.yaml:
+  - dxo2.emPort changed from "5001" to "8443".
+  - Added dxo2.phpCollectorHost, phpCollectorPort, btlHost, btlPort with
+    127.0.0.1 defaults (Kubernetes same-pod loopback).
+
+  build-scripts/deploy.sh:
+  - apmia_em_port default updated to 8443.
+  - Added apmia_php_collector_host/port and apmia_btl_host/port locals; all
+    four written to the generated values.local.yaml.
+
+  .config.example:
+  - APMIA_EM_PORT updated to 8443.
+  - Added APMIA_PHP_COLLECTOR_HOST, APMIA_PHP_COLLECTOR_PORT, APMIA_BTL_HOST,
+    APMIA_BTL_PORT with explanatory comments.
+
+------------------------------------------------------------------------------
 2026-06-16 @ 10:00 - [DX O2 Agent Setup Documentation]:
   Added comprehensive DX-O2-AGENT-SETUP.md and updated CLAUDE.md + README.md
   with complete agent setup instructions.

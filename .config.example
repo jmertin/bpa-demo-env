@@ -39,15 +39,25 @@ HELM_CHART_PATH=""
 #
 # APMIA_EM_HOST: Hostname or IP of the Broadcom Enterprise Manager (required
 #   when the dx-o2-agents container is enabled).
-# APMIA_EM_PORT: EM collector port (default 5001 for unsecured, 5443 for TLS).
+# APMIA_EM_PORT: EM collector port.  Default 8443 (WSS/WebSocket Secure).
+#   Use 5443 for SSL-over-TCP or 5001 for plain-TCP (lab/unsecured only).
 # APMIA_AGENT_NAME: Logical agent name shown in the EM console.
 # APMIA_APP_NAME:   Application name used to group metrics in the console.
 # APMIA_LOG_LEVEL:  Agent log verbosity: DEBUG, INFO, WARN, or ERROR.
 #
+# Same-pod IPC endpoints (Kubernetes): all containers share 127.0.0.1.
+# APMIA_PHP_COLLECTOR_HOST / PORT: where the PHP probe reaches the IA.
+# APMIA_BTL_HOST / PORT: where the BPA WebServer Plugin reaches the BTL.
+# Override these only when running the DX O2 agent in a separate pod or service.
+#
 # Leave APMIA_EM_HOST empty to deploy without DX O2 monitoring; all other
 # containers start cleanly without the agent volume mounted.
 APMIA_EM_HOST=""
-APMIA_EM_PORT="5001"
+APMIA_EM_PORT="8443"
 APMIA_AGENT_NAME="bpa-demo-agent"
 APMIA_APP_NAME="BPA-Demo"
 APMIA_LOG_LEVEL="INFO"
+APMIA_PHP_COLLECTOR_HOST="127.0.0.1"
+APMIA_PHP_COLLECTOR_PORT="55512"
+APMIA_BTL_HOST="127.0.0.1"
+APMIA_BTL_PORT="9001"

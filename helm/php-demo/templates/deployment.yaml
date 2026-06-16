@@ -113,6 +113,23 @@ spec:
               value: {{ .Values.dxo2.appName | quote }}
             - name: APMIA_LOG_LEVEL
               value: {{ .Values.dxo2.logLevel | quote }}
+            - name: APMIA_PHP_COLLECTOR_HOST
+              value: {{ .Values.dxo2.phpCollectorHost | quote }}
+            - name: APMIA_PHP_COLLECTOR_PORT
+              value: {{ .Values.dxo2.phpCollectorPort | quote }}
+            - name: APMIA_BTL_HOST
+              value: {{ .Values.dxo2.btlHost | quote }}
+            - name: APMIA_BTL_PORT
+              value: {{ .Values.dxo2.btlPort | quote }}
+          ports:
+            # Informational: the IA PHP collector socket and BTL listener ports.
+            # Containers in the same pod communicate via 127.0.0.1 – no Service needed.
+            - name: php-collector
+              containerPort: {{ .Values.dxo2.phpCollectorPort }}
+              protocol: TCP
+            - name: btl
+              containerPort: {{ .Values.dxo2.btlPort }}
+              protocol: TCP
           {{- with .Values.dxo2.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -134,6 +151,11 @@ spec:
           env:
             - name: APMIA_HOME
               value: "/opt/apmia"
+            # BTL is in the dx-o2-agent container; same pod → always 127.0.0.1.
+            - name: APMIA_BTL_HOST
+              value: {{ .Values.dxo2.btlHost | quote }}
+            - name: APMIA_BTL_PORT
+              value: {{ .Values.dxo2.btlPort | quote }}
           {{- end }}
           volumeMounts:
             - name: nginx-config
@@ -202,6 +224,11 @@ spec:
             {{- if .Values.dxo2.enabled }}
             - name: APMIA_HOME
               value: "/opt/apmia"
+            # IA PHP collector is in the dx-o2-agent container; same pod → always 127.0.0.1.
+            - name: APMIA_PHP_COLLECTOR_HOST
+              value: {{ .Values.dxo2.phpCollectorHost | quote }}
+            - name: APMIA_PHP_COLLECTOR_PORT
+              value: {{ .Values.dxo2.phpCollectorPort | quote }}
             {{- end }}
           volumeMounts:
             - name: nginx-config

@@ -152,10 +152,18 @@ probes:
 dxo2:
   enabled: false
   emHost: ""              # Enterprise Manager hostname or IP (required when enabled)
-  emPort: "5001"          # EM collector port (5001 plain-text, 5443 TLS)
+  emPort: "8443"          # EM collector port (8443=WSS default, 5443=SSL/TCP, 5001=plain-TCP)
   agentName: "bpa-demo-agent"
   appName: "BPA-Demo"
   logLevel: "INFO"        # DEBUG | INFO | WARN | ERROR
+
+  # Same-pod IPC endpoints.  All containers in the pod share 127.0.0.1 (Kubernetes
+  # network namespace).  Override only when running the agent in a separate pod/service.
+  phpCollectorHost: "127.0.0.1"  # IA PHP collector: php-fpm probe → dx-o2-agent
+  phpCollectorPort: "55512"      # Default IA PHP collector port
+  btlHost: "127.0.0.1"          # BTL: nginx BPA plugin → dx-o2-agent
+  btlPort: "9001"                # Default BTL listener port
+
   resources:
     requests:
       memory: "256Mi"

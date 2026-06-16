@@ -24,7 +24,8 @@
 #              MARIADB_PASSWORD.
 #              Optional: HELM_CHART_PATH (defaults to helm/php-demo),
 #              APMIA_EM_HOST, APMIA_EM_PORT, APMIA_AGENT_NAME, APMIA_APP_NAME,
-#              APMIA_LOG_LEVEL.
+#              APMIA_LOG_LEVEL, APMIA_PHP_COLLECTOR_HOST, APMIA_PHP_COLLECTOR_PORT,
+#              APMIA_BTL_HOST, APMIA_BTL_PORT.
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -106,10 +107,14 @@ generate_values() {
 
     # DX O2 optional variables – default to empty strings when not configured.
     local apmia_em_host="${APMIA_EM_HOST:-}"
-    local apmia_em_port="${APMIA_EM_PORT:-5001}"
+    local apmia_em_port="${APMIA_EM_PORT:-8443}"
     local apmia_agent_name="${APMIA_AGENT_NAME:-bpa-demo-agent}"
     local apmia_app_name="${APMIA_APP_NAME:-BPA-Demo}"
     local apmia_log_level="${APMIA_LOG_LEVEL:-INFO}"
+    local apmia_php_collector_host="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
+    local apmia_php_collector_port="${APMIA_PHP_COLLECTOR_PORT:-55512}"
+    local apmia_btl_host="${APMIA_BTL_HOST:-127.0.0.1}"
+    local apmia_btl_port="${APMIA_BTL_PORT:-9001}"
 
     info "Generating transient Helm values override: ${out}"
     cat > "${out}" <<EOF
@@ -158,6 +163,10 @@ dxo2:
   agentName: "${apmia_agent_name}"
   appName: "${apmia_app_name}"
   logLevel: "${apmia_log_level}"
+  phpCollectorHost: "${apmia_php_collector_host}"
+  phpCollectorPort: "${apmia_php_collector_port}"
+  btlHost: "${apmia_btl_host}"
+  btlPort: "${apmia_btl_port}"
 EOF
     info "Values file generated."
 }
