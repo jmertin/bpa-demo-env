@@ -100,8 +100,11 @@ RUN set -euo pipefail && \
     echo "BTL extracted to /opt/btlistener"
 
 # ── BPA WebServer Plugin ──────────────────────────────────────────────────────
-# Selects the nginx 1.17.1 module; its module ABI is compatible with
-# nginx 1.18.x shipped by ubuntu:22.04 (same NGX_MODULE_VERSION series).
+# Extract EVERY nginx plugin variant from the BPA zip and store each .so as
+# ngx_http_ca_plugin_filter_module_<nginx-ver>.so  (e.g. _1.18.0.so).
+# The nginx entrypoint selects the file matching the running nginx version at
+# startup, so the image works regardless of which nginx release is in the
+# container — no hardcoded version required here.
 RUN set -euo pipefail && \
     BPA_ZIP=$(ls /tmp/installers/Business_Payload_Analyzer_WebServer_Plugins.zip 2>/dev/null | head -1) && \
     if [[ -z "${BPA_ZIP}" ]]; then \
@@ -109,18 +112,27 @@ RUN set -euo pipefail && \
         exit 0; \
     fi && \
     echo "Extracting BPA plugin from: $(basename "${BPA_ZIP}")" && \
+    mkdir -p /opt/apmia/extensions/WebServerPlugin && \
     unzip -q "${BPA_ZIP}" -d /tmp/bpa-extract && \
-    NGINX_PLUGIN=$(find /tmp/bpa-extract -name "nginx-webserver-plugin-*-ngx_1.17.1.tar.gz" | head -1) && \
-    if [[ -z "${NGINX_PLUGIN}" ]]; then \
-        echo "ERROR: nginx 1.17.1 plugin not found inside BPA zip" >&2; \
+    FOUND=0 && \
+    for plugin_tar in $(find /tmp/bpa-extract -name "nginx-webserver-plugin-*-ngx_*.tar.gz" 2>/dev/null | sort); do \
+        ngx_ver=$(basename "${plugin_tar}" | sed 's/.*-ngx_\([0-9.]*\)\.tar\.gz/\1/') && \
+        rm -rf /tmp/bpa-ngx && mkdir -p /tmp/bpa-ngx && \
+        tar -xzf "${plugin_tar}" -C /tmp/bpa-ngx && \
+        so=$(find /tmp/bpa-ngx -name "ngx_http_ca_plugin_filter_module.so" | head -1) && \
+        if [[ -n "${so}" ]]; then \
+            dest="/opt/apmia/extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module_${ngx_ver}.so" && \
+            cp "${so}" "${dest}" && \
+            echo "  Installed plugin for nginx ${ngx_ver}: $(basename "${dest}")" && \
+            FOUND=$((FOUND + 1)); \
+        fi; \
+    done && \
+    rm -rf /tmp/bpa-extract /tmp/bpa-ngx && \
+    if [[ ${FOUND} -eq 0 ]]; then \
+        echo "ERROR: No nginx plugin variants found inside BPA zip" >&2; \
         exit 1; \
     fi && \
-    mkdir -p /opt/apmia/extensions/WebServerPlugin && \
-    tar -xzf "${NGINX_PLUGIN}" -C /tmp/bpa-extract && \
-    find /tmp/bpa-extract -name "ngx_http_ca_plugin_filter_module.so" \
-        -exec cp {} /opt/apmia/extensions/WebServerPlugin/ \; && \
-    rm -rf /tmp/bpa-extract && \
-    echo "BPA WebServer Plugin installed to /opt/apmia/extensions/WebServerPlugin/"
+    echo "BPA WebServer Plugin: ${FOUND} nginx variant(s) installed."
 
 # ── Permissions and runtime directories ──────────────────────────────────────
 RUN set -euo pipefail && \
