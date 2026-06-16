@@ -43,13 +43,6 @@ introscope.agent.extensions.directory=${APMIA_HOME}/extensions
 # PHP probe lifecycle directly when running inside a dedicated container.
 introscope.agent.php.agentEnabled=false
 
-# ── PHP probe IPC endpoint ────────────────────────────────────────────────────
-# Address on which the Infrastructure Agent's PHP collector socket listens.
-# The PHP probe extension (wily_php_agent.so) in php-fpm connects here.
-# In Kubernetes (same pod) this is always 127.0.0.1 – containers share the
-# pod loopback.  Override via APMIA_PHP_COLLECTOR_HOST / APMIA_PHP_COLLECTOR_PORT.
-introscope.agent.php.collectorAddress=${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT}
-
 # ── Data reporting ────────────────────────────────────────────────────────────
 introscope.agent.defaultMetricFrequency=15
 introscope.agent.metricFrequency=15

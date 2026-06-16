@@ -112,9 +112,9 @@ generate_values() {
     local apmia_app_name="${APMIA_APP_NAME:-BPA-Demo}"
     local apmia_log_level="${APMIA_LOG_LEVEL:-INFO}"
     local apmia_php_collector_host="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
-    local apmia_php_collector_port="${APMIA_PHP_COLLECTOR_PORT:-55512}"
+    local apmia_php_collector_port="${APMIA_PHP_COLLECTOR_PORT:-5005}"
     local apmia_btl_host="${APMIA_BTL_HOST:-127.0.0.1}"
-    local apmia_btl_port="${APMIA_BTL_PORT:-9001}"
+    local apmia_btl_port="${APMIA_BTL_PORT:-8000}"
 
     info "Generating transient Helm values override: ${out}"
     cat > "${out}" <<EOF

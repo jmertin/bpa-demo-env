@@ -8,8 +8,10 @@ set -euo pipefail
 APMIA_HOME="${APMIA_HOME:-/opt/apmia}"
 PHP_PROBE_DIR="${APMIA_HOME}/extensions/PHPAgent"
 # IPC address where the PHP probe reaches the Infrastructure Agent (same pod).
+# Default port 5005 matches wily_php_agent.ini default from the DX O2 installer.
 APMIA_PHP_COLLECTOR_HOST="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
-APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-55512}"
+APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-5005}"
+APMIA_APP_NAME="${APMIA_APP_NAME:-BPA-Demo}"
 PHP_VERSION="8.1"
 PHP_CONF_D="/etc/php/${PHP_VERSION}/fpm/conf.d"
 PHP_MODS_AVAIL="/etc/php/${PHP_VERSION}/mods-available"
@@ -37,18 +39,16 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
            "${PHP_CONF_D}/99-wily_php_agent.ini"
     echo "[entrypoint]   Probe INI installed at ${PHP_CONF_D}/99-wily_php_agent.ini"
 
-    # Patch the Infrastructure Agent IPC endpoint so the probe can reach the
-    # dx-o2-agent sidecar.  In Kubernetes, all pod containers share 127.0.0.1.
-    # Replace the collectorAddress property if already present; append if absent.
-    local collector_line="introscope.agent.php.collectorAddress=${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT}"
-    if grep -qE '^[[:space:]]*introscope\.agent\.php\.collectorAddress' \
-            "${PHP_MODS_AVAIL}/wily_php_agent.ini" 2>/dev/null; then
-        sed -i "s|.*introscope\.agent\.php\.collectorAddress=.*|${collector_line}|" \
-            "${PHP_MODS_AVAIL}/wily_php_agent.ini"
-    else
-        printf '\n%s\n' "${collector_line}" >> "${PHP_MODS_AVAIL}/wily_php_agent.ini"
-    fi
-    echo "[entrypoint]   PHP probe collector: ${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT}"
+    # Patch the wily_php_agent.ini so the probe connects to the dx-o2-agent
+    # sidecar.  In a Kubernetes pod all containers share 127.0.0.1.
+    # Property names come from the DX O2 installer format (wily_php_agent.*).
+    INI_PATH="${PHP_MODS_AVAIL}/wily_php_agent.ini"
+    sed -i "s|^wily_php_agent\.collectorHost=.*|wily_php_agent.collectorHost=\"${APMIA_PHP_COLLECTOR_HOST}\"|" "${INI_PATH}"
+    sed -i "s|^wily_php_agent\.collectorPort=.*|wily_php_agent.collectorPort=\"${APMIA_PHP_COLLECTOR_PORT}\"|" "${INI_PATH}"
+    sed -i "s|^wily_php_agent\.application\.name=.*|wily_php_agent.application.name=\"${APMIA_APP_NAME}\"|" "${INI_PATH}"
+    # Redirect the probe log to a writable path inside the container.
+    sed -i "s|^wily_php_agent\.logdir=.*|wily_php_agent.logdir=\"/tmp\"|" "${INI_PATH}"
+    echo "[entrypoint]   PHP probe IPC: ${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT}"
 
     # Run the agent's own install helper if present (sets up any additional
     # symlinks or registers the probe with php-fpm's configuration).
