@@ -342,6 +342,23 @@ The application is reachable at **http://localhost:8080/** after `up`.
 
 ## DX O2 agent setup
 
+> **Full guide:** see **[DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)** for
+> complete download instructions, installer structure, build walkthrough,
+> runtime injection diagrams, verification steps, and troubleshooting.
+
+### Components
+
+All four Broadcom monitoring components ship in a **single installer archive**
+(`apmia-<version>-linux.tar.gz`) downloaded from
+[Broadcom Support](https://support.broadcom.com/):
+
+| Component | Runs in | Path after install |
+|---|---|---|
+| Infrastructure Agent | `dx-o2-agent` sidecar | `bin/APMIAgent` |
+| Business Transaction Listener (BTL) | `dx-o2-agent` sidecar | `bin/btl` |
+| PHP Probe | `php-fpm` (injected at startup) | `extensions/PHPAgent/wily_php_agent.so` |
+| BPA WebServer Plugin | `nginx` (injected at startup) | `extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module.so` |
+
 ### How it works
 
 Broadcom monitoring uses an **opportunistic injection** pattern so agent binaries
@@ -359,12 +376,12 @@ are never baked into the application images:
 Without the DX O2 image (or with `dxo2.enabled=false`), all containers start
 cleanly with no agent overhead.
 
-### Enabling in Kubernetes
+### Quick-start (Kubernetes)
 
 ```bash
-# 1. Place the installer in the gitignored directory
-ls src/dx-o2-agents/installers/
-# apmia-<version>-<platform>.tar.gz
+# 1. Download apmia-<version>-linux.tar.gz from support.broadcom.com
+#    and verify its checksum, then:
+cp ~/Downloads/apmia-<version>-linux.tar.gz src/dx-o2-agents/installers/
 
 # 2. Configure EM connection in .config
 APMIA_EM_HOST="em.example.internal"
@@ -373,7 +390,7 @@ APMIA_AGENT_NAME="bpa-demo-agent"
 APMIA_APP_NAME="BPA-Demo"
 APMIA_LOG_LEVEL="INFO"
 
-# 3. Rebuild — Step 4 now builds dx-o2-agents
+# 3. Build — Step 4 now builds dx-o2-agents
 build-scripts/build.sh
 
 # 4. Push all images including dx-o2-agents

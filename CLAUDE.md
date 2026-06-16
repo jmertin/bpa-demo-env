@@ -113,16 +113,43 @@ Rules:
 
 ## DX O2 agent injection pattern
 
+> Full setup guide: **`DX-O2-AGENT-SETUP.md`** — download steps, installer
+> structure, build walkthrough, verification commands, troubleshooting.
+
 The Broadcom APMIA agent is **never baked into application images**.  Instead:
 
-1. `src/dx-o2-agents/` image is built when `installers/apmia-*.tar.gz` is present (git-ignored, downloaded from Broadcom Support).
+1. `src/dx-o2-agents/` image is built when `installers/apmia-*.tar.gz` is present
+   (git-ignored; download from [support.broadcom.com](https://support.broadcom.com/)).
 2. At pod startup a **`dxo2-init` initContainer** copies `/opt/apmia/ → emptyDir volume` (`apmia-share`).
-3. The **`dx-o2-agent` sidecar** runs the Java Infrastructure Agent daemon.
-4. `php-fpm` and `nginx` containers mount `apmia-share` at `/opt/apmia` (readOnly).  Their `entrypoint.sh` scripts perform **opportunistic injection** — they check for the probe/plugin files and load them; they start cleanly without them if the volume is absent.
+3. The **`dx-o2-agent` sidecar** runs the Java Infrastructure Agent daemon + BTL.
+4. `php-fpm` and `nginx` containers mount `apmia-share` at `/opt/apmia` (readOnly).
+   Their `entrypoint.sh` scripts perform **opportunistic injection**:
+   - `php-fpm`: copies `extensions/PHPAgent/wily_php_agent.so` into PHP's
+     `extension_dir`; symlinks `wily_php_agent.ini` into `conf.d/`.
+   - `nginx`: writes `load_module <path>/ngx_http_ca_plugin_filter_module.so;`
+     to `/etc/nginx/modules-enabled/bpa.conf` (included by `nginx.conf` at
+     top-level scope before `events {}`).
+   - Both containers start cleanly when the volume is absent.
 
-All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`.  When `false` (the default): no initContainer, no sidecar, no emptyDir volume is created.
+All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`.  When `false`
+(the default): no initContainer, no sidecar, no emptyDir volume is created.
 
-`APMIA_EM_HOST` in `.config` being non-empty causes `deploy.sh` to set `dxo2.enabled: true` in the generated `values.local.yaml`.
+`APMIA_EM_HOST` in `.config` being non-empty causes `deploy.sh` to set
+`dxo2.enabled: true` in the generated `values.local.yaml`.
+
+### Expected paths inside /opt/apmia after install
+
+```
+bin/APMIAgent                                      ← Infrastructure Agent main binary
+bin/btl                                            ← BTL binary (may be absent; then embedded in agent)
+extensions/PHPAgent/wily_php_agent.so              ← PHP probe .so (PHP 8.1 / amd64)
+extensions/PHPAgent/wily_php_agent.ini             ← PHP INI snippet
+extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module.so  ← NGINX BPA module
+extensions/WebServerPlugin/webserver_plugin.ini    ← BPA plugin config
+config/IntroscopeAgent.profile.template            ← our template (overrides installer default)
+config/IntroscopeAgent.profile                     ← rendered at runtime by entrypoint.sh
+logs/IntroscopeAgent.log                           ← runtime log (size-capped 50 MB)
+```
 
 ---
 
@@ -248,3 +275,4 @@ APMIA_EM_HOST APMIA_EM_PORT APMIA_AGENT_NAME APMIA_APP_NAME APMIA_LOG_LEVEL
 | MariaDB schema + seed | `helm/php-demo/sql/schema.sql` / `seed.sql` |
 | Config template | `.config.example` |
 | Version matrix | `COMPATIBILITY.md` |
+| DX O2 agent setup guide | `DX-O2-AGENT-SETUP.md` |
