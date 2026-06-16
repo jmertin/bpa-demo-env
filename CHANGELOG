@@ -5,6 +5,64 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-16 @ 10:00 - [DX O2 Agent Setup Documentation]:
+  Added comprehensive DX-O2-AGENT-SETUP.md and updated CLAUDE.md + README.md
+  with complete agent setup instructions.
+
+  New file: DX-O2-AGENT-SETUP.md
+  - Section 1: Compatibility matrix (PHP 8.1, NGINX 1.18, glibc 2.35, JRE 11)
+    with status confirmation for each DX O2 agent ceiling.
+  - Section 2: Obtaining the installer — Support Portal navigation path,
+    exact file pattern to select (apmia-*.tar.gz vs IntroscopeAgent-*.tar.gz),
+    sha256sum checksum verification steps.
+  - Section 3: Placing the installer — cp command, .gitignore coverage
+    explanation, single-archive constraint.
+  - Section 4: Installer output tree — exact /opt/apmia/ directory structure
+    created by install.sh -i silent, with annotations for all four components:
+      bin/APMIAgent, bin/btl, extensions/PHPAgent/, extensions/WebServerPlugin/
+    Includes note that exact sub-paths vary by APMIA release generation.
+  - Section 5: Building the image — build.sh output walkthrough, "build once,
+    share always" explanation (php-fpm/nginx do not need rebuilding on agent
+    version change).
+  - Section 6: Runtime injection — step-by-step pseudocode for each component:
+      6.1 Infrastructure Agent + BTL entrypoint flow (envsubst → APMIAgent →
+          btl → signal trap → wait)
+      6.2 PHP Probe injection (wily_php_agent.ini guard → copy .so → symlink
+          .ini → run install helper)
+      6.3 BPA WebServer Plugin injection (ngx_http_ca_plugin_filter_module.so
+          guard → write load_module to modules-enabled/bpa.conf → copy
+          webserver_plugin.ini → nginx -t validates)
+      6.4 Complete Kubernetes pod startup sequence diagram (initContainers →
+          parallel container start with volume mount annotations)
+  - Section 7: Configuring the agent — .config variables, profile rendering
+    table (envsubst substitutions), TLS EM (port 5443, SSLSocketFactory) guide.
+  - Section 8: Verification — kubectl logs expected output for all three
+    containers, curl header check (X-Page-ID), kubectl exec php -m / nginx -T
+    extension checks, EM connectivity test.
+  - Section 9: Troubleshooting — five named problems with symptoms, root cause,
+    and fix commands:
+      "Probe files not found" (dxo2-init failure)
+      "unknown directive load_module" (missing top-level include)
+      "module is not binary compatible" (NGINX version mismatch)
+      "PHP probe loads but no data" (EM unreachable)
+      "BTL binary not found" (embedded BTL in newer APMIA — not an error)
+      Docker Compose: optional apmia_data volume recipe for local testing.
+  - Section 10: End-to-end checklist (12 items, check-box format).
+
+  Updated: README.md (DX O2 section)
+  - Added reference link to DX-O2-AGENT-SETUP.md at section top.
+  - Added component table showing all four agents, their container, and
+    post-install path.
+  - Kept quick-start commands; expanded step 1 with checksum note and cp path.
+
+  Updated: CLAUDE.md (DX O2 agent injection pattern)
+  - Added reference pointer to DX-O2-AGENT-SETUP.md.
+  - Expanded injection description to show exactly what each entrypoint does
+    for php-fpm (copy .so + symlink .ini) and nginx (write load_module drop-in).
+  - Added /opt/apmia expected paths block with all four component paths.
+  - Added DX-O2-AGENT-SETUP.md to the key file paths table.
+
+------------------------------------------------------------------------------
 2026-06-15 @ 18:45 - [Phase 6 – README Rewrite & CHANGELOG Audit]:
   Replaced the outdated README.md with a complete, accurate reference for the
   current project state, and audited the CHANGELOG for completeness.
