@@ -1,53 +1,76 @@
 #!/usr/bin/env bash
 # entrypoint.sh – Broadcom DX O2 combined agent container
-# Starts the Infrastructure Agent and, when present, the Business Transaction
-# Listener (BTL) as a sidecar process.  Handles SIGTERM/SIGINT for graceful
-# shutdown so Kubernetes pod termination completes within the grace period.
+#
+# The IntroscopeAgent.profile is pre-configured by the DX O2 installer download
+# (contains tenant EM URL and JWT credential).  This entrypoint must NOT
+# overwrite it.  It patches only the deployment-specific fields at runtime,
+# then starts the Infrastructure Agent and the Business Transaction Listener.
+#
+# Requires: all three packages downloaded from the DX O2 interface (not from
+# support.broadcom.com).  See DX-O2-AGENT-SETUP.md for download instructions.
 set -euo pipefail
 
 APMIA_HOME="${APMIA_HOME:-/opt/apmia}"
-PROFILE_TEMPLATE="${APMIA_HOME}/config/IntroscopeAgent.profile.template"
-PROFILE="${APMIA_HOME}/config/IntroscopeAgent.profile"
-AGENT_BIN="${APMIA_HOME}/bin/APMIAgent"
-BTL_BIN="${APMIA_HOME}/bin/btl"
+BTL_HOME="${BTL_HOME:-/opt/btlistener}"
+PROFILE="${APMIA_HOME}/core/config/IntroscopeAgent.profile"
+AGENT_SCRIPT="${APMIA_HOME}/bin/APMIAgent.sh"
+BTL_SCRIPT="${BTL_HOME}/bin/BTListener.sh"
 
-# ── Validate required environment variables ────────────────────────────────────
-: "${APMIA_EM_HOST:?APMIA_EM_HOST must be set (Enterprise Manager hostname)}"
-APMIA_EM_PORT="${APMIA_EM_PORT:-8443}"          # WSS default; 5001=plain-TCP, 5443=SSL/TCP
+# Use the JRE bundled in the PHP_apmia archive.
+# The BTListener.sh start script checks JAVA_HOME; it must be set before launch.
+export JAVA_HOME="${APMIA_HOME}/jre"
+export PATH="${JAVA_HOME}/bin:${PATH}"
+
+# ── Deployment-specific parameters ────────────────────────────────────────────
+# The EM connection (URL, credential, transport protocol) is already embedded
+# in IntroscopeAgent.profile by the DX O2 installer.  Only agent identity and
+# same-pod IPC settings need runtime values.
 APMIA_AGENT_NAME="${APMIA_AGENT_NAME:-bpa-demo-agent}"
 APMIA_APP_NAME="${APMIA_APP_NAME:-BPA-Demo}"
 APMIA_LOG_LEVEL="${APMIA_LOG_LEVEL:-INFO}"
 
-# Same-pod IPC addresses – used in the rendered profile so the PHP probe and
-# BPA plugin can reach the IA collector and BTL running in this container.
-# In Kubernetes all pod containers share 127.0.0.1.  Override for other topologies.
+# Same-pod IPC addresses.  PHP probe (php-fpm) connects to the IA collector;
+# BPA plugin (nginx) connects to the BTL.  Both reach this container on
+# 127.0.0.1 (shared Kubernetes pod network namespace).
 APMIA_PHP_COLLECTOR_HOST="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
-APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-55512}"
+APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-5005}"
 APMIA_BTL_HOST="${APMIA_BTL_HOST:-127.0.0.1}"
-APMIA_BTL_PORT="${APMIA_BTL_PORT:-9001}"
+APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
 
-# ── Render agent profile from template ────────────────────────────────────────
-if [[ -f "${PROFILE_TEMPLATE}" ]]; then
-    echo "[entrypoint] Rendering agent profile from template..."
-    export APMIA_HOME APMIA_EM_HOST APMIA_EM_PORT APMIA_AGENT_NAME \
-           APMIA_APP_NAME APMIA_LOG_LEVEL \
-           APMIA_PHP_COLLECTOR_HOST APMIA_PHP_COLLECTOR_PORT \
-           APMIA_BTL_HOST APMIA_BTL_PORT
-    # Use envsubst to replace ${VAR} placeholders in the template.
-    # Only expand the variables we export to avoid clobbering properties that
-    # contain $ signs for other purposes.
-    envsubst '${APMIA_HOME} ${APMIA_EM_HOST} ${APMIA_EM_PORT} \
-              ${APMIA_AGENT_NAME} ${APMIA_APP_NAME} ${APMIA_LOG_LEVEL} \
-              ${APMIA_PHP_COLLECTOR_HOST} ${APMIA_PHP_COLLECTOR_PORT} \
-              ${APMIA_BTL_HOST} ${APMIA_BTL_PORT}' \
-        < "${PROFILE_TEMPLATE}" > "${PROFILE}"
-    echo "[entrypoint] Agent profile written to ${PROFILE}"
+# ── Patch pre-configured profile ───────────────────────────────────────────────
+# Never touch the agentManager.url / agentManager.credential blocks – they are
+# set by the DX O2 installer and must remain intact.
+if [[ ! -f "${PROFILE}" ]]; then
+    echo "[entrypoint] ERROR: Pre-configured agent profile not found:" >&2
+    echo "[entrypoint]        ${PROFILE}" >&2
+    echo "[entrypoint]        Download the agent package from your DX O2 interface" >&2
+    echo "[entrypoint]        (Agents → Infrastructure Agent → Linux), not from" >&2
+    echo "[entrypoint]        support.broadcom.com. The DX O2 download includes" >&2
+    echo "[entrypoint]        a pre-configured IntroscopeAgent.profile." >&2
+    exit 1
 fi
 
+echo "[entrypoint] Using pre-configured agent profile: ${PROFILE}"
+echo "[entrypoint]   Patching agent name  : ${APMIA_AGENT_NAME}"
+echo "[entrypoint]   Patching app name    : ${APMIA_APP_NAME}"
+
+# Patch agent name (property is present with value 'Agent' in the shipped profile).
+sed -i "s|^introscope\.agent\.agentName=.*|introscope.agent.agentName=${APMIA_AGENT_NAME}|" \
+    "${PROFILE}"
+
+# Patch application name (may be commented out; uncomment and set it).
+if grep -qE '^[#;[:space:]]*introscope\.agent\.application\.name=' "${PROFILE}"; then
+    sed -i "s|^[#;[:space:]]*introscope\.agent\.application\.name=.*|introscope.agent.application.name=${APMIA_APP_NAME}|" \
+        "${PROFILE}"
+else
+    printf '\nintroscope.agent.application.name=%s\n' "${APMIA_APP_NAME}" >> "${PROFILE}"
+fi
+
+echo "[entrypoint] Agent profile ready."
+
 # ── Validate agent binary ──────────────────────────────────────────────────────
-if [[ ! -x "${AGENT_BIN}" ]]; then
-    echo "[entrypoint] ERROR: Agent binary not found or not executable: ${AGENT_BIN}" >&2
-    echo "[entrypoint]        Ensure the APMIA installer completed successfully." >&2
+if [[ ! -x "${AGENT_SCRIPT}" ]]; then
+    echo "[entrypoint] ERROR: Agent start script not found: ${AGENT_SCRIPT}" >&2
     exit 1
 fi
 
@@ -66,25 +89,25 @@ _shutdown() {
 trap _shutdown TERM INT
 
 # ── Start Infrastructure Agent ─────────────────────────────────────────────────
-echo "[entrypoint] Starting Broadcom Infrastructure Agent..."
-echo "[entrypoint]   EM host  : ${APMIA_EM_HOST}:${APMIA_EM_PORT}"
-echo "[entrypoint]   Agent    : ${APMIA_AGENT_NAME}"
-echo "[entrypoint]   App      : ${APMIA_APP_NAME}"
+# 'console' mode runs the Java Service Wrapper in the foreground so container
+# logs capture all agent output via the pod's log driver.
+echo "[entrypoint] Starting Broadcom Infrastructure Agent (console mode)..."
+echo "[entrypoint]   Agent : ${APMIA_AGENT_NAME}"
+echo "[entrypoint]   App   : ${APMIA_APP_NAME}"
 
-"${AGENT_BIN}" &
+"${AGENT_SCRIPT}" console &
 AGENT_PID=$!
 echo "[entrypoint] Infrastructure Agent started (PID ${AGENT_PID})"
 
-# ── Start Business Transaction Listener (if present as a standalone binary) ────
-if [[ -x "${BTL_BIN}" ]]; then
+# ── Start Business Transaction Listener ───────────────────────────────────────
+if [[ -x "${BTL_SCRIPT}" ]]; then
     echo "[entrypoint] Starting Business Transaction Listener..."
-    "${BTL_BIN}" &
+    "${BTL_SCRIPT}" &
     BTL_PID=$!
     echo "[entrypoint] BTL started (PID ${BTL_PID})"
 else
-    echo "[entrypoint] BTL binary not found at ${BTL_BIN} – BTL may be embedded in the Infrastructure Agent."
+    echo "[entrypoint] BTL script not found at ${BTL_SCRIPT} – BTL not started."
 fi
 
 # ── Wait ───────────────────────────────────────────────────────────────────────
-# Stay alive until the main agent process exits or a signal is received.
 wait "${AGENT_PID}"

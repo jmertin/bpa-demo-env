@@ -103,8 +103,12 @@ spec:
           env:
             - name: APMIA_HOME
               value: "/opt/apmia"
+            # emHost is optional when using the DX O2 installer download – the
+            # EM connection is pre-configured in the agent's IntroscopeAgent.profile.
+            {{- if .Values.dxo2.emHost }}
             - name: APMIA_EM_HOST
-              value: {{ .Values.dxo2.emHost | required "dxo2.emHost is required when dxo2.enabled=true" | quote }}
+              value: {{ .Values.dxo2.emHost | quote }}
+            {{- end }}
             - name: APMIA_EM_PORT
               value: {{ .Values.dxo2.emPort | quote }}
             - name: APMIA_AGENT_NAME

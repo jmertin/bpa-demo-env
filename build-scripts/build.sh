@@ -18,9 +18,10 @@
 #   .config    Must exist in the project root (copy from .config.example).
 #
 # DX O2 agents image:
-#   Built only when src/dx-o2-agents/installers/apmia-*.tar.gz is present.
-#   Download the Broadcom Infrastructure Agent from https://support.broadcom.com/
-#   and place it in that directory before running this script.
+#   Built only when src/dx-o2-agents/installers/PHP_apmia*.tar is present.
+#   Download all three packages from your DX O2 interface (not from
+#   support.broadcom.com) and place them in that directory.  See
+#   DX-O2-AGENT-SETUP.md for download instructions.
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -168,16 +169,17 @@ build_image "nginx" "${NGINX_IMAGE}" "${ROOT_DIR}/src/nginx/"
 
 # Step 4 – build DX O2 agents image (conditional on installer presence)
 DXO2_INSTALLER_COUNT=$(find "${ROOT_DIR}/src/dx-o2-agents/installers" \
-    -name 'apmia-*.tar.gz' 2>/dev/null | wc -l | tr -d ' ')
+    -name 'PHP_apmia*.tar' 2>/dev/null | wc -l | tr -d ' ')
 DXO2_BUILT=false
 
 if [[ "${DXO2_INSTALLER_COUNT}" -gt 0 ]]; then
     build_image "dx-o2-agents" "${DXO2_IMAGE}" "${ROOT_DIR}/src/dx-o2-agents/"
     DXO2_BUILT=true
 else
-    info "dx-o2-agents: SKIPPED – no apmia-*.tar.gz installer found."
-    info "  Download from https://support.broadcom.com/ and place in:"
-    info "  src/dx-o2-agents/installers/"
+    info "dx-o2-agents: SKIPPED – PHP_apmia*.tar not found in installers/."
+    info "  Download all three DX O2 agent packages from your DX O2 interface"
+    info "  and place them in src/dx-o2-agents/installers/."
+    info "  See DX-O2-AGENT-SETUP.md for instructions."
     echo ""
 fi
 

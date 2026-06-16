@@ -8,9 +8,10 @@ APMIA_HOME="${APMIA_HOME:-/opt/apmia}"
 BPA_MODULE_DIR="${APMIA_HOME}/extensions/WebServerPlugin"
 BPA_MODULE="${BPA_MODULE_DIR}/ngx_http_ca_plugin_filter_module.so"
 BPA_MODULE_CONF="/etc/nginx/modules-enabled/bpa.conf"
-# IPC address where the BPA plugin reaches the Business Transaction Listener (same pod).
+# IPC address where the BPA plugin reaches the BTL in the dx-o2-agent sidecar.
+# Default port 8000 matches the BTL's default from the DX O2 installer.
 APMIA_BTL_HOST="${APMIA_BTL_HOST:-127.0.0.1}"
-APMIA_BTL_PORT="${APMIA_BTL_PORT:-9001}"
+APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
 
 # ── BPA WebServer Plugin Injection ────────────────────────────────────────────
 # Checks for the Broadcom BPA shared module in the agent volume mounted at
@@ -28,25 +29,11 @@ if [[ -f "${BPA_MODULE}" ]]; then
     echo "load_module ${BPA_MODULE};" > "${BPA_MODULE_CONF}"
     echo "[entrypoint]   Wrote ${BPA_MODULE_CONF}"
 
-    # Copy the BPA plugin configuration file if the package provides one.
-    BPA_PLUGIN_INI="${BPA_MODULE_DIR}/webserver_plugin.ini"
-    if [[ -f "${BPA_PLUGIN_INI}" ]]; then
-        cp "${BPA_PLUGIN_INI}" /etc/nginx/bpa_plugin.ini
-        echo "[entrypoint]   Copied BPA plugin config → /etc/nginx/bpa_plugin.ini"
-
-        # Patch the BTL connection so the plugin reaches the dx-o2-agent sidecar.
-        # In Kubernetes, all pod containers share 127.0.0.1 (same network namespace).
-        # Replace collectorHost/collectorPort if present; append the block if absent.
-        local bpa_ini="/etc/nginx/bpa_plugin.ini"
-        if grep -qE '^[[:space:]]*collectorHost' "${bpa_ini}"; then
-            sed -i "s|^[[:space:]]*collectorHost=.*|collectorHost=${APMIA_BTL_HOST}|" "${bpa_ini}"
-            sed -i "s|^[[:space:]]*collectorPort=.*|collectorPort=${APMIA_BTL_PORT}|" "${bpa_ini}"
-        else
-            printf '\n[Collector]\ncollectorHost=%s\ncollectorPort=%s\n' \
-                "${APMIA_BTL_HOST}" "${APMIA_BTL_PORT}" >> "${bpa_ini}"
-        fi
-        echo "[entrypoint]   BTL address: ${APMIA_BTL_HOST}:${APMIA_BTL_PORT}"
-    fi
+    # The BPA plugin package from the DX O2 interface ships only the .so module;
+    # there is no separate webserver_plugin.ini.  The plugin communicates with
+    # the BTL via its own internal defaults; APMIA_BTL_HOST/PORT are logged for
+    # observability and will be used if future plugin versions expose ini config.
+    echo "[entrypoint]   BPA → BTL: ${APMIA_BTL_HOST}:${APMIA_BTL_PORT}"
 
     echo "[entrypoint] BPA WebServer Plugin active – BPA instrumentation enabled."
 else

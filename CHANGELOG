@@ -5,6 +5,95 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-16 @ 14:00 - [DX O2 interface installer format – complete overhaul]:
+  Replaced the single-archive support.broadcom.com installer model with the
+  three-package DX O2 interface download format.  The DX O2 download includes
+  a pre-configured IntroscopeAgent.profile (tenant EM URL + JWT) that must not
+  be overwritten.  Corrected PHP collector port (5005) and BTL port (8000) to
+  match the actual DX O2 installer defaults.  Fixed property names used when
+  patching wily_php_agent.ini (wily_php_agent.* format, not Java properties).
+
+  src/dx-o2-agents/Dockerfile (complete rewrite):
+  - Added SHELL ["/bin/bash", "-c"] (required for [[ ]] bash syntax; ubuntu:22.04
+    uses dash as /bin/sh).
+  - Removed openjdk-11-jre-headless (bundled JRE included in PHP_apmia*.tar).
+  - Detects PHP_apmia*.tar (not apmia-*.tar.gz); extracts to /opt – creates /opt/apmia/.
+  - Normalises PHP probe to extensions/PHPAgent/ (copied from probe/lib/php81/).
+  - Extracts Business_Transaction_Listener.zip → /opt/btlistener/.
+  - Extracts nginx 1.17.1 plugin from Business_Payload_Analyzer_WebServer_Plugins.zip
+    → extensions/WebServerPlugin/.
+  - Makes APMIAgent.sh, APMIACtrl.sh, BTListener.sh executable.
+  - Removed install.sh -i silent step (not applicable to DX O2 format).
+
+  src/dx-o2-agents/entrypoint.sh (complete rewrite):
+  - Sets JAVA_HOME to bundled JRE at ${APMIA_HOME}/jre/.
+  - Locates profile at core/config/IntroscopeAgent.profile (new path).
+  - Never renders profile from template; patches only agentName and
+    application.name; all agentManager.* lines (EM URL, JWT) are left intact.
+  - Starts APMIAgent.sh in console (foreground) mode via Java Service Wrapper.
+  - Starts BTListener.sh if present.
+  - Corrected APMIA_PHP_COLLECTOR_PORT default: 55512 → 5005.
+  - Corrected APMIA_BTL_PORT default: 9001 → 8000.
+
+  src/php-fpm/entrypoint.sh:
+  - Corrected PHP collector port default: 55512 → 5005.
+  - Fixed patching property names: wily_php_agent.collectorHost/Port
+    (not introscope.agent.php.collectorAddress – wrong format for PHP INI).
+  - Added APMIA_APP_NAME patching (wily_php_agent.application.name).
+  - Added wily_php_agent.logdir redirect to /tmp.
+  - Fixed: changed 'local ini_path=' (invalid outside function) to INI_PATH=.
+
+  src/nginx/entrypoint.sh:
+  - Corrected BTL port default: 9001 → 8000.
+  - Removed webserver_plugin.ini patching (file not present in DX O2 BPA
+    package; only the .so is shipped).
+
+  src/dx-o2-agents/config/IntroscopeAgent.profile.template:
+  - Removed introscope.agent.php.collectorAddress property (was incorrect
+    for both installer formats; PHP probe uses wily_php_agent.ini, not
+    IntroscopeAgent.profile, for IPC configuration).
+
+  build-scripts/build.sh:
+  - Installer detection pattern changed from apmia-*.tar.gz to PHP_apmia*.tar.
+
+  helm/php-demo/values.yaml:
+  - dxo2.phpCollectorPort: 55512 → 5005 (matches wily_php_agent.ini default).
+  - dxo2.btlPort: 9001 → 8000 (matches BTL application.properties default).
+  - dxo2.emHost: now optional (documented as not needed for DX O2 download).
+
+  helm/php-demo/templates/deployment.yaml:
+  - APMIA_EM_HOST env var: changed from required to conditional
+    ({{- if .Values.dxo2.emHost }}) for DX O2 pre-configured profile support.
+  - Named ports on dx-o2-agent container updated: php-collector 5005, btl 8000.
+
+  build-scripts/deploy.sh:
+  - apmia_php_collector_port default: 55512 → 5005.
+  - apmia_btl_port default: 9001 → 8000.
+
+  .config.example:
+  - APMIA_PHP_COLLECTOR_PORT: 55512 → 5005.
+  - APMIA_BTL_PORT: 9001 → 8000.
+  - Updated comments to reflect DX O2 interface download and pre-configured
+    profile; APMIA_EM_HOST documented as optional for DX O2 format.
+
+  DX-O2-AGENT-SETUP.md (complete rewrite):
+  - Section 1: Updated compatibility matrix (bundled JRE replaces openjdk).
+  - Section 2: Download source changed from support.broadcom.com to DX O2
+    interface; three packages listed with navigation paths.
+  - Section 3: Placement instructions updated for three archives.
+  - Section 4: Complete directory layout documented for new installer format.
+  - Section 5: Build output examples updated.
+  - Section 6: Runtime injection rewritten for APMIAgent.sh console mode,
+    BTListener.sh, profile-patching approach, wily_php_agent.* property names.
+  - Section 7: Configuration notes updated; same-pod IPC address table added.
+  - Sections 8–10: Verification commands, troubleshooting, and checklist updated.
+
+  CLAUDE.md:
+  - DX O2 agent injection pattern updated for three-package format and new paths.
+  - Expected paths table rewritten to reflect DX O2 installer layout.
+  - Helm chart conventions: dxo2.emHost documented as optional.
+
+------------------------------------------------------------------------------
 2026-06-16 @ 11:30 - [WSS default + same-pod IPC addressing for DX O2 probes]:
   Changed EM connection protocol to WSS (WebSocket Secure) as default.
   Added explicit same-pod IPC addressing so the PHP probe and BPA WebServer

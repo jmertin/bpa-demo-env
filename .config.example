@@ -37,27 +37,34 @@ HELM_CHART_PATH=""
 # (dx-o2-agents image) and are also forwarded to the PHP-FPM and NGINX
 # containers for opportunistic probe/plugin injection.
 #
-# APMIA_EM_HOST: Hostname or IP of the Broadcom Enterprise Manager (required
-#   when the dx-o2-agents container is enabled).
-# APMIA_EM_PORT: EM collector port.  Default 8443 (WSS/WebSocket Secure).
-#   Use 5443 for SSL-over-TCP or 5001 for plain-TCP (lab/unsecured only).
+# DX O2 agent configuration.
+#
+# Installers must be downloaded from your DX O2 interface (NOT from
+# support.broadcom.com).  The DX O2 download produces pre-configured packages
+# with your tenant's EM URL and JWT credential already embedded.  See
+# DX-O2-AGENT-SETUP.md for download instructions.
+#
+# APMIA_EM_HOST / APMIA_EM_PORT: Optional override for the EM connection.
+#   When using the DX O2 installer these are pre-configured in the agent
+#   profile and do NOT need to be set here.  Leave APMIA_EM_HOST empty.
 # APMIA_AGENT_NAME: Logical agent name shown in the EM console.
 # APMIA_APP_NAME:   Application name used to group metrics in the console.
 # APMIA_LOG_LEVEL:  Agent log verbosity: DEBUG, INFO, WARN, or ERROR.
 #
-# Same-pod IPC endpoints (Kubernetes): all containers share 127.0.0.1.
-# APMIA_PHP_COLLECTOR_HOST / PORT: where the PHP probe reaches the IA.
-# APMIA_BTL_HOST / PORT: where the BPA WebServer Plugin reaches the BTL.
-# Override these only when running the DX O2 agent in a separate pod or service.
+# Same-pod IPC (Kubernetes – all containers share 127.0.0.1):
+# APMIA_PHP_COLLECTOR_HOST / PORT: PHP probe → IA collector (port 5005 default).
+# APMIA_BTL_HOST / PORT: BPA plugin → BTL (port 8000 default).
+# Override host/port only when running the DX O2 agent in a separate pod.
 #
-# Leave APMIA_EM_HOST empty to deploy without DX O2 monitoring; all other
-# containers start cleanly without the agent volume mounted.
+# Set APMIA_EM_HOST to a non-empty value to enable the DX O2 monitoring stack.
+# Leave it empty to deploy without APM; all containers start cleanly without
+# the agent volume mounted.
 APMIA_EM_HOST=""
 APMIA_EM_PORT="8443"
 APMIA_AGENT_NAME="bpa-demo-agent"
 APMIA_APP_NAME="BPA-Demo"
 APMIA_LOG_LEVEL="INFO"
 APMIA_PHP_COLLECTOR_HOST="127.0.0.1"
-APMIA_PHP_COLLECTOR_PORT="55512"
+APMIA_PHP_COLLECTOR_PORT="5005"
 APMIA_BTL_HOST="127.0.0.1"
-APMIA_BTL_PORT="9001"
+APMIA_BTL_PORT="8000"

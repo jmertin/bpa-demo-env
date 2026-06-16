@@ -151,18 +151,23 @@ probes:
 # All application containers start cleanly in that mode.
 dxo2:
   enabled: false
-  emHost: ""              # Enterprise Manager hostname or IP (required when enabled)
-  emPort: "8443"          # EM collector port (8443=WSS default, 5443=SSL/TCP, 5001=plain-TCP)
+  # emHost and emPort are NOT required when using the DX O2 installer download.
+  # The PHP_apmia*.tar from the DX O2 interface includes a pre-configured
+  # IntroscopeAgent.profile with the EM URL (WSS) and JWT credential baked in.
+  # Set emHost only if you need to override the pre-configured EM URL.
+  emHost: ""
+  emPort: "8443"          # Informational only when using pre-configured profile
   agentName: "bpa-demo-agent"
   appName: "BPA-Demo"
   logLevel: "INFO"        # DEBUG | INFO | WARN | ERROR
 
   # Same-pod IPC endpoints.  All containers in the pod share 127.0.0.1 (Kubernetes
   # network namespace).  Override only when running the agent in a separate pod/service.
+  # Ports match the DX O2 installer defaults: IA PHP collector 5005, BTL 8000.
   phpCollectorHost: "127.0.0.1"  # IA PHP collector: php-fpm probe → dx-o2-agent
-  phpCollectorPort: "55512"      # Default IA PHP collector port
+  phpCollectorPort: "5005"       # Default IA PHP collector port (wily_php_agent.ini)
   btlHost: "127.0.0.1"          # BTL: nginx BPA plugin → dx-o2-agent
-  btlPort: "9001"                # Default BTL listener port
+  btlPort: "8000"                # Default BTL listener port (BTL application.properties)
 
   resources:
     requests:
