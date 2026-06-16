@@ -36,7 +36,7 @@ CHANGELOG             ← timestamped change log; update on every change
 | PHP | php8.1-fpm (ubuntu repos) | ≤ DX O2 PHP Agent ceiling PHP 8.4 |
 | NGINX | nginx 1.18 (ubuntu repos) | ≤ BPA WebServer Plugin ceiling 1.29.x |
 | Database | mariadb:11 (Docker Hub) | official image, pinned major |
-| Monitoring | Broadcom APMIA (tar.gz) | installs to /opt/apmia inside dx-o2-agents image |
+| Monitoring | Broadcom APMIA (3 DX O2 packages) | pre-configured; installs to /opt/apmia + /opt/btlistener |
 | Orchestration | Kubernetes + Helm 3.12+ | chart at helm/php-demo/ |
 | Local dev | Docker Compose v2 | compose.sh wrapper |
 
@@ -53,6 +53,7 @@ CHANGELOG             ← timestamped change log; update on every change
 - Reference: https://docs.backdropcms.org/php-standards
 
 ### PHPDoc template
+
 ```php
 /**
  * One-sentence description of what this function does.
@@ -164,6 +165,7 @@ logs/                                              ← Runtime log directory
 ```
 
 BTL is installed at `/opt/btlistener/` (extracted from `Business_Transaction_Listener.zip`):
+
 ```
 bin/BTListener.sh                                  ← BTL start script
 conf/custom/application.properties                 ← Pre-configured: tenant DXC URL + tenantId + BTL port 8000
@@ -266,8 +268,15 @@ MARIADB_ROOT_PASSWORD MARIADB_DATABASE MARIADB_USER MARIADB_PASSWORD
 APP_NAMESPACE APP_HOSTNAME TLS_CLUSTER_ISSUER INGRESS_CLASS_NAME KUBECONFIG
 HELM_CHART_PATH   # optional; defaults to helm/php-demo
 
-# DX O2 (optional — leave APMIA_EM_HOST empty to disable agent)
+# DX O2 agent identity (optional — leave APMIA_EM_HOST empty to disable agent)
 APMIA_EM_HOST APMIA_EM_PORT APMIA_AGENT_NAME APMIA_APP_NAME APMIA_LOG_LEVEL
+
+# DX O2 same-pod IPC (optional — defaults match DX O2 installer; override only
+# when running the dx-o2-agent sidecar in a separate pod/service)
+APMIA_PHP_COLLECTOR_HOST   # default 127.0.0.1 (IA PHP collector — php-fpm → dx-o2-agent)
+APMIA_PHP_COLLECTOR_PORT   # default 5005      (from wily_php_agent.ini)
+APMIA_BTL_HOST             # default 127.0.0.1 (BTL — nginx BPA plugin → dx-o2-agent)
+APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
 ```
 
 ---
@@ -276,8 +285,9 @@ APMIA_EM_HOST APMIA_EM_PORT APMIA_AGENT_NAME APMIA_APP_NAME APMIA_LOG_LEVEL
 
 - `compose.sh` wraps `docker compose`, sources `.config`, and calls `package-app.sh` before any build.
 - NGINX uses `src/nginx/config/default-compose.conf` (FastCGI to `phpfpm:9000` by hostname, not `127.0.0.1`).
-- Only `REGISTRY`, `IMAGE_PREFIX`, `IMAGE_TAG`, and the four `MARIADB_*` vars are needed for Compose.  Kubernetes/APMIA vars are exported with safe defaults and silently unused.
-- No DX O2 agent in the Compose stack.
+- Only `REGISTRY`, `IMAGE_PREFIX`, `IMAGE_TAG`, the four `MARIADB_*` vars, and the `APMIA_*` vars are needed for Compose.  Kubernetes-only vars (`APP_NAMESPACE`, `KUBECONFIG`, etc.) are exported with safe defaults and silently unused.
+- The `dxo2` service is included.  It populates the `apmia_data` named volume from the image on first start (Docker volume-init, equivalent to the `dxo2-init` initContainer in Kubernetes).  `phpfpm` and `nginx` mount the volume read-only for opportunistic probe/plugin injection.
+- **Compose networking vs Kubernetes:** In Compose each service has its own network namespace; containers reach each other by service name.  `APMIA_PHP_COLLECTOR_HOST=dxo2` and `APMIA_BTL_HOST=dxo2` (not `127.0.0.1` as in a Kubernetes pod).
 
 ---
 
@@ -289,8 +299,10 @@ APMIA_EM_HOST APMIA_EM_PORT APMIA_AGENT_NAME APMIA_APP_NAME APMIA_LOG_LEVEL
 | PHP-FPM entrypoint (probe injection) | `src/php-fpm/entrypoint.sh` |
 | NGINX entrypoint (BPA plugin injection) | `src/nginx/entrypoint.sh` |
 | DX O2 entrypoint (agent + BTL daemon) | `src/dx-o2-agents/entrypoint.sh` |
-| APMIA profile template | `src/dx-o2-agents/config/IntroscopeAgent.profile.template` |
-| APMIA installer (git-ignored) | `src/dx-o2-agents/installers/apmia-*.tar.gz` |
+| APMIA profile reference template | `src/dx-o2-agents/config/IntroscopeAgent.profile.template` |
+| DX O2 installers (git-ignored) | `src/dx-o2-agents/installers/PHP_apmia*.tar` |
+| | `src/dx-o2-agents/installers/Business_Transaction_Listener.zip` |
+| | `src/dx-o2-agents/installers/Business_Payload_Analyzer_WebServer_Plugins.zip` |
 | Helm values (defaults, committed) | `helm/php-demo/values.yaml` |
 | Helm values (secrets, generated + deleted) | `helm/php-demo/values.local.yaml` |
 | Kubernetes deployment template | `helm/php-demo/templates/deployment.yaml` |

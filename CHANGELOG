@@ -5,6 +5,32 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-16 @ 15:00 - [Add DX O2 agent service to Docker Compose stack]:
+  Added the missing dxo2 service and apmia_data named volume to
+  docker-compose.yml so the PHP probe and BPA WebServer Plugin are injected
+  in local development the same way they are in Kubernetes.
+
+  docker-compose.yml:
+  - New dxo2 service (build: ./src/dx-o2-agents, pull_policy: never).
+    Mounts apmia_data:/opt/apmia read-write so Docker's volume-init copies
+    /opt/apmia from the image into the named volume on first start — the
+    Compose equivalent of the dxo2-init Kubernetes initContainer.
+  - phpfpm: added apmia_data:/opt/apmia:ro volume mount; added
+    APMIA_PHP_COLLECTOR_HOST=dxo2, APMIA_PHP_COLLECTOR_PORT, APMIA_APP_NAME
+    env vars; added depends_on dxo2 (condition: service_started).
+  - nginx: added apmia_data:/opt/apmia:ro volume mount; added
+    APMIA_BTL_HOST=dxo2, APMIA_BTL_PORT env vars; added depends_on dxo2.
+  - Added apmia_data named volume to the volumes block.
+  Note: In Compose, services communicate by service name (not 127.0.0.1
+  as in a Kubernetes pod), so IPC host vars are set to 'dxo2', not
+  127.0.0.1.  CLAUDE.md Docker Compose section updated accordingly.
+
+  CLAUDE.md:
+  - Docker Compose notes: removed "No DX O2 agent in the Compose stack"
+    (now outdated); replaced with accurate description of dxo2 service and
+    Compose-vs-Kubernetes networking difference.
+
+------------------------------------------------------------------------------
 2026-06-16 @ 14:00 - [DX O2 interface installer format – complete overhaul]:
   Replaced the single-archive support.broadcom.com installer model with the
   three-package DX O2 interface download format.  The DX O2 download includes
