@@ -5,6 +5,34 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-16 @ 15:30 - [Fix BPA nginx plugin version mismatch]:
+  The Dockerfile was hardcoded to select the nginx 1.17.1 plugin from the
+  BPA zip. nginx 1.18.0 (ubuntu:22.04) requires a module built against
+  exactly the same nginx version — 1.17.x and 1.18.x are NOT ABI-compatible.
+  Symptom: "module version 1017001 instead of 1018000", nginx crash on start.
+
+  src/dx-o2-agents/Dockerfile:
+  - Replaced hardcoded ngx_1.17.1 selection with a loop that extracts ALL
+    nginx plugin variants from the BPA zip and stores each as
+    ngx_http_ca_plugin_filter_module_<ver>.so (e.g. _1.18.0.so).
+    The image now carries every available nginx version; no rebuild needed
+    when the target nginx version changes.
+
+  src/nginx/entrypoint.sh:
+  - Removed fixed BPA_MODULE path (bare .so no longer exists).
+  - Added nginx version detection via `nginx -v`.
+  - Selects the exact-version-matched .so first; falls back to any available
+    variant if no exact match found.
+  - Runs `nginx -t` immediately after writing bpa.conf.  If the test fails
+    (version mismatch), removes bpa.conf and logs a clear diagnostic with the
+    list of available .so variants before starting nginx without BPA — the
+    container no longer crashes on a module version mismatch.
+
+  CLAUDE.md:
+  - Technology stack: NGINX note updated to clarify that the BPA plugin
+    requires an exact nginx version match, not just a series ceiling.
+
+------------------------------------------------------------------------------
 2026-06-16 @ 15:00 - [Add DX O2 agent service to Docker Compose stack]:
   Added the missing dxo2 service and apmia_data named volume to
   docker-compose.yml so the PHP probe and BPA WebServer Plugin are injected

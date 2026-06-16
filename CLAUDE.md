@@ -34,7 +34,7 @@ CHANGELOG             ← timestamped change log; update on every change
 |---|---|---|
 | Base OS | ubuntu:22.04 (Jammy LTS) | glibc 2.35; within DX O2 agent ceilings |
 | PHP | php8.1-fpm (ubuntu repos) | ≤ DX O2 PHP Agent ceiling PHP 8.4 |
-| NGINX | nginx 1.18 (ubuntu repos) | ≤ BPA WebServer Plugin ceiling 1.29.x |
+| NGINX | nginx 1.18 (ubuntu repos) | BPA plugin must match exact nginx version (not just series) |
 | Database | mariadb:11 (Docker Hub) | official image, pinned major |
 | Monitoring | Broadcom APMIA (3 DX O2 packages) | pre-configured; installs to /opt/apmia + /opt/btlistener |
 | Orchestration | Kubernetes + Helm 3.12+ | chart at helm/php-demo/ |
