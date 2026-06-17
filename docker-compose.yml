@@ -22,6 +22,9 @@ services:
       context: ./src/dx-o2-agents
     pull_policy: never             # use local image only – compose.sh builds it
     environment:
+      # APMIA_DEPLOY=false → passive volume (seed only, IA not started).
+      # Set to true (default) to run the Infrastructure Agent from this container.
+      APMIA_DEPLOY: ${APMIA_DEPLOY:-true}
       # Agent identity – native APMIA Docker container mechanism.
       # The APMIA agent startup script reads APMENV_* vars directly and overrides
       # the corresponding introscope.* profile properties without any file patching.
@@ -29,7 +32,23 @@ services:
       APMENV_INTROSCOPE_AGENT_APPLICATION_NAME:  ${APMIA_APP_NAME:-bpa-demo}
       APMENV_INTROSCOPE_AGENT_HOSTNAME:          ${APMIA_HOST_NAME:-bpa-demo-host}
       APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME: ${APMIA_PROCESS_NAME:-bpa-demo}
-      APMIA_LOG_LEVEL:                           ${APMIA_LOG_LEVEL:-INFO}
+      # Log level: log4j logger spec – level and appender name.
+      APMENV_LOG4J_LOGGER_INTROSCOPEAGENT: "${APMIA_LOG_LEVEL:-INFO}, logfile"
+      # ── MariaDB monitoring (APMIA DB Monitor extension) ───────────────────────
+      # MYSQL_MONITOR=true activates DB monitoring.  Credentials come from the
+      # MARIADB_* vars in .config (git-ignored, never committed).
+      # Hostname is the Docker Compose service name (not 127.0.0.1 as in Kubernetes).
+      MYSQL_MONITOR: ${MYSQL_MONITOR:-true}
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES:                    bpadb
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_QUERY_SNAPSHOTS:             "false"
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_QUERYINTERVAL:               "15"
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_TRACEINTERVAL:               "30"
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_INSTANCENAME: ${MARIADB_DATABASE:-phpapp}
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_HOSTNAME:     mariadb
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_PORT:         "3306"
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_USERNAME:     ${MARIADB_USER}
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_PASSWORD:     ${MARIADB_PASSWORD}
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_VERSION:      ""
     volumes:
       # Mount read-write so Docker copies /opt/apmia from the image into the
       # named volume on first start (probe .so, BPA .so, pre-configured profile).
