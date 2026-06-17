@@ -5,6 +5,23 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 15:30 - [Fix – Browser agent auto-injection not disabled when snippet absent]:
+  The DX O2 installer download may ship wily_php_agent.ini with
+  browseragent.autoInjection already enabled and a default snippet value.
+  The else branch in entrypoint.sh previously only logged a message but did
+  not clear these pre-existing entries, causing auto-injection to remain
+  active even when APMIA_BROWSER_SNIPPET was empty in .config.
+
+  Fix: when APMIA_BROWSER_SNIPPET is unset the else branch now:
+    1. Sets wily_php_agent.browseragent.autoInjection.enabled=false (if the
+       property is present in the INI).
+    2. Removes any wily_php_agent.browseragent.autoInjection.snippetString
+       line, making .config the authoritative and exclusive control point.
+
+  - src/apache-php/entrypoint.sh: else branch updated with explicit disable
+    and scrub logic for pre-configured browser agent properties.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 15:00 - [Feat – Browser agent auto-injection via PHP probe]:
   Added opt-in browser agent JavaScript auto-injection through the PHP probe.
   When APMIA_BROWSER_SNIPPET is set the PHP probe writes two properties into
