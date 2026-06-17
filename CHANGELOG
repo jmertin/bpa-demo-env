@@ -5,6 +5,53 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 18:00 - [Docs – full documentation overhaul to reflect current stack]:
+  All documentation files rewritten to accurately reflect the current state
+  of the project after the Apache migration, APMENV_* adoption, and all
+  subsequent DX O2 improvements.
+
+  CLAUDE.md:
+    - Technology stack updated: apache-php replaces nginx + php-fpm.
+    - DX O2 injection pattern fully documented: APMENV_* mechanism,
+      APMIA_DEPLOY, browser agent INI properties, DB Monitor, container
+      hostname fix.
+    - New security rule 9: DB Monitor credentials via secretKeyRef.
+    - APMENV_* reference table added.
+    - .config required variables section updated with all new variables
+      (APMIA_DEPLOY, APMIA_HOST_NAME, APMIA_PROCESS_NAME, MYSQL_MONITOR,
+      APMIA_BROWSER_SNIPPET, and all APMIA_*_NAME variants).
+    - Docker Compose notes updated: uniform list-form environment block,
+      passthrough form for APMIA_BROWSER_SNIPPET, hostname directive.
+    - Key file paths updated to apache-php paths.
+
+  README.md:
+    - Full rewrite: nginx + php-fpm references replaced with apache-php.
+    - Architecture diagrams updated for single container + DX O2 sidecar.
+    - Project structure updated.
+    - Design decisions updated.
+    - Helm chart reference updated with new dxo2.* values.
+    - DX O2 quick-start updated.
+
+  COMPATIBILITY.md:
+    - Converted from planning document to deployed-stack reference.
+    - All action items marked resolved.
+    - Web server migration history documented.
+    - wily_php_agent.ini properties reference added.
+    - APMENV_* environment variables reference added.
+
+  DX-O2-AGENT-SETUP.md:
+    - nginx BPA plugin references replaced with Apache BPA module.
+    - Runtime injection section 6.2 updated for apache-php paths
+      (/etc/php/8.1/apache2/conf.d/ instead of fpm/).
+    - Section 6.3 rewritten for Apache LoadModule injection pattern.
+    - Browser agent and DB Monitor setup sections added.
+    - APMENV_* mapping table added.
+    - Verification commands updated for apache-php container name.
+    - Troubleshooting entries added for hostname metric path and
+      browser snippet issues.
+    - End-to-end checklist updated (17 steps).
+
+------------------------------------------------------------------------------
 2026-06-17 @ 17:15 - [Fix – snippetString value must be single-quoted in wily_php_agent.ini]:
   The PHP probe INI parser requires the snippetString value to be enclosed
   in single quotes so that the embedded double-quotes in the <script> tag

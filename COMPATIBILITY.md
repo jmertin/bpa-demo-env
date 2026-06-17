@@ -1,80 +1,101 @@
 # Version Compatibility Matrix – BPA-Demo / DX O2 Integration
 
-Generated: 2026-06-15  
-Purpose: Establish safe version boundaries before agent injection (Phase 3).
+Updated: 2026-06-17
+Status: All action items resolved; stack is at its target baseline.
 
 ---
 
-## 1. Current Prototype Baseline
+## 1. Deployed Stack
 
-| Component  | Current Base Image   | Default Package Version      |
-|------------|----------------------|------------------------------|
-| PHP-FPM    | ubuntu:26.04 (Noble+)| php-fpm – likely PHP 8.4–8.5 |
-| NGINX      | ubuntu:26.04 (Noble+)| nginx   – likely 1.26–1.28   |
-
-> **Ubuntu 26.04** ships the very latest APT packages and is not yet on
-> Broadcom's validated OS list for Infrastructure Agent binary installers.
-
----
-
-## 2. Broadcom DX O2 Agent Requirements
-
-| Agent / Plugin                         | Max Supported Version | Notes                                      |
-|----------------------------------------|-----------------------|--------------------------------------------|
-| PHP Agent (`wily_php_agent`)           | PHP **8.4**           | Probes PHP-FPM workers via shared library  |
-| BPA WebServer Plugin (`ngx_http_ca_*`) | NGINX **1.29.x**      | Dynamic `.so` module, version-ABI-sensitive|
-| Infrastructure Agent (binary)          | Ubuntu 20.04 / 22.04  | glibc 2.31 / 2.35 ABI; 26.04 unverified   |
-| Business Transaction Listener (BTL)    | Same OS as Infra Agent| Co-located with Infra Agent container      |
-
-Sources: Broadcom DX APM Compatibility Guide (CA Technologies / Broadcom portal).
+| Component | Image / Package | Version | Notes |
+|---|---|---|---|
+| Web server | apache2 (ubuntu:22.04 repos) | 2.4.x | mod_php; replaced former nginx + php-fpm pair |
+| PHP | libapache2-mod-php8.1 (ubuntu:22.04 repos) | 8.1 | Within DX O2 PHP Agent ceiling ≤ 8.4 |
+| Base OS | ubuntu:22.04 (Jammy LTS) | glibc 2.35 | Confirmed compatible with APMIA binary |
+| Database | mariadb:11 (Docker Hub) | 11.x | Official image, pinned major |
+| DX O2 agent | PHP_apmia_*.tar (DX O2 interface) | tenant-specific | Bundled JRE; pre-configured profile |
+| BTL | Business_Transaction_Listener.zip | tenant-specific | Co-located in dx-o2-agents container |
+| BPA plugin | Business_Payload_Analyzer_WebServer_Plugins.zip | tenant-specific | Apache mod_*.so + nginx variants |
 
 ---
 
-## 3. Target Base Image Decision
+## 2. Broadcom DX O2 Agent Compatibility Ceilings
+
+| Agent / Plugin | Ceiling | Project version | Status |
+|---|---|---|---|
+| PHP Agent (`wily_php_agent`) | PHP **8.4** | PHP 8.1 | ✅ within ceiling |
+| BPA WebServer Plugin (Apache `mod_*.so`) | Apache 2.4.x | Apache 2.4.x | ✅ within ceiling |
+| BPA WebServer Plugin (nginx `ngx_http_ca_*`) | NGINX **1.29.x** | n/a (Apache stack) | — |
+| Infrastructure Agent binary | Ubuntu 20.04 / 22.04 (glibc ≥ 2.17) | ubuntu:22.04 (glibc 2.35) | ✅ confirmed |
+| Business Transaction Listener | Same OS as Infra Agent | ubuntu:22.04 | ✅ confirmed |
+| DB Monitor (MySQL/MariaDB) | MariaDB / MySQL compatible | mariadb:11 | ✅ compatible |
+
+Sources: Broadcom DX APM Compatibility Guide.
+
+---
+
+## 3. Base Image Selection Rationale
 
 **Selected: `ubuntu:22.04` (Jammy Jellyfish, LTS until April 2027)**
 
-Rationale:
-
-| Criterion                           | ubuntu:22.04             | ubuntu:24.04              | ubuntu:26.04              |
-|-------------------------------------|--------------------------|---------------------------|---------------------------|
-| Infra Agent binary compatibility    | ✅ Confirmed              | ⚠️ Partial (recent builds) | ❌ Unverified              |
-| Default PHP version                 | 8.1 (≤ 8.4 limit ✅)     | 8.3 (≤ 8.4 limit ✅)      | 8.4–8.5 (may exceed limit)|
-| Default NGINX version               | 1.18 (≤ 1.29.x ✅)       | 1.24 (≤ 1.29.x ✅)        | 1.26+ (≤ 1.29.x ✅)       |
-| glibc version                       | 2.35                     | 2.39                      | 2.41+                     |
-| LTS support remaining               | Until Apr 2027           | Until Apr 2029            | Until Apr 2031            |
-
-PHP 8.1 (ubuntu:22.04 default) satisfies the ≤ 8.4 ceiling.
-NGINX 1.18 (ubuntu:22.04 default) is within the ≤ 1.29.x ceiling.
-The Broadcom Infrastructure Agent `.deb` package has published Ubuntu 22.04 support.
-
-Optional: install PHP 8.3 via the `ondrej/php` PPA if a newer minor is required.
-Optional: install NGINX 1.27/1.28 via the official `nginx.org` APT repo.
+| Criterion | ubuntu:22.04 | ubuntu:24.04 | ubuntu:26.04 |
+|---|---|---|---|
+| APMIA binary compatibility | ✅ Confirmed | ⚠️ Partial (recent builds) | ❌ Unverified |
+| Default PHP version | 8.1 (≤ 8.4 ✅) | 8.3 (≤ 8.4 ✅) | 8.4–8.5 (may exceed ceiling) |
+| Default Apache version | 2.4.x (✅) | 2.4.x (✅) | 2.4.x (✅) |
+| glibc version | 2.35 | 2.39 | 2.41+ |
+| LTS support remaining | Until Apr 2027 | Until Apr 2029 | Until Apr 2031 |
 
 ---
 
-## 4. Recommended Package Pinning (Phase 3 Dockerfiles)
+## 4. Web Server Migration History
 
-```dockerfile
-FROM ubuntu:22.04
+The project originally used **nginx 1.18 + php-fpm** as two separate containers.
+This was replaced with a **single apache-php container** (Apache 2.4 + mod_php 8.1)
+for the following reasons:
 
-# PHP-FPM (within DX O2 PHP Agent ceiling of PHP 8.4)
-RUN apt-get install -y php8.1-fpm php8.1-mysql php8.1-mbstring
+- Eliminates the FastCGI intermediary and all cross-container vhost configuration differences.
+- Simplifies the DX O2 BPA plugin injection (single entrypoint; Apache's `LoadModule` mechanism).
+- Reduces pod container count for the monitoring-free deployment (2 containers vs 3).
+- The Broadcom BPA plugin ships both an Apache `mod_*.so` and nginx `.so` variants; the Apache
+  variant is now used in this project.
 
-# NGINX (within BPA WebServer Plugin ceiling of NGINX 1.29.x)
-# Default ubuntu:22.04 ships nginx 1.18 – acceptable.
-# To use a newer minor, add the nginx.org focal repo before installing:
-#   echo "deb https://nginx.org/packages/ubuntu jammy nginx" > /etc/apt/sources.list.d/nginx.list
-RUN apt-get install -y nginx
-```
+The nginx BPA module variants (`ngx_http_ca_plugin_filter_module_<ver>.so`) are still extracted
+by the Dockerfile and available in `extensions/WebServerPlugin/` for reference, but the
+`apache-php` entrypoint only searches for `mod_*.so` files.
 
 ---
 
-## 5. Action Items for Phase 3
+## 5. DX O2 wily_php_agent.ini Properties Reference
 
-- [ ] Rebase `src/php-fpm/Dockerfile` from `ubuntu:26.04` to `ubuntu:22.04`
-- [ ] Rebase `src/nginx/Dockerfile` from `ubuntu:26.04` to `ubuntu:22.04`
-- [ ] Pin PHP to `php8.1-fpm` (or `php8.3-fpm` via PPA if justified)
-- [ ] Pin NGINX to ubuntu:22.04 default (1.18) or add nginx.org repo for 1.27+
-- [ ] Create `src/dx-o2-agents/Dockerfile` based on `ubuntu:22.04`
-- [ ] Validate that all three container images resolve Broadcom agent `.deb` dependencies
+| Property | Usage | Notes |
+|---|---|---|
+| `wily_php_agent.collectorHost` | PHP probe → IA IPC address | 127.0.0.1 (K8s), dxo2 (Compose) |
+| `wily_php_agent.collectorPort` | PHP probe → IA IPC port | default 5005 |
+| `wily_php_agent.application.name` | App name in metric tree | from APMIA_APP_NAME |
+| `wily_php_agent.logdir` | Probe log directory | set to /tmp at runtime |
+| `wily_php_agent.agentName` | Probe identity in metric tree | from APMIA_PHP_AGENT_NAME |
+| `wily_php_agent.enable.browseragent.snippet.autoInjection` | Enable browser agent | `1` = on, `0` = off |
+| `wily_php_agent.browseragent.autoInjection.snippetString` | Browser snippet value | single-quoted `'<script ...>'` |
+| `wily_php_agent.browseragent.autoInjection.enabled` | **Legacy — not used** | removed by entrypoint |
+
+---
+
+## 6. APMENV_* Environment Variables Reference
+
+The APMIA agent reads `APMENV_*` vars at startup and overrides the corresponding
+`introscope.*` profile properties without modifying `IntroscopeAgent.profile`.
+
+| APMENV_* variable | Maps to introscope.* property |
+|---|---|
+| `APMENV_INTROSCOPE_AGENT_AGENTNAME` | `introscope.agent.agentName` |
+| `APMENV_INTROSCOPE_AGENT_APPLICATION_NAME` | `introscope.agent.application.name` |
+| `APMENV_INTROSCOPE_AGENT_HOSTNAME` | `introscope.agent.hostName` |
+| `APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME` | `introscope.agent.customProcessName` |
+| `APMENV_LOG4J_LOGGER_INTROSCOPEAGENT` | log4j logger spec, e.g. `"INFO, logfile"` |
+| `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES` | DB Monitor profile list |
+| `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_HOSTNAME` | DB hostname |
+| `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_PORT` | DB port |
+| `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_USERNAME` | DB username |
+| `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_PASSWORD` | DB password |
+| `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_INSTANCENAME` | DB instance display name |
