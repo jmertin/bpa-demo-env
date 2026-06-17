@@ -5,6 +5,20 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 13:00 - [Fix – Set container hostname so PHP probe and BPA report readable names]:
+  The PHP probe and BPA Apache module pick up the OS hostname of the container
+  they run in (apachephp / apache-php), not the DX O2 IA hostname override.
+  Auto-generated Docker container IDs (e.g. ae17a0b2e78c) were appearing as
+  the host segment of the metric path.
+
+  - docker-compose.yml: added `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` to
+    the apachephp service so both the PHP probe and BPA module report under a
+    human-readable hostname in Compose.
+  - helm/php-demo/templates/deployment.yaml: added `hostname: dxo2.hostName`
+    to the pod template spec; all containers in the pod (including apache-php)
+    share this hostname, fixing the metric path for both probes.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 12:30 - [Refactor – Switch DX O2 agent identity to APMENV_* native mechanism]:
   Replaced the manual IntroscopeAgent.profile patching and wrapper.conf JVM-arg
   injection with the official APMENV_* Docker container environment variable
