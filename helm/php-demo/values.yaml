@@ -140,12 +140,13 @@ dxo2:
   # ── Agent identity ──────────────────────────────────────────────────────────
   # These values override the auto-detected Docker/Kubernetes hostname and name
   # so the agent appears with human-readable labels in the DX O2 APM console.
-  # The entrypoint patches IntroscopeAgent.profile AND injects wrapper.conf JVM
-  # -D flags per the DX O2 documentation:
-  #   -Dcom.wily.introscope.agent.agentName
-  #   -Dintroscope.agent.application.name
-  #   -Dintroscope.agent.hostName
-  #   -Dintroscope.agent.customProcessName
+  # They are exposed to the dx-o2-agent container as APMENV_* environment variables
+  # – the native APMIA Docker mechanism.  The agent startup script reads them and
+  # overrides the corresponding introscope.* profile properties automatically:
+  #   APMENV_INTROSCOPE_AGENT_AGENTNAME         → introscope.agent.agentName
+  #   APMENV_INTROSCOPE_AGENT_APPLICATION_NAME  → introscope.agent.application.name
+  #   APMENV_INTROSCOPE_AGENT_HOSTNAME          → introscope.agent.hostName
+  #   APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME → introscope.agent.customProcessName
   agentName:   "bpa-demo-agent"   # IA leaf name in the metric tree
   appName:     "bpa-demo"         # application grouping in DX O2
   hostName:    "bpa-demo-host"    # overrides container hostname / pod IP
