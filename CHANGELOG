@@ -5,6 +5,21 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 16:30 - [Fix – YAML parse error from mixed environment block style]:
+  Mixing mapping style (KEY: VALUE) and list style (- ITEM) in the same
+  YAML environment block is illegal.  The previous fix introduced a list-form
+  entry (- APMIA_BROWSER_SNIPPET) alongside mapping-form entries, causing:
+    yaml: did not find expected key (line 91 / line 112)
+
+  Fix: convert the entire apachephp environment block to list form.
+  Hardcoded Compose-network values use (- KEY=value); all variables
+  read from .config use passthrough form (- KEY), relying on compose.sh
+  to export each one with a safe default.
+
+  - docker-compose.yml: apachephp environment block rewritten as uniform
+    list style.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 16:00 - [Fix – APMIA_BROWSER_SNIPPET not reaching container in Docker Compose]:
   Two root causes prevented the browser snippet from appearing in the
   apachephp container environment:
