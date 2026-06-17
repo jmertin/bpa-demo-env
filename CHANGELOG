@@ -5,6 +5,27 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 15:00 - [Feat – Browser agent auto-injection via PHP probe]:
+  Added opt-in browser agent JavaScript auto-injection through the PHP probe.
+  When APMIA_BROWSER_SNIPPET is set the PHP probe writes two properties into
+  wily_php_agent.ini at container startup and injects the snippet into the
+  <head> of every HTML response:
+    wily_php_agent.browseragent.autoInjection.enabled=true
+    wily_php_agent.browseragent.autoInjection.snippetString=<value>
+
+  The snippet string (a <script> tag referencing the DX O2 tenant URL) is
+  written using printf %s to handle special characters without shell escaping.
+
+  - src/apache-php/entrypoint.sh: added APMIA_BROWSER_SNIPPET variable and
+    browser agent injection block inside the PHP probe section.
+  - docker-compose.yml: APMIA_BROWSER_SNIPPET added to apachephp service.
+  - helm/php-demo/values.yaml: browserSnippet field added (empty default).
+  - helm/php-demo/templates/deployment.yaml: APMIA_BROWSER_SNIPPET env var
+    added to apache-php container when dxo2.browserSnippet is non-empty.
+  - build-scripts/deploy.sh: apmia_browser_snippet wired into generate_values().
+  - .config.example: APMIA_BROWSER_SNIPPET documented with instructions.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 14:00 - [Feat – APMIA_DEPLOY flag, APMENV log level, MariaDB DB Monitor]:
   Three adapations from a reference working DX O2 Docker Compose configuration:
 

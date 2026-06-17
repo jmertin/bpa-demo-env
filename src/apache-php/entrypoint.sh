@@ -18,6 +18,10 @@ APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"
 APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
 # Web plugin identity – available to the BPA Apache module via process environment.
 APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
+# Browser agent snippet string from the DX O2 tenant (Experience View → Browser Agent).
+# When non-empty, the PHP probe automatically injects the snippet into every HTML
+# response (wily_php_agent.browseragent.autoInjection).  Leave empty to disable.
+APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET:-}"
 
 PHP_VERSION="8.1"
 PHP_MODS_AVAIL="/etc/php/${PHP_VERSION}/mods-available"
@@ -54,6 +58,24 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
         printf '\nwily_php_agent.agentName="%s"\n' "${APMIA_PHP_AGENT_NAME}" >> "${INI_PATH}"
     fi
     echo "[entrypoint]   PHP probe agent : ${APMIA_PHP_AGENT_NAME}"
+
+    # ── Browser agent auto-injection ──────────────────────────────────────────
+    # When APMIA_BROWSER_SNIPPET is set the PHP probe injects the supplied
+    # JavaScript snippet into the <head> of every HTML response automatically.
+    # The snippet string is written with printf %s to preserve special characters
+    # without shell escaping.
+    if [[ -n "${APMIA_BROWSER_SNIPPET}" ]]; then
+        if grep -qE "^wily_php_agent\.browseragent\.autoInjection\.enabled=" "${INI_PATH}"; then
+            sed -i "s|^wily_php_agent\.browseragent\.autoInjection\.enabled=.*|wily_php_agent.browseragent.autoInjection.enabled=true|" "${INI_PATH}"
+        else
+            printf '\nwily_php_agent.browseragent.autoInjection.enabled=true\n' >> "${INI_PATH}"
+        fi
+        sed -i "/^wily_php_agent\.browseragent\.autoInjection\.snippetString=/d" "${INI_PATH}"
+        printf 'wily_php_agent.browseragent.autoInjection.snippetString=%s\n' "${APMIA_BROWSER_SNIPPET}" >> "${INI_PATH}"
+        echo "[entrypoint]   Browser agent : auto-injection enabled"
+    else
+        echo "[entrypoint]   Browser agent : disabled (APMIA_BROWSER_SNIPPET not set)"
+    fi
 
     echo "[entrypoint] DX O2 PHP probe active – APM instrumentation enabled."
 else

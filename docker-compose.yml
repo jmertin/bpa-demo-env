@@ -104,6 +104,10 @@ services:
       APMIA_APP_NAME:        ${APMIA_APP_NAME:-bpa-demo}
       APMIA_PHP_AGENT_NAME:  ${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}
       APMIA_WEB_AGENT_NAME:  ${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}
+      # Browser agent auto-injection via the PHP probe.  Set to the snippet
+      # string from your DX O2 tenant (Experience View → Browser Agent → Snippet).
+      # Leave empty (default) to disable browser agent injection.
+      APMIA_BROWSER_SNIPPET: ${APMIA_BROWSER_SNIPPET:-}
     volumes:
       # Populated by the dxo2 service on first start (probe .so + .ini + BPA .so).
       - apmia_data:/opt/apmia:ro

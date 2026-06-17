@@ -245,6 +245,12 @@ spec:
               value: {{ .Values.dxo2.phpAgentName | quote }}
             - name: APMIA_WEB_AGENT_NAME
               value: {{ .Values.dxo2.webAgentName | quote }}
+            {{- if .Values.dxo2.browserSnippet }}
+            # Browser agent auto-injection: PHP probe injects this snippet into
+            # every HTML response when the value is non-empty.
+            - name: APMIA_BROWSER_SNIPPET
+              value: {{ .Values.dxo2.browserSnippet | quote }}
+            {{- end }}
             {{- end }}
           volumeMounts:
             # ConfigMap vhost overrides the baked-in sites-available/bpa-demo.conf;
