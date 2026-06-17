@@ -22,9 +22,12 @@ services:
       context: ./src/dx-o2-agents
     pull_policy: never             # use local image only – compose.sh builds it
     environment:
-      APMIA_AGENT_NAME: ${APMIA_AGENT_NAME:-bpa-demo-local}
-      APMIA_APP_NAME:   ${APMIA_APP_NAME:-BPA-Demo}
-      APMIA_LOG_LEVEL:  ${APMIA_LOG_LEVEL:-INFO}
+      # Agent identity – overrides auto-detected Docker container hostname/name.
+      APMIA_AGENT_NAME:   ${APMIA_AGENT_NAME:-bpa-demo-agent}
+      APMIA_APP_NAME:     ${APMIA_APP_NAME:-bpa-demo}
+      APMIA_HOST_NAME:    ${APMIA_HOST_NAME:-bpa-demo-host}
+      APMIA_PROCESS_NAME: ${APMIA_PROCESS_NAME:-bpa-demo}
+      APMIA_LOG_LEVEL:    ${APMIA_LOG_LEVEL:-INFO}
     volumes:
       # Mount read-write so Docker copies /opt/apmia from the image into the
       # named volume on first start (probe .so, BPA .so, pre-configured profile).
@@ -72,7 +75,10 @@ services:
       # DX O2 BPA plugin → BTL.  In Compose, reach dxo2 by service name.
       APMIA_BTL_HOST: dxo2
       APMIA_BTL_PORT: ${APMIA_BTL_PORT:-8000}
-      APMIA_APP_NAME: ${APMIA_APP_NAME:-BPA-Demo}
+      # Probe/plugin identity in the DX O2 APM metric tree.
+      APMIA_APP_NAME:        ${APMIA_APP_NAME:-bpa-demo}
+      APMIA_PHP_AGENT_NAME:  ${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}
+      APMIA_WEB_AGENT_NAME:  ${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}
     volumes:
       # Populated by the dxo2 service on first start (probe .so + .ini + BPA .so).
       - apmia_data:/opt/apmia:ro

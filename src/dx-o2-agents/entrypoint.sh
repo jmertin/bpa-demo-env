@@ -25,12 +25,18 @@ export PATH="${JAVA_HOME}/bin:${PATH}"
 # The EM connection (URL, credential, transport protocol) is already embedded
 # in IntroscopeAgent.profile by the DX O2 installer.  Only agent identity and
 # same-pod IPC settings need runtime values.
-APMIA_AGENT_NAME="${APMIA_AGENT_NAME:-bpa-demo-agent}"
-APMIA_APP_NAME="${APMIA_APP_NAME:-BPA-Demo}"
+
+# Agent identity – controls how this agent appears in the DX O2 APM console.
+# Override any of these via environment variables in docker-compose.yml or
+# values.yaml to avoid auto-detected Docker container hostnames appearing in APM.
+APMIA_AGENT_NAME="${APMIA_AGENT_NAME:-bpa-demo-agent}"     # agent leaf name
+APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"                # application grouping
+APMIA_HOST_NAME="${APMIA_HOST_NAME:-bpa-demo-host}"         # hostname override (prevents container IP/ID)
+APMIA_PROCESS_NAME="${APMIA_PROCESS_NAME:-bpa-demo}"        # custom process name in metric path
 APMIA_LOG_LEVEL="${APMIA_LOG_LEVEL:-INFO}"
 
-# Same-pod IPC addresses.  PHP probe (php-fpm) connects to the IA collector;
-# BPA plugin (nginx) connects to the BTL.  Both reach this container on
+# Same-pod IPC addresses.  PHP probe (apache-php) connects to the IA collector;
+# BPA plugin (apache-php) connects to the BTL.  Both reach this container on
 # 127.0.0.1 (shared Kubernetes pod network namespace).
 APMIA_PHP_COLLECTOR_HOST="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
 APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-5005}"
@@ -51,22 +57,64 @@ if [[ ! -f "${PROFILE}" ]]; then
 fi
 
 echo "[entrypoint] Using pre-configured agent profile: ${PROFILE}"
-echo "[entrypoint]   Patching agent name  : ${APMIA_AGENT_NAME}"
-echo "[entrypoint]   Patching app name    : ${APMIA_APP_NAME}"
+echo "[entrypoint]   Agent name    : ${APMIA_AGENT_NAME}"
+echo "[entrypoint]   App name      : ${APMIA_APP_NAME}"
+echo "[entrypoint]   Host name     : ${APMIA_HOST_NAME}"
+echo "[entrypoint]   Process name  : ${APMIA_PROCESS_NAME}"
+
+# Helper: set or append a property in IntroscopeAgent.profile.
+# Handles commented-out, present, and absent property lines.
+_set_profile_prop() {
+    local -r key="$1"
+    local -r val="$2"
+    if grep -qE "^[#;[:space:]]*${key}=" "${PROFILE}"; then
+        sed -i "s|^[#;[:space:]]*${key}=.*|${key}=${val}|" "${PROFILE}"
+    else
+        printf '\n%s=%s\n' "${key}" "${val}" >> "${PROFILE}"
+    fi
+}
 
 # Patch agent name (property is present with value 'Agent' in the shipped profile).
 sed -i "s|^introscope\.agent\.agentName=.*|introscope.agent.agentName=${APMIA_AGENT_NAME}|" \
     "${PROFILE}"
 
-# Patch application name (may be commented out; uncomment and set it).
-if grep -qE '^[#;[:space:]]*introscope\.agent\.application\.name=' "${PROFILE}"; then
-    sed -i "s|^[#;[:space:]]*introscope\.agent\.application\.name=.*|introscope.agent.application.name=${APMIA_APP_NAME}|" \
-        "${PROFILE}"
-else
-    printf '\nintroscope.agent.application.name=%s\n' "${APMIA_APP_NAME}" >> "${PROFILE}"
-fi
+_set_profile_prop "introscope.agent.application.name" "${APMIA_APP_NAME}"
+_set_profile_prop "introscope.agent.hostName"          "${APMIA_HOST_NAME}"
+_set_profile_prop "introscope.agent.customProcessName" "${APMIA_PROCESS_NAME}"
 
-echo "[entrypoint] Agent profile ready."
+echo "[entrypoint] Agent profile patched."
+
+# ── Inject JVM identity flags into wrapper.conf ────────────────────────────────
+# The Java Service Wrapper reads wrapper.java.additional.N= entries for JVM -D
+# properties.  These override profile properties and are the canonical way to
+# set agent identity from the documentation:
+#   -Dintroscope.agent.customProcessName
+#   -Dcom.wily.introscope.agent.agentName
+#   -Dintroscope.agent.application.name
+#   -Dintroscope.agent.hostName
+WRAPPER_CONF=$(find "${APMIA_HOME}" -name "wrapper.conf" 2>/dev/null | head -1 || true)
+
+if [[ -n "${WRAPPER_CONF}" ]]; then
+    echo "[entrypoint] Injecting JVM identity args into: ${WRAPPER_CONF}"
+
+    # Find the highest existing additional index to avoid collisions.
+    JVM_IDX=$(grep -oE 'wrapper\.java\.additional\.[0-9]+' "${WRAPPER_CONF}" | \
+              grep -oE '[0-9]+$' | sort -n | tail -1 2>/dev/null || echo 0)
+
+    _add_jvm_arg() {
+        JVM_IDX=$((JVM_IDX + 1))
+        printf 'wrapper.java.additional.%d=-D%s=%s\n' "${JVM_IDX}" "$1" "$2" \
+            >> "${WRAPPER_CONF}"
+        echo "[entrypoint]   -D$1=$2"
+    }
+
+    _add_jvm_arg "introscope.agent.hostName"          "${APMIA_HOST_NAME}"
+    _add_jvm_arg "introscope.agent.customProcessName" "${APMIA_PROCESS_NAME}"
+    _add_jvm_arg "com.wily.introscope.agent.agentName" "${APMIA_AGENT_NAME}"
+    _add_jvm_arg "introscope.agent.application.name"  "${APMIA_APP_NAME}"
+else
+    echo "[entrypoint] wrapper.conf not found – identity set via profile only."
+fi
 
 # ── Validate agent binary ──────────────────────────────────────────────────────
 if [[ ! -x "${AGENT_SCRIPT}" ]]; then
@@ -92,8 +140,10 @@ trap _shutdown TERM INT
 # 'console' mode runs the Java Service Wrapper in the foreground so container
 # logs capture all agent output via the pod's log driver.
 echo "[entrypoint] Starting Broadcom Infrastructure Agent (console mode)..."
-echo "[entrypoint]   Agent : ${APMIA_AGENT_NAME}"
-echo "[entrypoint]   App   : ${APMIA_APP_NAME}"
+echo "[entrypoint]   Agent   : ${APMIA_AGENT_NAME}"
+echo "[entrypoint]   App     : ${APMIA_APP_NAME}"
+echo "[entrypoint]   Host    : ${APMIA_HOST_NAME}"
+echo "[entrypoint]   Process : ${APMIA_PROCESS_NAME}"
 
 "${AGENT_SCRIPT}" console &
 AGENT_PID=$!

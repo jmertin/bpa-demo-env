@@ -5,6 +5,68 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 11:00 - [Feat – Structured DX O2 agent identity via env vars]:
+  The APM console was showing auto-detected Docker container hostnames and
+  internal IPs instead of human-readable names.  Four new environment
+  variables control every naming field for the IA, PHP probe, and BPA web
+  plugin respectively.  All values are set through env vars – no profile or
+  INI file is hard-coded.
+
+  Mechanism (as documented by Broadcom):
+    -Dintroscope.agent.customProcessName   → APMIA_PROCESS_NAME
+    -Dcom.wily.introscope.agent.agentName  → APMIA_AGENT_NAME
+    -Dintroscope.agent.application.name    → APMIA_APP_NAME
+    -Dintroscope.agent.hostName            → APMIA_HOST_NAME
+  JVM -D flags are injected into wrapper.conf (wrapper.java.additional.N)
+  and the same values are patched into IntroscopeAgent.profile as a belt-
+  and-suspenders measure.
+
+  Defaults:
+    APMIA_AGENT_NAME    = bpa-demo-agent
+    APMIA_APP_NAME      = bpa-demo
+    APMIA_HOST_NAME     = bpa-demo-host
+    APMIA_PROCESS_NAME  = bpa-demo
+    APMIA_PHP_AGENT_NAME = bpa-demo-php-probe
+    APMIA_WEB_AGENT_NAME = bpa-demo-web-plugin
+
+  src/dx-o2-agents/entrypoint.sh:
+  - Added APMIA_HOST_NAME and APMIA_PROCESS_NAME variables.
+  - Changed APMIA_APP_NAME default from BPA-Demo to bpa-demo (lowercase).
+  - Added _set_profile_prop() helper; patches hostName and customProcessName
+    into IntroscopeAgent.profile (handles commented-out and absent lines).
+  - Added wrapper.conf JVM arg injection (_add_jvm_arg) for all four
+    identity properties; gracefully skips if wrapper.conf is absent.
+  - Fixed stale "nginx" comment in IPC address section.
+
+  src/apache-php/entrypoint.sh:
+  - Added APMIA_PHP_AGENT_NAME (bpa-demo-php-probe) and APMIA_WEB_AGENT_NAME
+    (bpa-demo-web-plugin) variables.
+  - Changed APMIA_APP_NAME default to bpa-demo.
+  - Patches wily_php_agent.agentName in the INI (adds property if absent).
+  - Exposes APMIA_WEB_AGENT_NAME to the BPA Apache module via
+    SetEnv APMIA_WEB_AGENT_NAME in conf-enabled/bpa.conf.
+
+  docker-compose.yml:
+  - dxo2 service: added APMIA_HOST_NAME, APMIA_PROCESS_NAME; updated
+    APMIA_AGENT_NAME default to bpa-demo-agent and APP_NAME to bpa-demo.
+  - apachephp service: added APMIA_PHP_AGENT_NAME and APMIA_WEB_AGENT_NAME.
+
+  helm/php-demo/values.yaml:
+  - Added dxo2.hostName, dxo2.processName, dxo2.phpAgentName, dxo2.webAgentName.
+  - Updated dxo2.appName default to bpa-demo.
+
+  helm/php-demo/templates/deployment.yaml:
+  - dx-o2-agent sidecar: added APMIA_HOST_NAME, APMIA_PROCESS_NAME env vars.
+  - apache-php container: added APMIA_PHP_AGENT_NAME, APMIA_WEB_AGENT_NAME env vars.
+
+  build-scripts/deploy.sh:
+  - Added local vars and values.local.yaml output for all four new identity fields.
+
+  CLAUDE.md:
+  - Updated .config required variables with all six APMIA identity vars and
+    their descriptions.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 10:30 - [Fix – Apache startup warnings in apache-php container]:
   Two warnings appeared on every container start:
 
