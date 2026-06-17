@@ -63,6 +63,10 @@ services:
     build:
       context: ./src/apache-php   # app.tar.gz must exist here before building
     pull_policy: never             # use local image only – compose.sh builds it
+    # Set a human-readable hostname so the PHP probe and BPA Apache module
+    # report under this name in the DX O2 metric path instead of the
+    # auto-generated Docker container ID.
+    hostname: ${APMIA_HOST_NAME:-bpa-demo-host}
     ports:
       - "8080:8080"
     environment:

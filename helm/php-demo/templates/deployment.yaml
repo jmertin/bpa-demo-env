@@ -36,6 +36,11 @@ spec:
       # before the kubelet escalates to SIGKILL.
       terminationGracePeriodSeconds: 60
 
+      # Set a human-readable pod hostname so the PHP probe and BPA Apache module
+      # report under this name in the DX O2 metric path instead of the
+      # auto-generated pod name.  All containers in the pod share this hostname.
+      hostname: {{ .Values.dxo2.hostName }}
+
       initContainers:
 
         {{- if .Values.dxo2.enabled }}
