@@ -91,8 +91,12 @@ apache2ctl configtest
 
 # ── Launch Apache ──────────────────────────────────────────────────────────────
 # Source Apache envvars so APACHE_RUN_DIR, APACHE_LOG_DIR, etc. are set.
+# The envvars file references APACHE_CONFDIR before defining it; temporarily
+# suspend nounset (-u) so the source does not abort under set -euo pipefail.
 # exec replaces the shell, making Apache PID 1 directly (required for container
 # lifecycle signal handling – SIGTERM reaches Apache, not a wrapper shell).
 # shellcheck source=/etc/apache2/envvars
+set +u
 . /etc/apache2/envvars
+set -u
 exec apache2 -D FOREGROUND

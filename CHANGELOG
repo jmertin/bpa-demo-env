@@ -5,6 +5,28 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 10:30 - [Fix – Apache startup warnings in apache-php container]:
+  Two warnings appeared on every container start:
+
+  1. "AH00558: Could not reliably determine the server's fully qualified
+     domain name" – Apache requires a global ServerName directive; a
+     VirtualHost-level ServerAdmin is not sufficient.
+     Fix: added ServerName localhost to a new conf-available/servername.conf
+     and enabled it with a2enconf servername in the Dockerfile.
+
+  2. "/etc/apache2/envvars: line 7: APACHE_CONFDIR: unbound variable" –
+     the envvars file references $APACHE_CONFDIR before setting it; with
+     set -euo pipefail active this aborts the script under nounset (-u).
+     Fix: wrap the `. /etc/apache2/envvars` call with set +u / set -u in
+     entrypoint.sh.
+
+  src/apache-php/Dockerfile:
+  - Added RUN echo "ServerName localhost" + a2enconf servername.
+
+  src/apache-php/entrypoint.sh:
+  - Added set +u before and set -u after `. /etc/apache2/envvars`.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 10:00 - [Feat – Replace nginx + PHP-FPM with Apache + mod_php]:
   Replaced the two-container nginx + php-fpm setup with a single apache-php
   container (Apache 2.4 + mod_php 8.1).  The BPA WebServer Plugin for Apache
