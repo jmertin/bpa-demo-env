@@ -53,6 +53,10 @@ RUN apt-get update && \
 RUN a2enmod rewrite headers php8.1 && \
     a2dissite 000-default
 
+# Suppress "Could not reliably determine the server's FQDN" at every startup.
+RUN echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf && \
+    a2enconf servername
+
 # Listen on non-privileged port 8080 (the default of 80 requires root).
 RUN sed -i 's/Listen 80$/Listen 8080/' /etc/apache2/ports.conf
 
