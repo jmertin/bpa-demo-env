@@ -120,11 +120,8 @@ generate_values() {
     cat > "${out}" <<EOF
 # Auto-generated from .config by deploy.sh – do NOT commit.
 image:
-  phpfpm:
-    repository: ${REGISTRY}/${IMAGE_PREFIX}/php-fpm
-    tag: "${IMAGE_TAG}"
-  nginx:
-    repository: ${REGISTRY}/${IMAGE_PREFIX}/nginx
+  apachephp:
+    repository: ${REGISTRY}/${IMAGE_PREFIX}/apache-php
     tag: "${IMAGE_TAG}"
   dxo2:
     repository: ${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents
@@ -211,11 +208,11 @@ post_deploy_init() {
         -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
 
     if [[ -n "${pod}" ]]; then
-        kubectl exec -n "${ns}" "${pod}" -c php-fpm -- \
+        kubectl exec -n "${ns}" "${pod}" -c apache-php -- \
             php /var/www/html/setup/init_users.php || true
     else
         info "WARNING: php-demo pod not found – skipping init check."
-        info "         Run manually: kubectl exec -n ${ns} <pod> -c php-fpm -- php /var/www/html/setup/init_users.php"
+        info "         Run manually: kubectl exec -n ${ns} <pod> -c apache-php -- php /var/www/html/setup/init_users.php"
     fi
 }
 

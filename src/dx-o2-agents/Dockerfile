@@ -101,10 +101,9 @@ RUN set -euo pipefail && \
 
 # ── BPA WebServer Plugin ──────────────────────────────────────────────────────
 # Extract EVERY nginx plugin variant from the BPA zip and store each .so as
-# ngx_http_ca_plugin_filter_module_<nginx-ver>.so  (e.g. _1.18.0.so).
-# The nginx entrypoint selects the file matching the running nginx version at
-# startup, so the image works regardless of which nginx release is in the
-# container — no hardcoded version required here.
+# ngx_http_ca_plugin_filter_module_<nginx-ver>.so (e.g. _1.18.0.so).
+# The apache-php entrypoint looks for any mod_*.so for the Apache module.
+# All variants are extracted so the image supports both nginx and Apache targets.
 RUN set -euo pipefail && \
     BPA_ZIP=$(ls /tmp/installers/Business_Payload_Analyzer_WebServer_Plugins.zip 2>/dev/null | head -1) && \
     if [[ -z "${BPA_ZIP}" ]]; then \
@@ -114,6 +113,8 @@ RUN set -euo pipefail && \
     echo "Extracting BPA plugin from: $(basename "${BPA_ZIP}")" && \
     mkdir -p /opt/apmia/extensions/WebServerPlugin && \
     unzip -q "${BPA_ZIP}" -d /tmp/bpa-extract && \
+    \
+    # ── nginx variants ────────────────────────────────────────────────────────
     FOUND=0 && \
     for plugin_tar in $(find /tmp/bpa-extract -name "nginx-webserver-plugin-*-ngx_*.tar.gz" 2>/dev/null | sort); do \
         ngx_ver=$(basename "${plugin_tar}" | sed 's/.*-ngx_\([0-9.]*\)\.tar\.gz/\1/') && \
@@ -123,16 +124,37 @@ RUN set -euo pipefail && \
         if [[ -n "${so}" ]]; then \
             dest="/opt/apmia/extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module_${ngx_ver}.so" && \
             cp "${so}" "${dest}" && \
-            echo "  Installed plugin for nginx ${ngx_ver}: $(basename "${dest}")" && \
+            echo "  Installed nginx plugin for ${ngx_ver}: $(basename "${dest}")" && \
             FOUND=$((FOUND + 1)); \
         fi; \
     done && \
-    rm -rf /tmp/bpa-extract /tmp/bpa-ngx && \
     if [[ ${FOUND} -eq 0 ]]; then \
         echo "ERROR: No nginx plugin variants found inside BPA zip" >&2; \
         exit 1; \
     fi && \
-    echo "BPA WebServer Plugin: ${FOUND} nginx variant(s) installed."
+    echo "BPA WebServer Plugin: ${FOUND} nginx variant(s) installed." && \
+    \
+    # ── Apache variants ───────────────────────────────────────────────────────
+    # Search non-nginx tarballs for any mod_*.so (Apache module convention).
+    # Non-fatal: some BPA releases are nginx-only.
+    APACHE_FOUND=0 && \
+    for plugin_tar in $(find /tmp/bpa-extract -name "*.tar.gz" \
+            -not -name "nginx-webserver-plugin-*" 2>/dev/null | sort); do \
+        rm -rf /tmp/bpa-tmp && mkdir -p /tmp/bpa-tmp && \
+        tar -xzf "${plugin_tar}" -C /tmp/bpa-tmp 2>/dev/null || true && \
+        for so in $(find /tmp/bpa-tmp -name "mod_*.so" 2>/dev/null); do \
+            cp "${so}" "/opt/apmia/extensions/WebServerPlugin/$(basename "${so}")" && \
+            echo "  Installed Apache plugin: $(basename "${so}")" && \
+            APACHE_FOUND=$((APACHE_FOUND + 1)); \
+        done; \
+    done && \
+    if [[ ${APACHE_FOUND} -gt 0 ]]; then \
+        echo "BPA Apache WebServer Plugin: ${APACHE_FOUND} module(s) installed."; \
+    else \
+        echo "NOTE: No Apache module (mod_*.so) found in BPA zip (may be nginx-only)."; \
+    fi && \
+    \
+    rm -rf /tmp/bpa-extract /tmp/bpa-ngx /tmp/bpa-tmp
 
 # ── Permissions and runtime directories ──────────────────────────────────────
 RUN set -euo pipefail && \

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # package-app.sh – Package the PHP application source into a tar archive.
 #
-# Creates src/php-fpm/app.tar.gz from app/src/.  The archive is consumed as
-# the build context by the PHP-FPM Docker multi-stage build (Stage 1).
+# Creates src/apache-php/app.tar.gz from app/src/.  The archive is consumed as
+# the build context by the Apache + mod_php Docker multi-stage build (Stage 1).
 # This script must be run before build.sh (build.sh calls it automatically).
 #
 # Usage:
@@ -62,7 +62,7 @@ load_config() {
 ## Create the application archive.
 create_archive() {
     local -r app_src="${ROOT_DIR}/app/src"
-    local -r archive="${ROOT_DIR}/src/php-fpm/app.tar.gz"
+    local -r archive="${ROOT_DIR}/src/apache-php/app.tar.gz"
 
     [[ -d "${app_src}" ]] || \
         fatal "Application source directory not found: ${app_src}"

@@ -1,0 +1,2 @@
+# Daily security updates at 03:15 UTC
+15 3 * * * root apt-get update -qq && apt-get upgrade -y -q --with-new-pkgs && apt-get clean -qq 2>&1 | logger -t security-updates

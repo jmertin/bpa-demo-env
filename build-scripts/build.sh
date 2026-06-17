@@ -22,6 +22,10 @@
 #   Download all three packages from your DX O2 interface (not from
 #   support.broadcom.com) and place them in that directory.  See
 #   DX-O2-AGENT-SETUP.md for download instructions.
+#
+# Application image:
+#   src/apache-php/ – Apache 2.4 + mod_php 8.1 in a single container, replacing
+#   the former nginx + php-fpm two-image setup.
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -128,7 +132,7 @@ package_app() {
 
 ## Clean up transient build artefacts.
 cleanup() {
-    rm -f "${ROOT_DIR}/src/php-fpm/app.tar.gz"
+    rm -f "${ROOT_DIR}/src/apache-php/app.tar.gz"
 }
 
 # ── Argument parsing ───────────────────────────────────────────────────────────
@@ -147,8 +151,7 @@ check_prerequisites
 load_config
 compute_build_tag
 
-readonly PHP_FPM_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}"
-readonly NGINX_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}"
+readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
 readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
 
 echo "=== BPA-Demo image build ==="
@@ -161,13 +164,10 @@ echo ""
 # Step 1 – package PHP application
 package_app
 
-# Step 2 – build PHP-FPM image (multi-stage)
-build_image "php-fpm" "${PHP_FPM_IMAGE}" "${ROOT_DIR}/src/php-fpm/"
+# Step 2 – build Apache + mod_php image (multi-stage, replaces nginx + php-fpm)
+build_image "apache-php" "${APACHE_PHP_IMAGE}" "${ROOT_DIR}/src/apache-php/"
 
-# Step 3 – build NGINX image
-build_image "nginx" "${NGINX_IMAGE}" "${ROOT_DIR}/src/nginx/"
-
-# Step 4 – build DX O2 agents image (conditional on installer presence)
+# Step 3 – build DX O2 agents image (conditional on installer presence)
 DXO2_INSTALLER_COUNT=$(find "${ROOT_DIR}/src/dx-o2-agents/installers" \
     -name 'PHP_apmia*.tar' 2>/dev/null | wc -l | tr -d ' ')
 DXO2_BUILT=false
@@ -183,13 +183,12 @@ else
     echo ""
 fi
 
-# Step 5 – remove intermediate artefact
+# Step 4 – remove intermediate artefact
 cleanup
 
 # ── Build summary ──────────────────────────────────────────────────────────────
 echo "=== Build summary ==="
-echo "  [OK]  ${PHP_FPM_IMAGE}"
-echo "  [OK]  ${NGINX_IMAGE}"
+echo "  [OK]  ${APACHE_PHP_IMAGE}"
 if [[ "${DXO2_BUILT}" == "true" ]]; then
     echo "  [OK]  ${DXO2_IMAGE}"
 else
@@ -197,7 +196,7 @@ else
 fi
 echo ""
 
-# Step 6 – optional push
+# Step 5 – optional push
 if [[ "${OPT_PUSH}" == "true" ]]; then
     info "Push requested – invoking push.sh..."
     "${SCRIPT_DIR}/push.sh"

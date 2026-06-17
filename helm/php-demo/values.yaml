@@ -5,12 +5,8 @@
 replicaCount: 1
 
 image:
-  phpfpm:
-    repository: registry.example.com/php-demo/php-fpm
-    tag: "1.0.0"
-    pullPolicy: Always   # custom image – always pull so retagged builds are picked up
-  nginx:
-    repository: registry.example.com/php-demo/nginx
+  apachephp:
+    repository: registry.example.com/php-demo/apache-php
     tag: "1.0.0"
     pullPolicy: Always   # custom image – always pull so retagged builds are picked up
   dxo2:
@@ -68,19 +64,13 @@ persistence:
 
 # Per-container resource budgets (minimal for a demo workload).
 resources:
-  nginx:
+  apachephp:
+    # Combined budget for the former nginx + php-fpm two-container split.
     requests:
-      memory: "32Mi"
-      cpu: "25m"
-    limits:
       memory: "128Mi"
-      cpu: "250m"
-  phpfpm:
-    requests:
-      memory: "64Mi"
       cpu: "50m"
     limits:
-      memory: "256Mi"
+      memory: "384Mi"
       cpu: "500m"
   mariadb:
     requests:
@@ -95,7 +85,7 @@ podSecurityContext:
 
 # Liveness / readiness probes
 probes:
-  nginx:
+  apachephp:
     livenessProbe:
       httpGet:
         path: /
@@ -106,17 +96,6 @@ probes:
       httpGet:
         path: /
         port: 8080
-      initialDelaySeconds: 5
-      periodSeconds: 10
-  phpfpm:
-    livenessProbe:
-      tcpSocket:
-        port: 9000
-      initialDelaySeconds: 15
-      periodSeconds: 20
-    readinessProbe:
-      tcpSocket:
-        port: 9000
       initialDelaySeconds: 5
       periodSeconds: 10
   mariadb:
@@ -164,9 +143,9 @@ dxo2:
   # Same-pod IPC endpoints.  All containers in the pod share 127.0.0.1 (Kubernetes
   # network namespace).  Override only when running the agent in a separate pod/service.
   # Ports match the DX O2 installer defaults: IA PHP collector 5005, BTL 8000.
-  phpCollectorHost: "127.0.0.1"  # IA PHP collector: php-fpm probe → dx-o2-agent
+  phpCollectorHost: "127.0.0.1"  # IA PHP collector: apache-php probe → dx-o2-agent
   phpCollectorPort: "5005"       # Default IA PHP collector port (wily_php_agent.ini)
-  btlHost: "127.0.0.1"          # BTL: nginx BPA plugin → dx-o2-agent
+  btlHost: "127.0.0.1"          # BTL: apache-php BPA plugin → dx-o2-agent
   btlPort: "8000"                # Default BTL listener port (BTL application.properties)
 
   resources:

@@ -3,7 +3,7 @@
 ## Project overview
 
 BPA-Demo is a PHP web shop (300 smart-home products, three brands) used as a
-Broadcom DX O2 APM demonstration target.  The stack is **nginx + PHP-FPM +
+Broadcom DX O2 APM demonstration target.  The stack is **Apache 2.4 + mod_php +
 MariaDB** deployed as a single Kubernetes pod via Helm, with an optional
 Broadcom APMIA sidecar for live monitoring.  Docker Compose is provided for
 local development.
@@ -17,8 +17,7 @@ local development.
 .config.example       ← safe-to-commit template (copy → .config, fill in)
 .build_number         ← git-ignored; auto-incremented by build.sh
 app/src/              ← PHP application source (Backdrop CMS standards)
-src/php-fpm/          ← PHP-FPM container (ubuntu:22.04, multi-stage)
-src/nginx/            ← NGINX container (ubuntu:22.04)
+src/apache-php/       ← Apache 2.4 + mod_php container (ubuntu:22.04, multi-stage)
 src/dx-o2-agents/     ← Broadcom APMIA container; installers/ is git-ignored
 build-scripts/        ← OWF-compliant bash scripts (build/push/deploy/compose)
 helm/php-demo/        ← Helm chart v0.2.0
@@ -33,8 +32,8 @@ CHANGELOG             ← timestamped change log; update on every change
 | Layer | Choice | Version / notes |
 |---|---|---|
 | Base OS | ubuntu:22.04 (Jammy LTS) | glibc 2.35; within DX O2 agent ceilings |
-| PHP | php8.1-fpm (ubuntu repos) | ≤ DX O2 PHP Agent ceiling PHP 8.4 |
-| NGINX | nginx 1.18 (ubuntu repos) | BPA plugin must match exact nginx version (not just series) |
+| PHP | libapache2-mod-php8.1 (ubuntu repos) | mod_php; ≤ DX O2 PHP Agent ceiling PHP 8.4 |
+| Web server | apache2 2.4 (ubuntu repos) | BPA Apache module API stable across 2.4.x |
 | Database | mariadb:11 (Docker Hub) | official image, pinned major |
 | Monitoring | Broadcom APMIA (3 DX O2 packages) | pre-configured; installs to /opt/apmia + /opt/btlistener |
 | Orchestration | Kubernetes + Helm 3.12+ | chart at helm/php-demo/ |
@@ -125,19 +124,20 @@ The Broadcom APMIA agent is **never baked into application images**.  Instead:
    the tenant EM URL and JWT credential already embedded):
    - `PHP_apmia_<date>_v<n>.tar` — IA + PHP probe + bundled JRE + pre-configured profile
    - `Business_Transaction_Listener.zip` — BTL Java application
-   - `Business_Payload_Analyzer_WebServer_Plugins.zip` — BPA plugin for nginx
+   - `Business_Payload_Analyzer_WebServer_Plugins.zip` — BPA plugin (nginx + Apache variants)
 2. At pod startup a **`dxo2-init` initContainer** copies `/opt/apmia/ → emptyDir volume` (`apmia-share`).
 3. The **`dx-o2-agent` sidecar** runs the IA via `bin/APMIAgent.sh console` and the
    BTL via `/opt/btlistener/bin/BTListener.sh`.  JAVA_HOME is set to the bundled JRE.
-4. `php-fpm` and `nginx` containers mount `apmia-share` at `/opt/apmia` (readOnly).
-   Their `entrypoint.sh` scripts perform **opportunistic injection**:
-   - `php-fpm`: copies `extensions/PHPAgent/wily_php_agent.so` into PHP's
-     `extension_dir`; symlinks `wily_php_agent.ini` into `conf.d/`; patches
-     `wily_php_agent.collectorHost/Port` to reach the IA sidecar on `127.0.0.1:5005`.
-   - `nginx`: writes `load_module <path>/ngx_http_ca_plugin_filter_module.so;`
-     to `/etc/nginx/modules-enabled/bpa.conf` (included by `nginx.conf` at
-     top-level scope before `events {}`).
-   - Both containers start cleanly when the volume is absent.
+4. The **`apache-php` container** mounts `apmia-share` at `/opt/apmia` (readOnly).
+   Its `entrypoint.sh` performs **opportunistic injection** for both agents:
+   - **PHP probe**: copies `extensions/PHPAgent/wily_php_agent.so` into PHP's
+     `extension_dir`; symlinks `wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`;
+     patches `wily_php_agent.collectorHost/Port` to reach the IA sidecar on `127.0.0.1:5005`.
+   - **BPA plugin (Apache)**: finds any `mod_*.so` in `extensions/WebServerPlugin/`;
+     derives the module name from the filename (`mod_<name>.so` → `<name>_module`);
+     writes a `LoadModule` directive to `/etc/apache2/conf-enabled/bpa.conf`;
+     validates with `apache2ctl configtest` — disables if rejected, starts cleanly.
+   - Container starts cleanly when the volume is absent.
 
 All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`.  When `false`
 (the default): no initContainer, no sidecar, no emptyDir volume is created.
@@ -160,7 +160,8 @@ probe/lib/php81/wily_php_agent.so                  ← PHP probe .so (original p
 probe/wily_php_agent.ini                           ← PHP INI snippet (original path)
 extensions/PHPAgent/wily_php_agent.so              ← PHP probe .so (normalised by Dockerfile)
 extensions/PHPAgent/wily_php_agent.ini             ← PHP INI snippet (normalised by Dockerfile)
-extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module.so  ← NGINX BPA module (from BPA zip)
+extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module_<ver>.so  ← nginx BPA module variants (version-stamped by Dockerfile)
+extensions/WebServerPlugin/mod_<name>.so                          ← Apache BPA module (from BPA zip, if present)
 logs/                                              ← Runtime log directory
 ```
 
@@ -196,9 +197,9 @@ Chart: `helm/php-demo/` — version **0.2.0**
 
 - All sensitive values come via `values.local.yaml` (generated; never committed).
 - `dxo2.emHost` is **optional** when using the DX O2 installer download (the EM URL is pre-configured in the agent profile).  Set it only to override the embedded EM URL.
-- The ConfigMap `nginx.conf` includes `include /etc/nginx/modules-enabled/*.conf;` at the **top-level scope before `events {}`** — this is required for NGINX dynamic module loading and must not be removed.
+- The ConfigMap holds a single key `vhost.conf` mounted into the `apache-php` container at `/etc/apache2/sites-available/bpa-demo.conf`; the `sites-enabled/` symlink created by `a2ensite` in the Dockerfile follows this file.
 - Pod template carries `checksum/config` and `checksum/secret` annotations so pods are automatically recreated when config or secrets change.
-- `image.*.pullPolicy: Always` for all custom images (php-fpm, nginx, dxo2) so retagged builds are always pulled.  `IfNotPresent` for `mariadb` (pinned upstream, no local rebuilds).
+- `image.*.pullPolicy: Always` for all custom images (apachephp, dxo2) so retagged builds are always pulled.  `IfNotPresent` for `mariadb` (pinned upstream, no local rebuilds).
 
 ---
 
@@ -231,14 +232,14 @@ YYYY-MM-DD @ HH:MM - [Phase N – Task Name]:
 - Commit message format: `<type>: <short description>` — types: `feat`, `fix`, `refactor`, `docs`, `chore`.
 - Every commit includes `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
 - Commit frequently — at least once per completed phase or significant task.
-- **Never commit:** `.config`, `.build_number`, `src/dx-o2-agents/installers/*`, `src/php-fpm/app.tar.gz`, `helm/*/values.local.yaml`, `.claude/`.
+- **Never commit:** `.config`, `.build_number`, `src/dx-o2-agents/installers/*`, `src/apache-php/app.tar.gz`, `helm/*/values.local.yaml`, `.claude/`.
 
 ---
 
 ## Build-scripts pipeline
 
 ```
-build-scripts/package-app.sh   # tars app/src/ → src/php-fpm/app.tar.gz
+build-scripts/package-app.sh   # tars app/src/ → src/apache-php/app.tar.gz
 build-scripts/build.sh         # calls package-app.sh, docker build all images
 build-scripts/build.sh --push  # build + push in one step
 build-scripts/push.sh          # push to registry (--skip-dxo2 if not built)
@@ -273,9 +274,9 @@ APMIA_EM_HOST APMIA_EM_PORT APMIA_AGENT_NAME APMIA_APP_NAME APMIA_LOG_LEVEL
 
 # DX O2 same-pod IPC (optional — defaults match DX O2 installer; override only
 # when running the dx-o2-agent sidecar in a separate pod/service)
-APMIA_PHP_COLLECTOR_HOST   # default 127.0.0.1 (IA PHP collector — php-fpm → dx-o2-agent)
+APMIA_PHP_COLLECTOR_HOST   # default 127.0.0.1 (IA PHP collector — apache-php probe → dx-o2-agent)
 APMIA_PHP_COLLECTOR_PORT   # default 5005      (from wily_php_agent.ini)
-APMIA_BTL_HOST             # default 127.0.0.1 (BTL — nginx BPA plugin → dx-o2-agent)
+APMIA_BTL_HOST             # default 127.0.0.1 (BTL — apache-php BPA plugin → dx-o2-agent)
 APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
 ```
 
@@ -284,9 +285,9 @@ APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
 ## Docker Compose notes
 
 - `compose.sh` wraps `docker compose`, sources `.config`, and calls `package-app.sh` before any build.
-- NGINX uses `src/nginx/config/default-compose.conf` (FastCGI to `phpfpm:9000` by hostname, not `127.0.0.1`).
+- The `apachephp` service replaces the former `phpfpm` + `nginx` pair.  Apache + mod_php serves PHP directly with no FastCGI intermediary, so there is no Compose-vs-Kubernetes vhost config difference.
 - Only `REGISTRY`, `IMAGE_PREFIX`, `IMAGE_TAG`, the four `MARIADB_*` vars, and the `APMIA_*` vars are needed for Compose.  Kubernetes-only vars (`APP_NAMESPACE`, `KUBECONFIG`, etc.) are exported with safe defaults and silently unused.
-- The `dxo2` service is included.  It populates the `apmia_data` named volume from the image on first start (Docker volume-init, equivalent to the `dxo2-init` initContainer in Kubernetes).  `phpfpm` and `nginx` mount the volume read-only for opportunistic probe/plugin injection.
+- The `dxo2` service populates the `apmia_data` named volume from the image on first start (Docker volume-init, equivalent to the `dxo2-init` initContainer in Kubernetes).  `apachephp` mounts the volume read-only for opportunistic PHP probe and BPA plugin injection.
 - **Compose networking vs Kubernetes:** In Compose each service has its own network namespace; containers reach each other by service name.  `APMIA_PHP_COLLECTOR_HOST=dxo2` and `APMIA_BTL_HOST=dxo2` (not `127.0.0.1` as in a Kubernetes pod).
 
 ---
@@ -296,8 +297,8 @@ APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
 | Purpose | Path |
 |---|---|
 | PHP application source | `app/src/` |
-| PHP-FPM entrypoint (probe injection) | `src/php-fpm/entrypoint.sh` |
-| NGINX entrypoint (BPA plugin injection) | `src/nginx/entrypoint.sh` |
+| Apache+PHP entrypoint (probe + BPA injection) | `src/apache-php/entrypoint.sh` |
+| Apache VirtualHost config (baked + ConfigMap) | `src/apache-php/config/vhost.conf` |
 | DX O2 entrypoint (agent + BTL daemon) | `src/dx-o2-agents/entrypoint.sh` |
 | APMIA profile reference template | `src/dx-o2-agents/config/IntroscopeAgent.profile.template` |
 | DX O2 installers (git-ignored) | `src/dx-o2-agents/installers/PHP_apmia*.tar` |
@@ -306,7 +307,7 @@ APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
 | Helm values (defaults, committed) | `helm/php-demo/values.yaml` |
 | Helm values (secrets, generated + deleted) | `helm/php-demo/values.local.yaml` |
 | Kubernetes deployment template | `helm/php-demo/templates/deployment.yaml` |
-| nginx + PHP-FPM ConfigMap | `helm/php-demo/templates/configmap.yaml` |
+| Apache VirtualHost ConfigMap | `helm/php-demo/templates/configmap.yaml` |
 | MariaDB schema + seed | `helm/php-demo/sql/schema.sql` / `seed.sql` |
 | Config template | `.config.example` |
 | Version matrix | `COMPATIBILITY.md` |
