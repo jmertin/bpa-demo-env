@@ -5,6 +5,37 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 14:00 - [Feat – APMIA_DEPLOY flag, APMENV log level, MariaDB DB Monitor]:
+  Three adapations from a reference working DX O2 Docker Compose configuration:
+
+  1. APMIA_DEPLOY flag (passive volume mode):
+     When APMIA_DEPLOY=false the dxo2 container seeds the named volume with
+     the agent tree but does not start the IA or BTL daemons (use with an
+     external IA).  Default remains true (active mode – IA started from the
+     dxo2 container).
+     - src/dx-o2-agents/entrypoint.sh: added APMIA_DEPLOY check; when false,
+       prints message then exec sleep infinity (keeps volume accessible).
+     - docker-compose.yml, helm/values.yaml, deployment.yaml, deploy.sh: wired
+       APMIA_DEPLOY throughout.
+
+  2. Log level via APMENV_LOG4J_LOGGER_INTROSCOPEAGENT (native IA mechanism):
+     Replaced the custom APMIA_LOG_LEVEL env var (unused by the IA) with
+     APMENV_LOG4J_LOGGER_INTROSCOPEAGENT="<level>, logfile" which the IA agent
+     startup script reads natively.  APMIA_LOG_LEVEL in .config still controls
+     the level; it is now formatted into the APMENV_* value.
+
+  3. MariaDB/MySQL DB Monitor via APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_*:
+     The APMIA DB Monitor extension now polls the MariaDB instance using the
+     MARIADB_USER / MARIADB_PASSWORD credentials from .config.
+     - docker-compose.yml: dxo2 service gains MYSQL_MONITOR and twelve
+       APMENV_DBMONITOR vars; hostname is the Compose service name "mariadb".
+     - helm/values.yaml: added dxo2.dbMonitor section (non-sensitive defaults).
+     - deployment.yaml: conditional dbMonitor block; credentials injected via
+       secretKeyRef (MARIADB_USER / MARIADB_PASSWORD from the mariadb Secret).
+     - deploy.sh: MYSQL_MONITOR and instanceName wired into generated values.
+     - .config.example: documented APMIA_DEPLOY and MYSQL_MONITOR.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 13:00 - [Fix – Set container hostname so PHP probe and BPA report readable names]:
   The PHP probe and BPA Apache module pick up the OS hostname of the container
   they run in (apachephp / apache-php), not the DX O2 IA hostname override.

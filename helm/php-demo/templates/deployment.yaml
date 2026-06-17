@@ -116,6 +116,8 @@ spec:
             {{- end }}
             - name: APMIA_EM_PORT
               value: {{ .Values.dxo2.emPort | quote }}
+            - name: APMIA_DEPLOY
+              value: {{ .Values.dxo2.deploy | quote }}
             # Agent identity via APMENV_* – native APMIA Docker container mechanism.
             # The agent startup script reads these vars and overrides the
             # corresponding introscope.* profile properties without file patching.
@@ -127,8 +129,42 @@ spec:
               value: {{ .Values.dxo2.hostName | quote }}
             - name: APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME
               value: {{ .Values.dxo2.processName | quote }}
-            - name: APMIA_LOG_LEVEL
-              value: {{ .Values.dxo2.logLevel | quote }}
+            # Log level: log4j logger spec – level and appender name.
+            - name: APMENV_LOG4J_LOGGER_INTROSCOPEAGENT
+              value: "{{ .Values.dxo2.logLevel }}, logfile"
+            {{- if .Values.dxo2.dbMonitor.enabled }}
+            # ── MariaDB monitoring (APMIA DB Monitor extension) ─────────────────
+            # Hostname is 127.0.0.1 (same pod).  Credentials come from the
+            # mariadb Secret so they are never present in plain-text values files.
+            - name: MYSQL_MONITOR
+              value: "true"
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES
+              value: {{ .Values.dxo2.dbMonitor.profileName | quote }}
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_QUERY_SNAPSHOTS
+              value: {{ .Values.dxo2.dbMonitor.querySnapshots | quote }}
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_QUERYINTERVAL
+              value: {{ .Values.dxo2.dbMonitor.queryInterval | quote }}
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_TRACEINTERVAL
+              value: {{ .Values.dxo2.dbMonitor.traceInterval | quote }}
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_INSTANCENAME
+              value: {{ .Values.dxo2.dbMonitor.instanceName | quote }}
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_HOSTNAME
+              value: {{ .Values.dxo2.dbMonitor.hostname | quote }}
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_PORT
+              value: {{ .Values.dxo2.dbMonitor.port | quote }}
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_VERSION
+              value: ""
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "php-demo.secretName" . }}
+                  key: MARIADB_USER
+            - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "php-demo.secretName" . }}
+                  key: MARIADB_PASSWORD
+            {{- end }}
             - name: APMIA_PHP_COLLECTOR_HOST
               value: {{ .Values.dxo2.phpCollectorHost | quote }}
             - name: APMIA_PHP_COLLECTOR_PORT

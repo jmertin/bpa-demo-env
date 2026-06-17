@@ -108,6 +108,7 @@ generate_values() {
     # DX O2 optional variables – default to empty strings when not configured.
     local apmia_em_host="${APMIA_EM_HOST:-}"
     local apmia_em_port="${APMIA_EM_PORT:-8443}"
+    local apmia_deploy="${APMIA_DEPLOY:-true}"
     local apmia_agent_name="${APMIA_AGENT_NAME:-bpa-demo-agent}"
     local apmia_app_name="${APMIA_APP_NAME:-bpa-demo}"
     local apmia_host_name="${APMIA_HOST_NAME:-bpa-demo-host}"
@@ -119,6 +120,8 @@ generate_values() {
     local apmia_php_collector_port="${APMIA_PHP_COLLECTOR_PORT:-5005}"
     local apmia_btl_host="${APMIA_BTL_HOST:-127.0.0.1}"
     local apmia_btl_port="${APMIA_BTL_PORT:-8000}"
+    local mysql_monitor="${MYSQL_MONITOR:-true}"
+    local mariadb_database="${MARIADB_DATABASE:-phpapp}"
 
     info "Generating transient Helm values override: ${out}"
     cat > "${out}" <<EOF
@@ -159,6 +162,7 @@ imageCredentials:
 
 dxo2:
   enabled: $([ -n "${apmia_em_host}" ] && echo "true" || echo "false")
+  deploy: "${apmia_deploy}"
   emHost: "${apmia_em_host}"
   emPort: "${apmia_em_port}"
   agentName:   "${apmia_agent_name}"
@@ -172,6 +176,9 @@ dxo2:
   phpCollectorPort: "${apmia_php_collector_port}"
   btlHost: "${apmia_btl_host}"
   btlPort: "${apmia_btl_port}"
+  dbMonitor:
+    enabled: ${mysql_monitor}
+    instanceName: "${mariadb_database}"
 EOF
     info "Values file generated."
 }

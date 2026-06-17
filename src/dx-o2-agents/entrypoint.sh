@@ -35,7 +35,20 @@ export APMENV_INTROSCOPE_AGENT_APPLICATION_NAME="${APMENV_INTROSCOPE_AGENT_APPLI
 export APMENV_INTROSCOPE_AGENT_HOSTNAME="${APMENV_INTROSCOPE_AGENT_HOSTNAME:-${APMIA_HOST_NAME:-bpa-demo-host}}"
 export APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME="${APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME:-${APMIA_PROCESS_NAME:-bpa-demo}}"
 
-APMIA_LOG_LEVEL="${APMIA_LOG_LEVEL:-INFO}"
+# ── Deploy mode ────────────────────────────────────────────────────────────────
+# APMIA_DEPLOY=false creates a passive volume: the named volume (apmia_data in
+# Compose, apmia-share emptyDir in Kubernetes) is seeded with the agent tree
+# from the image but the IA and BTL daemons are NOT started.  Use this when
+# the IA is provided externally (existing on-premises agent or separate service).
+# Default: true (start the IA and BTL from this container).
+APMIA_DEPLOY="${APMIA_DEPLOY:-true}"
+
+if [[ "${APMIA_DEPLOY}" != "true" ]]; then
+    echo "[entrypoint] APMIA_DEPLOY=${APMIA_DEPLOY} – passive volume mode."
+    echo "[entrypoint] Agent tree available at ${APMIA_HOME}."
+    echo "[entrypoint] IA and BTL not started; sleeping to keep volume accessible."
+    exec sleep infinity
+fi
 
 # ── Verify pre-configured profile ─────────────────────────────────────────────
 # The EM connection (URL, credential, transport protocol) is embedded in the
