@@ -5,6 +5,16 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 17:15 - [Fix – snippetString value must be single-quoted in wily_php_agent.ini]:
+  The PHP probe INI parser requires the snippetString value to be enclosed
+  in single quotes so that the embedded double-quotes in the <script> tag
+  are preserved literally:
+    wily_php_agent.browseragent.autoInjection.snippetString='<script ...>'
+
+  - src/apache-php/entrypoint.sh: printf format string updated to wrap the
+    snippet value in single quotes when writing the INI property.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 17:00 - [Fix – correct PHP probe browser agent enable property name]:
   The correct INI property to enable browser agent auto-injection is
   wily_php_agent.enable.browseragent.snippet.autoInjection=1 (integer flag),
