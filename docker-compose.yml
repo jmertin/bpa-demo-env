@@ -89,27 +89,26 @@ services:
     ports:
       - "8080:8080"
     environment:
-      MARIADB_HOST:     mariadb
-      MARIADB_PORT:     "3306"
-      MARIADB_DATABASE: ${MARIADB_DATABASE}
-      MARIADB_USER:     ${MARIADB_USER}
-      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
-      # DX O2 PHP probe → IA collector.  In Compose, reach dxo2 by service name.
-      APMIA_PHP_COLLECTOR_HOST: dxo2
-      APMIA_PHP_COLLECTOR_PORT: ${APMIA_PHP_COLLECTOR_PORT:-5005}
-      # DX O2 BPA plugin → BTL.  In Compose, reach dxo2 by service name.
-      APMIA_BTL_HOST: dxo2
-      APMIA_BTL_PORT: ${APMIA_BTL_PORT:-8000}
-      # Probe/plugin identity in the DX O2 APM metric tree.
-      APMIA_APP_NAME:        ${APMIA_APP_NAME:-bpa-demo}
-      APMIA_PHP_AGENT_NAME:  ${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}
-      APMIA_WEB_AGENT_NAME:  ${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}
-      # Browser agent auto-injection via the PHP probe.  Set to the snippet
-      # string from your DX O2 tenant (Experience View → Browser Agent → Snippet).
-      # Leave empty (default) to disable browser agent injection.
-      # List/passthrough form avoids YAML interpolation of the raw value – the
-      # snippet contains double-quotes which would corrupt YAML if substituted
-      # directly.  compose.sh exports the variable with an empty-string default.
+      # Hardcoded Compose-network service names – not from .config.
+      - MARIADB_HOST=mariadb
+      - MARIADB_PORT=3306
+      # PHP probe → IA collector and BPA plugin → BTL use the dxo2 service
+      # name in Compose (not 127.0.0.1 as in a Kubernetes pod).
+      - APMIA_PHP_COLLECTOR_HOST=dxo2
+      - APMIA_BTL_HOST=dxo2
+      # All remaining vars are passed through from compose.sh which exports
+      # each one with a safe default after sourcing .config.
+      - MARIADB_DATABASE
+      - MARIADB_USER
+      - MARIADB_PASSWORD
+      - APMIA_PHP_COLLECTOR_PORT
+      - APMIA_BTL_PORT
+      - APMIA_APP_NAME
+      - APMIA_PHP_AGENT_NAME
+      - APMIA_WEB_AGENT_NAME
+      # Passthrough only – the snippet contains double-quotes that are unsafe
+      # to interpolate directly into YAML.  compose.sh exports the variable
+      # with an empty-string default so the container always receives it.
       - APMIA_BROWSER_SNIPPET
     volumes:
       # Populated by the dxo2 service on first start (probe .so + .ini + BPA .so).
