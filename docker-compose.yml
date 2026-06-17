@@ -107,7 +107,10 @@ services:
       # Browser agent auto-injection via the PHP probe.  Set to the snippet
       # string from your DX O2 tenant (Experience View → Browser Agent → Snippet).
       # Leave empty (default) to disable browser agent injection.
-      APMIA_BROWSER_SNIPPET: ${APMIA_BROWSER_SNIPPET:-}
+      # List/passthrough form avoids YAML interpolation of the raw value – the
+      # snippet contains double-quotes which would corrupt YAML if substituted
+      # directly.  compose.sh exports the variable with an empty-string default.
+      - APMIA_BROWSER_SNIPPET
     volumes:
       # Populated by the dxo2 service on first start (probe .so + .ini + BPA .so).
       - apmia_data:/opt/apmia:ro

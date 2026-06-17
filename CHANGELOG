@@ -5,6 +5,30 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 16:00 - [Fix – APMIA_BROWSER_SNIPPET not reaching container in Docker Compose]:
+  Two root causes prevented the browser snippet from appearing in the
+  apachephp container environment:
+
+  1. compose.sh did not export APMIA_BROWSER_SNIPPET (nor the many other DX O2
+     variables added since the original export block was written).  Docker Compose
+     reads ${VAR:-default} from the process environment; unexported variables
+     always resolved to the empty default.
+  2. docker-compose.yml used the YAML-interpolation form
+     (APMIA_BROWSER_SNIPPET: ${APMIA_BROWSER_SNIPPET:-}).  Because the snippet
+     value contains double-quotes the substituted YAML could fail to parse.
+
+  Fixes:
+  - build-scripts/compose.sh: export block extended to include APMIA_DEPLOY,
+    APMIA_HOST_NAME, APMIA_PROCESS_NAME, APMIA_PHP_AGENT_NAME, APMIA_WEB_AGENT_NAME,
+    APMIA_PHP_COLLECTOR_HOST/PORT, APMIA_BTL_HOST/PORT, MYSQL_MONITOR, and
+    APMIA_BROWSER_SNIPPET (all with correct defaults).  Also corrected
+    images_present() which still referenced the old php-fpm and nginx image names
+    instead of apache-php and dx-o2-agents.
+  - docker-compose.yml: APMIA_BROWSER_SNIPPET switched to the list/passthrough
+    form (- APMIA_BROWSER_SNIPPET) so the value reaches the container verbatim
+    without YAML interpolation or special-character escaping.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 15:30 - [Fix – Browser agent auto-injection not disabled when snippet absent]:
   The DX O2 installer download may ship wily_php_agent.ini with
   browseragent.autoInjection already enabled and a default snippet value.

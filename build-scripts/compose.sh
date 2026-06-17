@@ -72,18 +72,33 @@ load_config() {
     # DX O2 variables are optional; export with safe defaults so docker-compose.yml
     # can reference them without triggering unbound-variable errors.
     export APMIA_EM_HOST="${APMIA_EM_HOST:-}"
-    export APMIA_EM_PORT="${APMIA_EM_PORT:-5001}"
+    export APMIA_EM_PORT="${APMIA_EM_PORT:-8443}"
+    export APMIA_DEPLOY="${APMIA_DEPLOY:-true}"
     export APMIA_AGENT_NAME="${APMIA_AGENT_NAME:-bpa-demo-agent}"
-    export APMIA_APP_NAME="${APMIA_APP_NAME:-BPA-Demo}"
+    export APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"
+    export APMIA_HOST_NAME="${APMIA_HOST_NAME:-bpa-demo-host}"
+    export APMIA_PROCESS_NAME="${APMIA_PROCESS_NAME:-bpa-demo}"
+    export APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
+    export APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
     export APMIA_LOG_LEVEL="${APMIA_LOG_LEVEL:-INFO}"
+    export APMIA_PHP_COLLECTOR_HOST="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
+    export APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-5005}"
+    export APMIA_BTL_HOST="${APMIA_BTL_HOST:-127.0.0.1}"
+    export APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
+    export MYSQL_MONITOR="${MYSQL_MONITOR:-true}"
+    # APMIA_BROWSER_SNIPPET may contain double-quotes and other characters that
+    # are unsafe to interpolate directly into YAML.  Export it here so that
+    # docker-compose.yml can use the list/passthrough form (- APMIA_BROWSER_SNIPPET)
+    # which passes the value straight to the container without YAML parsing.
+    export APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET:-}"
 }
 
 ## Return 0 (true) when both application images exist in the local Docker store.
 images_present() {
-    local php_image="${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}"
-    local ngx_image="${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}"
+    local php_image="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
+    local dxo2_image="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
     docker image inspect "${php_image}" >/dev/null 2>&1 && \
-    docker image inspect "${ngx_image}" >/dev/null 2>&1
+    docker image inspect "${dxo2_image}" >/dev/null 2>&1
 }
 
 ## Package and build images locally (calls the build-scripts chain).
