@@ -13,7 +13,11 @@ APMIA_PHP_COLLECTOR_HOST="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
 APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-5005}"
 APMIA_BTL_HOST="${APMIA_BTL_HOST:-127.0.0.1}"
 APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
-APMIA_APP_NAME="${APMIA_APP_NAME:-BPA-Demo}"
+APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"
+# PHP probe identity in the APM metric tree (wily_php_agent.agentName).
+APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
+# Web plugin identity – available to the BPA Apache module via process environment.
+APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
 
 PHP_VERSION="8.1"
 PHP_MODS_AVAIL="/etc/php/${PHP_VERSION}/mods-available"
@@ -42,6 +46,15 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     sed -i "s|^wily_php_agent\.logdir=.*|wily_php_agent.logdir=\"/tmp\"|" "${INI_PATH}"
     echo "[entrypoint]   PHP probe IPC: ${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT}"
 
+    # Set PHP probe agent name (wily_php_agent.agentName controls the probe's
+    # identity in the DX O2 metric tree; add the property if absent in the INI).
+    if grep -qE "^wily_php_agent\.agentName=" "${INI_PATH}"; then
+        sed -i "s|^wily_php_agent\.agentName=.*|wily_php_agent.agentName=\"${APMIA_PHP_AGENT_NAME}\"|" "${INI_PATH}"
+    else
+        printf '\nwily_php_agent.agentName="%s"\n' "${APMIA_PHP_AGENT_NAME}" >> "${INI_PATH}"
+    fi
+    echo "[entrypoint]   PHP probe agent : ${APMIA_PHP_AGENT_NAME}"
+
     echo "[entrypoint] DX O2 PHP probe active – APM instrumentation enabled."
 else
     echo "[entrypoint] DX O2 agent volume not mounted – PHP probe skipped."
@@ -66,6 +79,10 @@ if [[ -n "${BPA_APACHE_SO}" ]]; then
     cat > /etc/apache2/conf-available/bpa.conf <<EOF
 # Written at container startup by entrypoint.sh.
 LoadModule ${MODULE_NAME} ${BPA_APACHE_SO}
+
+# Expose web plugin identity to the BPA module via the Apache request env.
+# The BPA Apache module reads APMIA_WEB_AGENT_NAME when building its metric path.
+SetEnv APMIA_WEB_AGENT_NAME ${APMIA_WEB_AGENT_NAME}
 EOF
     ln -sf /etc/apache2/conf-available/bpa.conf /etc/apache2/conf-enabled/bpa.conf
 

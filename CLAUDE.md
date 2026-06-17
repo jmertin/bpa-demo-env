@@ -270,7 +270,15 @@ APP_NAMESPACE APP_HOSTNAME TLS_CLUSTER_ISSUER INGRESS_CLASS_NAME KUBECONFIG
 HELM_CHART_PATH   # optional; defaults to helm/php-demo
 
 # DX O2 agent identity (optional — leave APMIA_EM_HOST empty to disable agent)
-APMIA_EM_HOST APMIA_EM_PORT APMIA_AGENT_NAME APMIA_APP_NAME APMIA_LOG_LEVEL
+# These override auto-detected Docker/Kubernetes hostnames in the APM console.
+APMIA_EM_HOST APMIA_EM_PORT
+APMIA_AGENT_NAME    # default bpa-demo-agent   (introscope.agent.agentName + com.wily.introscope.agent.agentName)
+APMIA_APP_NAME      # default bpa-demo          (introscope.agent.application.name)
+APMIA_HOST_NAME     # default bpa-demo-host     (introscope.agent.hostName — prevents container IP appearing in APM)
+APMIA_PROCESS_NAME  # default bpa-demo          (introscope.agent.customProcessName)
+APMIA_PHP_AGENT_NAME  # default bpa-demo-php-probe   (wily_php_agent.agentName in PHP probe INI)
+APMIA_WEB_AGENT_NAME  # default bpa-demo-web-plugin  (APMIA_WEB_AGENT_NAME env in BPA Apache module)
+APMIA_LOG_LEVEL     # default INFO              (DEBUG | INFO | WARN | ERROR)
 
 # DX O2 same-pod IPC (optional — defaults match DX O2 installer; override only
 # when running the dx-o2-agent sidecar in a separate pod/service)
