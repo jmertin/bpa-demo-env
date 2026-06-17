@@ -72,7 +72,7 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
             printf '\nwily_php_agent.enable.browseragent.snippet.autoInjection=1\n' >> "${INI_PATH}"
         fi
         sed -i "/^wily_php_agent\.browseragent\.autoInjection\.snippetString=/d" "${INI_PATH}"
-        printf 'wily_php_agent.browseragent.autoInjection.snippetString=%s\n' "${APMIA_BROWSER_SNIPPET}" >> "${INI_PATH}"
+        printf "wily_php_agent.browseragent.autoInjection.snippetString='%s'\n" "${APMIA_BROWSER_SNIPPET}" >> "${INI_PATH}"
         echo "[entrypoint]   Browser agent : auto-injection enabled"
     else
         if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=" "${INI_PATH}"; then
