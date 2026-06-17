@@ -5,6 +5,29 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 12:30 - [Refactor – Switch DX O2 agent identity to APMENV_* native mechanism]:
+  Replaced the manual IntroscopeAgent.profile patching and wrapper.conf JVM-arg
+  injection with the official APMENV_* Docker container environment variable
+  mechanism supported natively by the APMIA agent startup script.
+
+  The agent reads APMENV_* vars at launch and applies them as introscope.*
+  property overrides without any file modification:
+    APMENV_INTROSCOPE_AGENT_AGENTNAME         → introscope.agent.agentName
+    APMENV_INTROSCOPE_AGENT_APPLICATION_NAME  → introscope.agent.application.name
+    APMENV_INTROSCOPE_AGENT_HOSTNAME          → introscope.agent.hostName
+    APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME → introscope.agent.customProcessName
+
+  - src/dx-o2-agents/entrypoint.sh: removed _set_profile_prop(), sed profile
+    patching, and _add_jvm_arg()/wrapper.conf injection; replaced with four
+    export APMENV_* lines that also accept legacy APMIA_* vars as a fallback.
+  - docker-compose.yml: dxo2 service now sets APMENV_* keys sourced from the
+    APMIA_* shell vars in .config (user-facing naming unchanged).
+  - helm/php-demo/templates/deployment.yaml: dx-o2-agent sidecar env block
+    updated from APMIA_* to APMENV_* names.
+  - helm/php-demo/values.yaml: agent identity comment block updated to document
+    the APMENV_* convention and the property mapping.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 11:00 - [Feat – Structured DX O2 agent identity via env vars]:
   The APM console was showing auto-detected Docker container hostnames and
   internal IPs instead of human-readable names.  Four new environment

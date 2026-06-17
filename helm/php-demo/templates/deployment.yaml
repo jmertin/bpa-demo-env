@@ -111,15 +111,16 @@ spec:
             {{- end }}
             - name: APMIA_EM_PORT
               value: {{ .Values.dxo2.emPort | quote }}
-            # Agent identity: override auto-detected container hostname/name so
-            # the agent appears with human-readable labels in the APM console.
-            - name: APMIA_AGENT_NAME
+            # Agent identity via APMENV_* – native APMIA Docker container mechanism.
+            # The agent startup script reads these vars and overrides the
+            # corresponding introscope.* profile properties without file patching.
+            - name: APMENV_INTROSCOPE_AGENT_AGENTNAME
               value: {{ .Values.dxo2.agentName | quote }}
-            - name: APMIA_APP_NAME
+            - name: APMENV_INTROSCOPE_AGENT_APPLICATION_NAME
               value: {{ .Values.dxo2.appName | quote }}
-            - name: APMIA_HOST_NAME
+            - name: APMENV_INTROSCOPE_AGENT_HOSTNAME
               value: {{ .Values.dxo2.hostName | quote }}
-            - name: APMIA_PROCESS_NAME
+            - name: APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME
               value: {{ .Values.dxo2.processName | quote }}
             - name: APMIA_LOG_LEVEL
               value: {{ .Values.dxo2.logLevel | quote }}
