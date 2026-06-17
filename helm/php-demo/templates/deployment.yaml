@@ -40,8 +40,8 @@ spec:
 
         {{- if .Values.dxo2.enabled }}
         # Populate the shared emptyDir with the pre-installed APMIA agent tree
-        # so that the php-fpm and nginx containers can perform opportunistic probe
-        # and plugin injection at their own startup without pulling extra images.
+        # so that the apache-php container can perform opportunistic probe and
+        # BPA plugin injection at startup without pulling extra images.
         - name: dxo2-init
           image: "{{ .Values.image.dxo2.repository }}:{{ .Values.image.dxo2.tag }}"
           imagePullPolicy: {{ .Values.image.dxo2.pullPolicy }}
@@ -143,69 +143,21 @@ spec:
             runAsNonRoot: false   # APMIA agent daemon writes to /opt/apmia/logs owned by root
         {{- end }}
 
-        # ── nginx ─────────────────────────────────────────────────────────────
-        - name: nginx
-          image: "{{ .Values.image.nginx.repository }}:{{ .Values.image.nginx.tag }}"
-          imagePullPolicy: {{ .Values.image.nginx.pullPolicy }}
+        # ── apache-php ────────────────────────────────────────────────────────
+        # Single container combining Apache 2.4 + mod_php 8.1, replacing the
+        # former nginx + php-fpm two-container setup.  Both the PHP probe and
+        # the BPA WebServer Plugin (Apache) are injected opportunistically at
+        # startup from the apmia-share emptyDir when dxo2 is enabled.
+        - name: apache-php
+          image: "{{ .Values.image.apachephp.repository }}:{{ .Values.image.apachephp.tag }}"
+          imagePullPolicy: {{ .Values.image.apachephp.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-          {{- if .Values.dxo2.enabled }}
-          env:
-            - name: APMIA_HOME
-              value: "/opt/apmia"
-            # BTL is in the dx-o2-agent container; same pod → always 127.0.0.1.
-            - name: APMIA_BTL_HOST
-              value: {{ .Values.dxo2.btlHost | quote }}
-            - name: APMIA_BTL_PORT
-              value: {{ .Values.dxo2.btlPort | quote }}
-          {{- end }}
-          volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx/nginx.conf
-              subPath: nginx.conf
-              readOnly: true
-            - name: nginx-config
-              mountPath: /etc/nginx/conf.d/default.conf
-              subPath: default.conf
-              readOnly: true
-            - name: tmp-nginx
-              mountPath: /tmp
-            {{- if .Values.dxo2.enabled }}
-            # Populated by dxo2-init; entrypoint reads BPA module from here.
-            - name: apmia-share
-              mountPath: /opt/apmia
-              readOnly: true
-            {{- end }}
-          {{- with .Values.resources.nginx }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.probes.nginx.livenessProbe }}
-          livenessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.probes.nginx.readinessProbe }}
-          readinessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false   # nginx writes temp files to /tmp
-            runAsNonRoot: false             # nginx master needs to bind/manage workers
-
-        # ── php-fpm ───────────────────────────────────────────────────────────
-        - name: php-fpm
-          image: "{{ .Values.image.phpfpm.repository }}:{{ .Values.image.phpfpm.tag }}"
-          imagePullPolicy: {{ .Values.image.phpfpm.pullPolicy }}
-          ports:
-            - name: fastcgi
-              containerPort: 9000
-              protocol: TCP
           env:
             # Expose MariaDB connection details to PHP via environment.
-            # The application reads these from getenv().
+            # mod_php inherits the process environment so getenv() works directly.
             - name: MARIADB_HOST
               value: "127.0.0.1"
             - name: MARIADB_PORT
@@ -228,38 +180,47 @@ spec:
             {{- if .Values.dxo2.enabled }}
             - name: APMIA_HOME
               value: "/opt/apmia"
-            # IA PHP collector is in the dx-o2-agent container; same pod → always 127.0.0.1.
+            # Both the IA PHP collector and the BTL are in the dx-o2-agent
+            # sidecar container; same pod → always 127.0.0.1.
             - name: APMIA_PHP_COLLECTOR_HOST
               value: {{ .Values.dxo2.phpCollectorHost | quote }}
             - name: APMIA_PHP_COLLECTOR_PORT
               value: {{ .Values.dxo2.phpCollectorPort | quote }}
+            - name: APMIA_BTL_HOST
+              value: {{ .Values.dxo2.btlHost | quote }}
+            - name: APMIA_BTL_PORT
+              value: {{ .Values.dxo2.btlPort | quote }}
+            - name: APMIA_APP_NAME
+              value: {{ .Values.dxo2.appName | quote }}
             {{- end }}
           volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/php-fpm-pool.d/www.conf
-              subPath: www.conf
+            # ConfigMap vhost overrides the baked-in sites-available/bpa-demo.conf;
+            # the sites-enabled/ symlink from a2ensite follows the mounted file.
+            - name: app-config
+              mountPath: /etc/apache2/sites-available/bpa-demo.conf
+              subPath: vhost.conf
               readOnly: true
             {{- if .Values.dxo2.enabled }}
-            # Populated by dxo2-init; entrypoint injects PHP probe from here.
+            # Populated by dxo2-init; entrypoint injects PHP probe and BPA module.
             - name: apmia-share
               mountPath: /opt/apmia
               readOnly: true
             {{- end }}
-          {{- with .Values.resources.phpfpm }}
+          {{- with .Values.resources.apachephp }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.probes.phpfpm.livenessProbe }}
+          {{- with .Values.probes.apachephp.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.probes.phpfpm.readinessProbe }}
+          {{- with .Values.probes.apachephp.readinessProbe }}
           readinessProbe:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
-            runAsNonRoot: false   # master process needs root; workers drop to www-data
+            runAsNonRoot: false   # Apache master needs root to bind/manage workers
 
         # ── mariadb ───────────────────────────────────────────────────────────
         - name: mariadb
@@ -305,11 +266,9 @@ spec:
             runAsNonRoot: false   # official mariadb image initialises as root then drops
 
       volumes:
-        - name: nginx-config
+        - name: app-config
           configMap:
             name: {{ include "php-demo.configmapName" . }}
-        - name: tmp-nginx
-          emptyDir: {}
         - name: mariadb-data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
@@ -321,8 +280,8 @@ spec:
           configMap:
             name: {{ include "php-demo.fullname" . }}-db-init
         {{- if .Values.dxo2.enabled }}
-        # Shared agent tree: dxo2-init populates this at pod startup; nginx and
-        # php-fpm mount it read-only for opportunistic probe/plugin injection.
+        # Shared agent tree: dxo2-init populates this at pod startup; apache-php
+        # mounts it read-only for opportunistic probe and BPA plugin injection.
         - name: apmia-share
           emptyDir: {}
         {{- end }}

@@ -1,15 +1,16 @@
 ---
 # BPA-Demo – Docker Compose deployment (no TLS, local images)
-# Use scripts/compose.sh – it sources .config, packages the app, and builds
-# images locally when they are not already present in the local Docker store.
+# Use build-scripts/compose.sh – it sources .config, packages the app, and
+# builds images locally when they are not already present in the Docker store.
 # All custom images use pull_policy: never so Docker never contacts the
 # registry; images must be built locally first (compose.sh handles this).
 #
 # DX O2 agent note:
 #   The dxo2 service populates the apmia_data named volume from the image on
 #   first start (Docker volume-init behaviour, equivalent to the dxo2-init
-#   initContainer in Kubernetes).  phpfpm and nginx mount the same volume
-#   read-only so their entrypoints can inject the PHP probe and BPA plugin.
+#   initContainer in Kubernetes).  The apachephp service mounts the same
+#   volume read-only so its entrypoint can inject both the PHP probe and the
+#   BPA WebServer Plugin for Apache at startup.
 #   Unlike Kubernetes (shared pod network / 127.0.0.1), Compose services reach
 #   each other by service name – hence APMIA_PHP_COLLECTOR_HOST=dxo2 and
 #   APMIA_BTL_HOST=dxo2 rather than 127.0.0.1.
@@ -52,11 +53,13 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  phpfpm:
-    image: ${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}
+  apachephp:
+    image: ${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}
     build:
-      context: ./src/php-fpm      # app.tar.gz must exist here before building
+      context: ./src/apache-php   # app.tar.gz must exist here before building
     pull_policy: never             # use local image only – compose.sh builds it
+    ports:
+      - "8080:8080"
     environment:
       MARIADB_HOST:     mariadb
       MARIADB_PORT:     "3306"
@@ -66,9 +69,12 @@ services:
       # DX O2 PHP probe → IA collector.  In Compose, reach dxo2 by service name.
       APMIA_PHP_COLLECTOR_HOST: dxo2
       APMIA_PHP_COLLECTOR_PORT: ${APMIA_PHP_COLLECTOR_PORT:-5005}
-      APMIA_APP_NAME:           ${APMIA_APP_NAME:-BPA-Demo}
+      # DX O2 BPA plugin → BTL.  In Compose, reach dxo2 by service name.
+      APMIA_BTL_HOST: dxo2
+      APMIA_BTL_PORT: ${APMIA_BTL_PORT:-8000}
+      APMIA_APP_NAME: ${APMIA_APP_NAME:-BPA-Demo}
     volumes:
-      # Populated by the dxo2 service on first start (probe .so + .ini).
+      # Populated by the dxo2 service on first start (probe .so + .ini + BPA .so).
       - apmia_data:/opt/apmia:ro
     depends_on:
       mariadb:
@@ -76,28 +82,6 @@ services:
       dxo2:
         condition: service_started
     restart: unless-stopped
-
-  nginx:
-    image: ${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}
-    build:
-      context: ./src/nginx
-    pull_policy: never             # use local image only – compose.sh builds it
-    ports:
-      - "8080:8080"
-    environment:
-      # DX O2 BPA plugin → BTL.  In Compose, reach dxo2 by service name.
-      APMIA_BTL_HOST: dxo2
-      APMIA_BTL_PORT: ${APMIA_BTL_PORT:-8000}
-    volumes:
-      # Override the default vhost with a Compose-aware config that routes
-      # FastCGI to the phpfpm service rather than 127.0.0.1 (pod-local).
-      - ./src/nginx/config/default-compose.conf:/etc/nginx/conf.d/default.conf:ro
-      # Populated by the dxo2 service on first start (BPA .so).
-      - apmia_data:/opt/apmia:ro
-    depends_on:
-      - phpfpm
-      - dxo2
-    restart: on-failure
 
 volumes:
   mariadb_data:

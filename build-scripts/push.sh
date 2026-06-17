@@ -17,6 +17,10 @@
 #   .config    Must exist in the project root (copy from .config.example).
 #              REGISTRY, REGISTRY_USER, REGISTRY_PASSWORD, IMAGE_PREFIX, and
 #              IMAGE_TAG must all be set.
+#
+# Images pushed:
+#   apache-php   Apache 2.4 + mod_php 8.1 application image (replaces nginx + php-fpm)
+#   dx-o2-agents Broadcom APMIA + BTL sidecar (conditional on --skip-dxo2)
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -121,8 +125,7 @@ done
 check_prerequisites
 load_config
 
-readonly PHP_FPM_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/php-fpm:${IMAGE_TAG}"
-readonly NGINX_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/nginx:${IMAGE_TAG}"
+readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
 readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
 
 echo "=== BPA-Demo image push ==="
@@ -133,9 +136,8 @@ echo ""
 # Authenticate once for all pushes.
 registry_login
 
-# Push application images.
-push_image "${PHP_FPM_IMAGE}"
-push_image "${NGINX_IMAGE}"
+# Push the application image.
+push_image "${APACHE_PHP_IMAGE}"
 
 # Push DX O2 agents image conditionally.
 if [[ "${OPT_SKIP_DXO2}" == "true" ]]; then
@@ -149,8 +151,7 @@ fi
 registry_logout
 
 echo "=== Push complete ==="
-echo "  ${PHP_FPM_IMAGE}"
-echo "  ${NGINX_IMAGE}"
+echo "  ${APACHE_PHP_IMAGE}"
 if [[ "${OPT_SKIP_DXO2}" == "false" ]]; then
     echo "  ${DXO2_IMAGE}"
 fi

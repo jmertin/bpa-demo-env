@@ -5,6 +5,86 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 10:00 - [Feat – Replace nginx + PHP-FPM with Apache + mod_php]:
+  Replaced the two-container nginx + php-fpm setup with a single apache-php
+  container (Apache 2.4 + mod_php 8.1).  The BPA WebServer Plugin for Apache
+  has a stable module API across Apache 2.4.x releases, eliminating the
+  ABI version-mismatch problem that affected the nginx plugin.
+
+  Both the PHP probe and the BPA Apache plugin are injected opportunistically
+  at container startup from the APMIA shared volume — the container starts
+  cleanly without either if the agent volume is absent.
+
+  src/apache-php/Dockerfile (new):
+  - Multi-stage build (ubuntu:22.04); Stage 1 extracts app.tar.gz, Stage 2
+    installs apache2 + libapache2-mod-php8.1 + php8.1-{cli,mysql,mbstring}.
+  - Listens on port 8080 (sed -i on /etc/apache2/ports.conf).
+  - Enables mods: rewrite, headers, php8.1; disables default site; enables
+    bpa-demo.conf via a2ensite.
+
+  src/apache-php/entrypoint.sh (new):
+  - PHP probe: copies .so to extension_dir, installs INI to
+    /etc/php/8.1/apache2/conf.d/, patches collector host/port/appname/logdir.
+  - BPA plugin: finds mod_*.so in extensions/WebServerPlugin/; derives module
+    name from filename (mod_<name>.so → <name>_module); writes LoadModule to
+    conf-enabled/bpa.conf; validates with apache2ctl configtest; disables if
+    rejected (safe fallback).
+  - Starts Apache as PID 1 via `exec apache2 -D FOREGROUND`.
+
+  src/apache-php/config/vhost.conf (new):
+  - VirtualHost *:8080; logs to /proc/self/fd/1 and /proc/self/fd/2.
+  - AllowOverride All; /setup/ denied; hidden files denied.
+
+  src/dx-o2-agents/Dockerfile:
+  - Extended BPA extraction step to also search non-nginx tarballs in the
+    BPA zip for Apache mod_*.so files and install them flat to
+    extensions/WebServerPlugin/. Non-fatal when absent (nginx-only BPA zip).
+
+  docker-compose.yml:
+  - Removed phpfpm and nginx services.
+  - Added apachephp service (apache-php image, port 8080, apmia_data:ro).
+  - APMIA_PHP_COLLECTOR_HOST=dxo2 and APMIA_BTL_HOST=dxo2 in the same service
+    (Compose services reach each other by name, not 127.0.0.1).
+
+  helm/php-demo/templates/deployment.yaml:
+  - Removed nginx and php-fpm containers.
+  - Added apache-php container with http/8080, MariaDB env, APMIA env,
+    app-config vhost.conf subPath mount, apmia-share mount.
+  - Renamed volume nginx-config → app-config; removed tmp-nginx emptyDir.
+  - Updated dxo2-init comment to reference apache-php.
+
+  helm/php-demo/templates/configmap.yaml:
+  - Replaced nginx.conf + default.conf + www.conf with a single vhost.conf key.
+
+  helm/php-demo/values.yaml:
+  - Replaced image.phpfpm + image.nginx with image.apachephp.
+  - Merged nginx + phpfpm resource budgets into resources.apachephp (128/384 Mi).
+  - Merged probes into probes.apachephp (httpGet port 8080 for both live/ready).
+
+  build-scripts/build.sh:
+  - Replaced PHP_FPM_IMAGE + NGINX_IMAGE build steps with APACHE_PHP_IMAGE.
+  - cleanup() now removes src/apache-php/app.tar.gz.
+
+  build-scripts/package-app.sh:
+  - Archive destination changed from src/php-fpm/app.tar.gz to
+    src/apache-php/app.tar.gz.
+
+  build-scripts/deploy.sh:
+  - Image section in generate_values() updated to apachephp (removed phpfpm/nginx).
+  - post_deploy_init() container flag changed from -c php-fpm to -c apache-php.
+
+  build-scripts/push.sh:
+  - Replaced PHP_FPM_IMAGE + NGINX_IMAGE with APACHE_PHP_IMAGE.
+
+  .gitignore:
+  - Updated ignored archive path from src/php-fpm/ to src/apache-php/.
+
+  CLAUDE.md:
+  - Technology stack: replaced PHP-FPM + nginx rows with Apache + mod_php.
+  - All references to nginx/php-fpm updated to apache-php.
+  - Key file paths and Docker Compose notes updated.
+
+------------------------------------------------------------------------------
 2026-06-16 @ 15:30 - [Fix BPA nginx plugin version mismatch]:
   The Dockerfile was hardcoded to select the nginx 1.17.1 plugin from the
   BPA zip. nginx 1.18.0 (ubuntu:22.04) requires a module built against
