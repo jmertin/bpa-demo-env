@@ -5,6 +5,20 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-17 @ 17:00 - [Fix – correct PHP probe browser agent enable property name]:
+  The correct INI property to enable browser agent auto-injection is
+  wily_php_agent.enable.browseragent.snippet.autoInjection=1 (integer flag),
+  not wily_php_agent.browseragent.autoInjection.enabled=true (boolean string).
+
+  - src/apache-php/entrypoint.sh: browser agent block updated:
+    • Enabled path: sets enable.browseragent.snippet.autoInjection=1
+    • Disabled path: sets enable.browseragent.snippet.autoInjection=0
+    • Both paths: remove the legacy browseragent.autoInjection.enabled line
+      (whether pre-configured by the DX O2 installer or left over from a
+      previous container build).
+    • snippetString handling unchanged.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 16:30 - [Fix – YAML parse error from mixed environment block style]:
   Mixing mapping style (KEY: VALUE) and list style (- ITEM) in the same
   YAML environment block is illegal.  The previous fix introduced a list-form

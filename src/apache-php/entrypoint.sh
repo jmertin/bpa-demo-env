@@ -60,32 +60,29 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     echo "[entrypoint]   PHP probe agent : ${APMIA_PHP_AGENT_NAME}"
 
     # ── Browser agent auto-injection ──────────────────────────────────────────
-    # When APMIA_BROWSER_SNIPPET is set the PHP probe injects the supplied
-    # JavaScript snippet into the <head> of every HTML response automatically.
-    # The snippet string is written with printf %s to preserve special characters
-    # without shell escaping.
-    #
-    # When APMIA_BROWSER_SNIPPET is empty we explicitly set enabled=false and
-    # remove any pre-existing snippetString.  The DX O2 installer download may
-    # ship wily_php_agent.ini with autoInjection already enabled; this block
-    # ensures .config is always the authoritative source.
+    # The PHP probe is enabled via wily_php_agent.enable.browseragent.snippet.autoInjection=1
+    # and the snippet is supplied via wily_php_agent.browseragent.autoInjection.snippetString.
+    # The DX O2 installer may ship the INI with pre-configured values; .config is
+    # always the authoritative source.  The legacy property
+    # wily_php_agent.browseragent.autoInjection.enabled is removed in both branches.
     if [[ -n "${APMIA_BROWSER_SNIPPET}" ]]; then
-        if grep -qE "^wily_php_agent\.browseragent\.autoInjection\.enabled=" "${INI_PATH}"; then
-            sed -i "s|^wily_php_agent\.browseragent\.autoInjection\.enabled=.*|wily_php_agent.browseragent.autoInjection.enabled=true|" "${INI_PATH}"
+        if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=" "${INI_PATH}"; then
+            sed -i "s|^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=.*|wily_php_agent.enable.browseragent.snippet.autoInjection=1|" "${INI_PATH}"
         else
-            printf '\nwily_php_agent.browseragent.autoInjection.enabled=true\n' >> "${INI_PATH}"
+            printf '\nwily_php_agent.enable.browseragent.snippet.autoInjection=1\n' >> "${INI_PATH}"
         fi
         sed -i "/^wily_php_agent\.browseragent\.autoInjection\.snippetString=/d" "${INI_PATH}"
         printf 'wily_php_agent.browseragent.autoInjection.snippetString=%s\n' "${APMIA_BROWSER_SNIPPET}" >> "${INI_PATH}"
         echo "[entrypoint]   Browser agent : auto-injection enabled"
     else
-        # Disable and scrub any snippet the installer may have pre-configured.
-        if grep -qE "^wily_php_agent\.browseragent\.autoInjection\.enabled=" "${INI_PATH}"; then
-            sed -i "s|^wily_php_agent\.browseragent\.autoInjection\.enabled=.*|wily_php_agent.browseragent.autoInjection.enabled=false|" "${INI_PATH}"
+        if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=" "${INI_PATH}"; then
+            sed -i "s|^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=.*|wily_php_agent.enable.browseragent.snippet.autoInjection=0|" "${INI_PATH}"
         fi
         sed -i "/^wily_php_agent\.browseragent\.autoInjection\.snippetString=/d" "${INI_PATH}"
         echo "[entrypoint]   Browser agent : disabled (APMIA_BROWSER_SNIPPET not set)"
     fi
+    # Remove legacy enable property regardless of branch.
+    sed -i "/^wily_php_agent\.browseragent\.autoInjection\.enabled=/d" "${INI_PATH}"
 
     echo "[entrypoint] DX O2 PHP probe active – APM instrumentation enabled."
 else
