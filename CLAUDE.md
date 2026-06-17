@@ -33,9 +33,9 @@ CHANGELOG             ← timestamped change log; update on every change
 |---|---|---|
 | Base OS | ubuntu:22.04 (Jammy LTS) | glibc 2.35; within DX O2 agent ceilings |
 | PHP | libapache2-mod-php8.1 (ubuntu repos) | mod_php; ≤ DX O2 PHP Agent ceiling PHP 8.4 |
-| Web server | apache2 2.4 (ubuntu repos) | BPA Apache module API stable across 2.4.x |
+| Web server | apache2 2.4 (ubuntu repos) | single apache-php container; replaces former nginx + php-fpm pair |
 | Database | mariadb:11 (Docker Hub) | official image, pinned major |
-| Monitoring | Broadcom APMIA (3 DX O2 packages) | pre-configured; installs to /opt/apmia + /opt/btlistener |
+| Monitoring | Broadcom APMIA (3 DX O2 packages) | identity via APMENV_*; never patches IntroscopeAgent.profile |
 | Orchestration | Kubernetes + Helm 3.12+ | chart at helm/php-demo/ |
 | Local dev | Docker Compose v2 | compose.sh wrapper |
 
@@ -108,6 +108,7 @@ Rules:
 6. **`automountServiceAccountToken: false`** on the Kubernetes ServiceAccount — the pod needs no cluster API access.
 7. **`allowPrivilegeEscalation: false`** on every container and initContainer.
 8. **No secrets or credentials in CHANGELOG, README, or any tracked doc.**
+9. **DB Monitor credentials** in Kubernetes must be injected via `secretKeyRef` from the mariadb Secret — never plain-text in values files.
 
 ---
 
@@ -127,16 +128,18 @@ The Broadcom APMIA agent is **never baked into application images**.  Instead:
    - `Business_Payload_Analyzer_WebServer_Plugins.zip` — BPA plugin (nginx + Apache variants)
 2. At pod startup a **`dxo2-init` initContainer** copies `/opt/apmia/ → emptyDir volume` (`apmia-share`).
 3. The **`dx-o2-agent` sidecar** runs the IA via `bin/APMIAgent.sh console` and the
-   BTL via `/opt/btlistener/bin/BTListener.sh`.  JAVA_HOME is set to the bundled JRE.
+   BTL via `/opt/btlistener/bin/BTListener.sh`.  `JAVA_HOME` is set to the bundled JRE.
 4. The **`apache-php` container** mounts `apmia-share` at `/opt/apmia` (readOnly).
    Its `entrypoint.sh` performs **opportunistic injection** for both agents:
    - **PHP probe**: copies `extensions/PHPAgent/wily_php_agent.so` into PHP's
      `extension_dir`; symlinks `wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`;
-     patches `wily_php_agent.collectorHost/Port` to reach the IA sidecar on `127.0.0.1:5005`.
+     patches `collectorHost/Port`, `application.name`, `logdir`, `agentName`;
+     handles browser agent snippet (see below).
    - **BPA plugin (Apache)**: finds any `mod_*.so` in `extensions/WebServerPlugin/`;
-     derives the module name from the filename (`mod_<name>.so` → `<name>_module`);
-     writes a `LoadModule` directive to `/etc/apache2/conf-enabled/bpa.conf`;
-     validates with `apache2ctl configtest` — disables if rejected, starts cleanly.
+     derives the module name from the filename (`mod_<name>.so → <name>_module`);
+     writes a `LoadModule` + `SetEnv APMIA_WEB_AGENT_NAME` directive to
+     `/etc/apache2/conf-enabled/bpa.conf`; validates with `apache2ctl configtest` —
+     disables if rejected, starts cleanly.
    - Container starts cleanly when the volume is absent.
 
 All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`.  When `false`
@@ -144,38 +147,90 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`.  When `false`
 
 `APMIA_EM_HOST` in `.config` being non-empty causes `deploy.sh` to set
 `dxo2.enabled: true` in the generated `values.local.yaml`.  When using the
-pre-configured DX O2 packages, `APMIA_EM_HOST` does not need to be set — the
-EM URL is already in the bundled `IntroscopeAgent.profile`.
+pre-configured DX O2 packages, `APMIA_EM_HOST` does not need to point to a real
+host — it is used only as a truthy flag.
+
+### APMENV_* identity mechanism
+
+Agent identity is configured via `APMENV_*` environment variables — the native
+APMIA Docker container mechanism.  The agent startup script reads them and
+overrides the corresponding `introscope.*` profile properties **without any file
+patching**.  `APMIA_*` fallback vars are also accepted and promoted internally.
+
+| APMENV_* variable | introscope.* property overridden |
+|---|---|
+| `APMENV_INTROSCOPE_AGENT_AGENTNAME` | `introscope.agent.agentName` |
+| `APMENV_INTROSCOPE_AGENT_APPLICATION_NAME` | `introscope.agent.application.name` |
+| `APMENV_INTROSCOPE_AGENT_HOSTNAME` | `introscope.agent.hostName` |
+| `APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME` | `introscope.agent.customProcessName` |
+| `APMENV_LOG4J_LOGGER_INTROSCOPEAGENT` | log4j logger spec, e.g. `"INFO, logfile"` |
+| `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_*` | DB Monitor MySQL properties |
+
+**Critical:** `core/config/IntroscopeAgent.profile` contains the tenant's JWT
+credential and WSS EM URL pre-configured by the DX O2 installer.  This file must
+**never be patched, overwritten, or modified by any script.**  Use APMENV_* only.
+
+### Container hostname (metric path fix)
+
+`APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA (Java process).  The PHP
+probe and BPA Apache module read the OS `gethostname()` of their own container.
+To prevent auto-generated container IDs appearing in the metric path:
+- **Kubernetes**: `spec.hostname: {{ .Values.dxo2.hostName }}` in the pod template.
+- **Compose**: `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` on the `apachephp` service.
+
+### APMIA_DEPLOY flag
+
+| Value | Behaviour |
+|---|---|
+| `true` (default) | Start the IA and BTL daemons from the container |
+| `false` | Passive volume mode: seed the agent tree but `exec sleep infinity` (use when IA is external) |
+
+### Browser agent auto-injection
+
+The PHP probe supports injecting a JavaScript snippet into every HTML response.
+
+- Set `APMIA_BROWSER_SNIPPET` in `.config` to the `<script>` tag from your DX O2 tenant
+  (Experience View → Browser Agent → Snippet).  It is enclosed in single-quotes in `.config`
+  because the value contains double-quotes.
+- When set, the entrypoint writes to `wily_php_agent.ini`:
+  ```
+  wily_php_agent.enable.browseragent.snippet.autoInjection=1
+  wily_php_agent.browseragent.autoInjection.snippetString='<script ...>'
+  ```
+- When empty, the entrypoint explicitly sets `autoInjection=0`, removes any
+  pre-existing `snippetString`, and deletes the legacy
+  `wily_php_agent.browseragent.autoInjection.enabled` property (the DX O2 installer
+  may have pre-configured these; `.config` is always the authoritative source).
+
+### DB Monitor (MariaDB)
+
+- Enabled by `MYSQL_MONITOR=true` (default) in `.config`.
+- Uses `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_*` env vars; profile name `bpadb`.
+- Hostname in Compose: `mariadb` (service name).  Hostname in Kubernetes: `127.0.0.1` (same-pod).
+- Credentials: never plain-text in values files.  In Kubernetes they are pulled via
+  `secretKeyRef` from the mariadb Secret.  In Compose they are exported by `compose.sh`
+  from `.config` and passed as passthrough env vars.
 
 ### Expected paths inside /opt/apmia after install
 
-Packages from the DX O2 interface produce this layout (extracted from `PHP_apmia*.tar`):
-
 ```
-bin/APMIAgent.sh                                   ← IA start script (Java Service Wrapper)
+bin/APMIAgent.sh                                   ← IA start script
 APMIACtrl.sh                                       ← Agent control script
 jre/                                               ← Bundled JRE (JAVA_HOME at runtime)
-core/config/IntroscopeAgent.profile                ← Pre-configured profile (tenant EM URL + JWT — NEVER overwrite)
-probe/lib/php81/wily_php_agent.so                  ← PHP probe .so (original path from PHP_apmia*.tar)
-probe/wily_php_agent.ini                           ← PHP INI snippet (original path)
+core/config/IntroscopeAgent.profile                ← Pre-configured profile (NEVER overwrite)
 extensions/PHPAgent/wily_php_agent.so              ← PHP probe .so (normalised by Dockerfile)
 extensions/PHPAgent/wily_php_agent.ini             ← PHP INI snippet (normalised by Dockerfile)
-extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module_<ver>.so  ← nginx BPA module variants (version-stamped by Dockerfile)
-extensions/WebServerPlugin/mod_<name>.so                          ← Apache BPA module (from BPA zip, if present)
+extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module_<ver>.so  ← nginx BPA variants
+extensions/WebServerPlugin/mod_<name>.so           ← Apache BPA module (if present in BPA zip)
 logs/                                              ← Runtime log directory
 ```
 
-BTL is installed at `/opt/btlistener/` (extracted from `Business_Transaction_Listener.zip`):
+BTL is installed at `/opt/btlistener/` (from `Business_Transaction_Listener.zip`):
 
 ```
 bin/BTListener.sh                                  ← BTL start script
-conf/custom/application.properties                 ← Pre-configured: tenant DXC URL + tenantId + BTL port 8000
+conf/custom/application.properties                 ← Pre-configured: DXC URL + tenantId + port 8000
 ```
-
-**Critical:** `core/config/IntroscopeAgent.profile` contains the tenant's JWT credential and
-WSS EM URL pre-configured by the DX O2 installer.  The entrypoint patches only
-`introscope.agent.agentName` and `introscope.agent.application.name` — all
-`agentManager.*` blocks are left intact.
 
 ---
 
@@ -196,10 +251,10 @@ WSS EM URL pre-configured by the DX O2 installer.  The entrypoint patches only
 Chart: `helm/php-demo/` — version **0.2.0**
 
 - All sensitive values come via `values.local.yaml` (generated; never committed).
-- `dxo2.emHost` is **optional** when using the DX O2 installer download (the EM URL is pre-configured in the agent profile).  Set it only to override the embedded EM URL.
-- The ConfigMap holds a single key `vhost.conf` mounted into the `apache-php` container at `/etc/apache2/sites-available/bpa-demo.conf`; the `sites-enabled/` symlink created by `a2ensite` in the Dockerfile follows this file.
+- `dxo2.emHost` is **optional** when using the DX O2 installer download (the EM URL is pre-configured in the agent profile).  Set it to any non-empty string to trigger `dxo2.enabled: true` in `deploy.sh`.
+- The ConfigMap holds a single key `vhost.conf` mounted into the `apache-php` container at `/etc/apache2/sites-available/bpa-demo.conf` via `subPath`; the `sites-enabled/` symlink created by `a2ensite` in the Dockerfile follows this file.
 - Pod template carries `checksum/config` and `checksum/secret` annotations so pods are automatically recreated when config or secrets change.
-- `image.*.pullPolicy: Always` for all custom images (apachephp, dxo2) so retagged builds are always pulled.  `IfNotPresent` for `mariadb` (pinned upstream, no local rebuilds).
+- `image.*.pullPolicy: Always` for custom images (apachephp, dxo2).  `IfNotPresent` for `mariadb`.
 
 ---
 
@@ -269,23 +324,30 @@ MARIADB_ROOT_PASSWORD MARIADB_DATABASE MARIADB_USER MARIADB_PASSWORD
 APP_NAMESPACE APP_HOSTNAME TLS_CLUSTER_ISSUER INGRESS_CLASS_NAME KUBECONFIG
 HELM_CHART_PATH   # optional; defaults to helm/php-demo
 
-# DX O2 agent identity (optional — leave APMIA_EM_HOST empty to disable agent)
-# These override auto-detected Docker/Kubernetes hostnames in the APM console.
-APMIA_EM_HOST APMIA_EM_PORT
-APMIA_AGENT_NAME    # default bpa-demo-agent   (introscope.agent.agentName + com.wily.introscope.agent.agentName)
-APMIA_APP_NAME      # default bpa-demo          (introscope.agent.application.name)
-APMIA_HOST_NAME     # default bpa-demo-host     (introscope.agent.hostName — prevents container IP appearing in APM)
-APMIA_PROCESS_NAME  # default bpa-demo          (introscope.agent.customProcessName)
-APMIA_PHP_AGENT_NAME  # default bpa-demo-php-probe   (wily_php_agent.agentName in PHP probe INI)
-APMIA_WEB_AGENT_NAME  # default bpa-demo-web-plugin  (APMIA_WEB_AGENT_NAME env in BPA Apache module)
-APMIA_LOG_LEVEL     # default INFO              (DEBUG | INFO | WARN | ERROR)
+# DX O2 – agent lifecycle
+APMIA_DEPLOY        # true (default) = run IA; false = passive volume only
+APMIA_EM_HOST       # non-empty → deploy.sh sets dxo2.enabled=true; value is informational
+APMIA_EM_PORT       # default 8443
 
-# DX O2 same-pod IPC (optional — defaults match DX O2 installer; override only
-# when running the dx-o2-agent sidecar in a separate pod/service)
-APMIA_PHP_COLLECTOR_HOST   # default 127.0.0.1 (IA PHP collector — apache-php probe → dx-o2-agent)
-APMIA_PHP_COLLECTOR_PORT   # default 5005      (from wily_php_agent.ini)
-APMIA_BTL_HOST             # default 127.0.0.1 (BTL — apache-php BPA plugin → dx-o2-agent)
-APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
+# DX O2 – agent identity (exposed as APMENV_* to the dx-o2-agent container)
+APMIA_AGENT_NAME    # default bpa-demo-agent   (APMENV_INTROSCOPE_AGENT_AGENTNAME)
+APMIA_APP_NAME      # default bpa-demo          (APMENV_INTROSCOPE_AGENT_APPLICATION_NAME)
+APMIA_HOST_NAME     # default bpa-demo-host     (APMENV_INTROSCOPE_AGENT_HOSTNAME + OS hostname)
+APMIA_PROCESS_NAME  # default bpa-demo          (APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME)
+APMIA_PHP_AGENT_NAME  # default bpa-demo-php-probe   (wily_php_agent.agentName in PHP INI)
+APMIA_WEB_AGENT_NAME  # default bpa-demo-web-plugin  (APMIA_WEB_AGENT_NAME env for BPA Apache)
+APMIA_LOG_LEVEL     # default INFO  → APMENV_LOG4J_LOGGER_INTROSCOPEAGENT="INFO, logfile"
+
+# DX O2 – same-pod IPC (defaults match DX O2 installer; override for external IA)
+APMIA_PHP_COLLECTOR_HOST   # default 127.0.0.1  (Compose override: dxo2 service name)
+APMIA_PHP_COLLECTOR_PORT   # default 5005
+APMIA_BTL_HOST             # default 127.0.0.1  (Compose override: dxo2 service name)
+APMIA_BTL_PORT             # default 8000
+
+# DX O2 – optional extensions
+MYSQL_MONITOR          # default true  – enable APMIA DB Monitor for MariaDB
+APMIA_BROWSER_SNIPPET  # default ""    – <script> snippet from DX O2 → Experience View → Browser Agent
+                       # Enclose in single quotes in .config: APMIA_BROWSER_SNIPPET='<script ...>'
 ```
 
 ---
@@ -293,10 +355,12 @@ APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
 ## Docker Compose notes
 
 - `compose.sh` wraps `docker compose`, sources `.config`, and calls `package-app.sh` before any build.
-- The `apachephp` service replaces the former `phpfpm` + `nginx` pair.  Apache + mod_php serves PHP directly with no FastCGI intermediary, so there is no Compose-vs-Kubernetes vhost config difference.
-- Only `REGISTRY`, `IMAGE_PREFIX`, `IMAGE_TAG`, the four `MARIADB_*` vars, and the `APMIA_*` vars are needed for Compose.  Kubernetes-only vars (`APP_NAMESPACE`, `KUBECONFIG`, etc.) are exported with safe defaults and silently unused.
-- The `dxo2` service populates the `apmia_data` named volume from the image on first start (Docker volume-init, equivalent to the `dxo2-init` initContainer in Kubernetes).  `apachephp` mounts the volume read-only for opportunistic PHP probe and BPA plugin injection.
-- **Compose networking vs Kubernetes:** In Compose each service has its own network namespace; containers reach each other by service name.  `APMIA_PHP_COLLECTOR_HOST=dxo2` and `APMIA_BTL_HOST=dxo2` (not `127.0.0.1` as in a Kubernetes pod).
+- `load_config()` in `compose.sh` **explicitly exports every DX O2 variable** with safe defaults before running `docker compose`.  Variables not exported are invisible to Docker Compose YAML interpolation.
+- The `apachephp` service environment block uses **uniform list form** (`- KEY` or `- KEY=value`).  Mixing mapping and list style in a single YAML `environment` block is illegal YAML and causes a parse error.
+- `APMIA_BROWSER_SNIPPET` uses the passthrough form (`- APMIA_BROWSER_SNIPPET`, no `=` sign) to prevent YAML parser issues with the snippet's embedded double-quotes.
+- `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` is set on the `apachephp` service so the PHP probe and BPA Apache module report the correct hostname in the metric path.
+- **Compose networking vs Kubernetes:** `APMIA_PHP_COLLECTOR_HOST` and `APMIA_BTL_HOST` are hardcoded to `dxo2` (the service name) in `docker-compose.yml`, not read from `.config`.  In Kubernetes the same-pod default of `127.0.0.1` applies.
+- The `dxo2` service populates the `apmia_data` named volume on first start.  `apachephp` mounts it read-only.
 
 ---
 
@@ -305,13 +369,12 @@ APMIA_BTL_PORT             # default 8000      (from BTL application.properties)
 | Purpose | Path |
 |---|---|
 | PHP application source | `app/src/` |
+| Apache+PHP Dockerfile | `src/apache-php/Dockerfile` |
 | Apache+PHP entrypoint (probe + BPA injection) | `src/apache-php/entrypoint.sh` |
 | Apache VirtualHost config (baked + ConfigMap) | `src/apache-php/config/vhost.conf` |
+| DX O2 Dockerfile | `src/dx-o2-agents/Dockerfile` |
 | DX O2 entrypoint (agent + BTL daemon) | `src/dx-o2-agents/entrypoint.sh` |
-| APMIA profile reference template | `src/dx-o2-agents/config/IntroscopeAgent.profile.template` |
-| DX O2 installers (git-ignored) | `src/dx-o2-agents/installers/PHP_apmia*.tar` |
-| | `src/dx-o2-agents/installers/Business_Transaction_Listener.zip` |
-| | `src/dx-o2-agents/installers/Business_Payload_Analyzer_WebServer_Plugins.zip` |
+| DX O2 installers (git-ignored) | `src/dx-o2-agents/installers/` |
 | Helm values (defaults, committed) | `helm/php-demo/values.yaml` |
 | Helm values (secrets, generated + deleted) | `helm/php-demo/values.local.yaml` |
 | Kubernetes deployment template | `helm/php-demo/templates/deployment.yaml` |

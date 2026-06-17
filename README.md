@@ -1,7 +1,7 @@
 # BPA-Demo – Smart Home Device Web Shop
 
 A full-stack PHP demo web shop selling home-assistant compatible smart devices
-(Shelly, SonOff, Tuya) containerised with **nginx**, **PHP-FPM**, and **MariaDB**.
+(Shelly, SonOff, Tuya) containerised with **Apache 2.4 + mod_php** and **MariaDB**.
 
 The application ships 300 products across three brands, a session-based shopping
 basket, fake credit-card checkout with Luhn validation, an admin panel with
@@ -32,35 +32,23 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 │       └── setup/                # init_users.php (CLI only, not web-accessible)
 │
 ├── src/
-│   ├── php-fpm/                  # PHP-FPM container (multi-stage, ubuntu:22.04)
-│   │   ├── Dockerfile            # Stage 1: extract archive; Stage 2: runtime only
-│   │   ├── entrypoint.sh         # PHP probe injection, cron, then php-fpm -F -R
+│   ├── apache-php/               # Apache 2.4 + mod_php container (ubuntu:22.04, multi-stage)
+│   │   ├── Dockerfile            # Stage 1: extract archive; Stage 2: Apache + PHP runtime
+│   │   ├── entrypoint.sh         # PHP probe + BPA Apache module injection, cron, Apache
 │   │   └── config/
-│   │       ├── php-fpm.conf      # global config (no daemon, log to stderr)
-│   │       └── www.conf          # pool: TCP 0.0.0.0:9000, workers as www-data
-│   │
-│   ├── nginx/                    # NGINX container (ubuntu:22.04)
-│   │   ├── Dockerfile            # pessimistic cleanup of all distro defaults
-│   │   ├── entrypoint.sh         # BPA plugin injection, cron, then nginx -g 'daemon off;'
-│   │   └── config/
-│   │       ├── nginx.conf        # includes /etc/nginx/modules-enabled/*.conf at top level
-│   │       ├── default.conf      # listen 8080, fastcgi_pass 127.0.0.1:9000
-│   │       └── default-compose.conf  # listen 8080, fastcgi_pass phpfpm:9000 (Compose)
+│   │       └── vhost.conf        # VirtualHost listen 8080; baked in + overridden by ConfigMap
 │   │
 │   └── dx-o2-agents/             # Broadcom DX O2 monitoring container (ubuntu:22.04)
-│       ├── Dockerfile            # installs APMIA to /opt/apmia via silent installer
-│       ├── entrypoint.sh         # validates EM host, renders profile, starts agent + BTL
-│       ├── config/
-│       │   └── IntroscopeAgent.profile.template
-│       └── installers/           # place apmia-*.tar.gz here (git-ignored, licensed binary)
-│           └── .gitkeep
+│       ├── Dockerfile            # extracts APMIA + BTL + BPA plugin to /opt/apmia, /opt/btlistener
+│       ├── entrypoint.sh         # APMENV_* identity; starts IA + BTL; APMIA_DEPLOY passthrough
+│       └── installers/           # place 3 DX O2 packages here (git-ignored)
 │
 ├── build-scripts/
-│   ├── package-app.sh            # tar app/src/ → src/php-fpm/app.tar.gz
+│   ├── package-app.sh            # tar app/src/ → src/apache-php/app.tar.gz
 │   ├── build.sh                  # calls package-app.sh, then docker build all images
 │   ├── push.sh                   # docker login (--password-stdin) + push all images
 │   ├── deploy.sh                 # renders values.local.yaml from .config, helm upgrade
-│   └── compose.sh                # docker compose wrapper (sources .config, builds if needed)
+│   └── compose.sh                # docker compose wrapper (sources .config, exports vars)
 │
 └── helm/
     └── php-demo/                 # Helm chart v0.2.0
@@ -72,11 +60,11 @@ indent, K&R braces, PHPDoc on every function, single quotes).
         │   └── seed.sql          # 3 brands, 6 capabilities, 300 products, 13 demo users
         └── templates/
             ├── _helpers.tpl
-            ├── deployment.yaml         # pod: nginx + php-fpm + mariadb (+ dx-o2 sidecar)
+            ├── deployment.yaml         # pod: apache-php + mariadb (+ dx-o2 sidecar + init)
             ├── serviceaccount.yaml     # automountServiceAccountToken: false
             ├── registry-secret.yaml    # kubernetes.io/dockerconfigjson pull secret
             ├── db-init-configmap.yaml  # embeds schema.sql + seed.sql for MariaDB init
-            ├── configmap.yaml          # nginx + PHP-FPM configs (mounted over image defaults)
+            ├── configmap.yaml          # Apache VirtualHost config (mounted via subPath)
             ├── secret.yaml             # MariaDB credentials from Helm values
             ├── service.yaml            # ClusterIP on port 8080
             ├── ingress.yaml            # TLS ingress with cert-manager annotation
@@ -105,20 +93,22 @@ Service (ClusterIP :8080)
 │                                                          │
 │  initContainer: dxo2-init  ──► emptyDir /opt/apmia      │ ← when dxo2.enabled
 │                                                          │
-│  [dx-o2-agent] Java daemon ──► Enterprise Manager       │ ← when dxo2.enabled
+│  [dx-o2-agent] Java IA + BTL ──► DX O2 backend (WSS)    │ ← when dxo2.enabled
 │                                                          │
-│  [nginx]       listen 8080  ◄── external traffic         │
-│      │  BPA plugin ◄── /opt/apmia (emptyDir)            │ ← when dxo2.enabled
-│      │  FastCGI → 127.0.0.1:9000                        │
-│  [php-fpm]     listen 9000                               │
-│      │  PHP probe ◄── /opt/apmia (emptyDir)             │ ← when dxo2.enabled
-│      │  PDO → 127.0.0.1:3306                            │
+│  [apache-php]  Apache 2.4 + mod_php                      │
+│      listen 8080 ◄── external traffic                    │
+│      PHP probe ◄── /opt/apmia (emptyDir)                 │ ← when dxo2.enabled
+│      BPA Apache module ◄── /opt/apmia (emptyDir)         │ ← when dxo2.enabled
+│      PDO → 127.0.0.1:3306                                │
+│                                                          │
 │  [mariadb:11]  listen 3306                               │
-│      │  data → PersistentVolumeClaim (1 Gi)             │
+│      data → PersistentVolumeClaim (1 Gi)                 │
 └──────────────────────────────────────────────────────────┘
 ```
 
 All containers share the same network namespace, communicating via `127.0.0.1`.
+The pod's `spec.hostname` is set to `dxo2.hostName` so the PHP probe and BPA
+Apache module report a human-readable name instead of the auto-generated pod name.
 
 ### Docker Compose (local development)
 
@@ -126,18 +116,17 @@ All containers share the same network namespace, communicating via `127.0.0.1`.
 localhost:8080
    │
    ▼
-[nginx]    listen 8080
-   │  FastCGI → phpfpm:9000   (service name, not 127.0.0.1)
-   ▼
-[phpfpm]   listen 9000
+[apachephp]   Apache 2.4 + mod_php, listen 8080
+   │  PHP probe → dxo2:5005  (Compose service name, not 127.0.0.1)
+   │  BPA plugin → dxo2:8000
    │  PDO → mariadb:3306
-   ▼
-[mariadb]  listen 3306
-   │  data → named volume mariadb_data
+   │
+[dxo2]        IA + BTL daemon; seeds apmia_data volume
+   │
+[mariadb]     listen 3306, named volume mariadb_data
 ```
 
 Services run in separate containers and communicate via the Compose network.
-There is no DX O2 agent in the Compose stack.
 
 ---
 
@@ -145,21 +134,20 @@ There is no DX O2 agent in the Compose stack.
 
 | Requirement | Implementation |
 |---|---|
-| Base image | `ubuntu:22.04` LTS (Jammy) – glibc 2.35, PHP 8.1, NGINX 1.18; all within Broadcom DX O2 agent ceilings |
+| Base image | `ubuntu:22.04` LTS (Jammy) – glibc 2.35, PHP 8.1, Apache 2.4; all within Broadcom DX O2 agent ceilings |
+| Single web container | Apache 2.4 + mod_php replaces the former nginx + php-fpm pair; eliminates FastCGI intermediary and cross-container vhost config differences |
 | No-recommends installs | `apt-get install --no-install-recommends` on every `RUN` layer |
-| Multi-stage PHP-FPM build | Stage 1 (app-builder): `ubuntu:22.04` + `tar` only – extracts `app.tar.gz`; Stage 2 (runtime): PHP 8.1 packages + app from Stage 1; no archive tools in the final image |
-| PHP version pin | PHP 8.1 from Ubuntu 22.04 repos; within DX O2 PHP Agent ceiling (≤ 8.4) |
-| NGINX version pin | NGINX 1.18 from Ubuntu 22.04 repos; within BPA WebServer Plugin ceiling (≤ 1.29.x) |
-| Pessimistic NGINX hardening | All distro default vhosts, `conf.d/*`, `snippets/*`, and `modules-enabled/*` removed in Dockerfile; only project-supplied configs remain |
+| Multi-stage Apache build | Stage 1 (app-builder): extracts `app.tar.gz`; Stage 2 (runtime): Apache + PHP packages; no archive tools in the final image |
+| PHP version pin | PHP 8.1 (libapache2-mod-php8.1); within DX O2 PHP Agent ceiling (≤ 8.4) |
+| DX O2 opportunistic injection | PHP probe and BPA module NOT baked into app image; `dxo2-init` initContainer populates an `emptyDir`; entrypoint injects at startup if the volume is present; starts cleanly without it |
+| APMENV_* identity | Agent identity set via native APMIA Docker env var mechanism; `IntroscopeAgent.profile` (tenant JWT + EM URL) is never modified |
+| Container hostname in metric path | `spec.hostname` on the pod template ensures PHP probe and BPA Apache module report the configured name, not an auto-generated container/pod ID |
+| DB Monitor | APMIA DB Monitor extension enabled via APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_* vars; credentials from Kubernetes Secret |
+| Browser agent | PHP probe injects the DX O2 browser snippet via `wily_php_agent.enable.browseragent.snippet.autoInjection=1` when `APMIA_BROWSER_SNIPPET` is set |
 | Signed/official sources only | Ubuntu `apt` (Ubuntu GPG), official `mariadb:11` Docker Hub image |
-| DX O2 opportunistic injection | PHP probe and BPA plugin are NOT baked into app images; `dxo2-init` initContainer populates an `emptyDir`; entrypoints inject probes at startup if the volume is mounted; containers start cleanly without it |
-| Security updates inside containers | `cron.d` rule in each custom image; `entrypoint.sh` starts cron before the main process |
-| Registry credentials in Kubernetes | `kubernetes.io/dockerconfigjson` Secret; attached to the pod's ServiceAccount (`automountServiceAccountToken: false`); kubelet inherits pull credentials automatically |
-| Secrets never in git | `.config` is gitignored; `values.local.yaml` is generated by `deploy.sh` and deleted immediately after `helm upgrade` returns |
-| Config/credentials isolation | All variables in `.config` (shell format); every script sources it at runtime; no variable is embedded in any tracked file |
-| PHP coding standards | Backdrop CMS: 2-space indent, K&R braces, PHPDoc on every function, single quotes, no closing `?>` in pure-PHP files |
-| Shell scripting standards | OpenWaterFoundation (OWF): `#!/usr/bin/env bash`, `set -euo pipefail`, `readonly` constants, `local` function variables, `usage()` / `info()` / `fatal()` helpers, prerequisite checks, `--help` flags |
-| Build versioning | `build.sh` auto-increments `.build_number` and appends `b<N>` to `IMAGE_TAG` (e.g. `1.0.0b12`) so every build produces a distinct tag that Kubernetes cannot skip due to a cached image |
+| Secrets never in git | `.config` is gitignored; `values.local.yaml` generated by `deploy.sh` and deleted immediately after `helm upgrade` returns |
+| Shell scripting standards | OpenWaterFoundation (OWF): `set -euo pipefail`, `readonly` constants, `local` function variables, `usage()`/`info()`/`fatal()` helpers |
+| Build versioning | `build.sh` auto-increments `.build_number`, appends `b<N>` to `IMAGE_TAG` |
 
 ---
 
@@ -171,7 +159,7 @@ There is no DX O2 agent in the Compose stack.
 | kubectl | 1.28+ | Pointed at target cluster (`KUBECONFIG` in `.config`) |
 | helm | 3.12+ | Kubernetes deploy only |
 | cert-manager | 1.13+ | Cluster-side; for TLS Ingress |
-| NGINX Ingress Controller | any | Or Traefik, HAProxy, ALB — set `INGRESS_CLASS_NAME` |
+| Ingress Controller | any | nginx, Traefik, HAProxy, ALB — set `INGRESS_CLASS_NAME` |
 
 ---
 
@@ -184,44 +172,12 @@ cp .config.example .config
 $EDITOR .config
 ```
 
-`.config` is gitignored and must never be committed. The full variable set:
-
-```bash
-# Docker Registry
-REGISTRY="registry.example.com"
-REGISTRY_USER="admin"
-REGISTRY_PASSWORD="changeme"
-
-# Image settings — build.sh appends b<N> automatically
-IMAGE_PREFIX="php-demo"
-IMAGE_TAG="1.0.0"
-BUILD_PLATFORM="linux/amd64"
-
-# MariaDB credentials
-MARIADB_ROOT_PASSWORD="changeme_root"
-MARIADB_DATABASE="phpapp"
-MARIADB_USER="phpuser"
-MARIADB_PASSWORD="changeme_user"
-
-# Kubernetes / Helm
-APP_NAMESPACE="php-demo"
-APP_HOSTNAME="php-demo.example.com"
-TLS_CLUSTER_ISSUER="letsencrypt-prod"
-INGRESS_CLASS_NAME="nginx"
-KUBECONFIG="${HOME}/.kube/config"
-HELM_CHART_PATH=""              # defaults to helm/php-demo when empty
-
-# Broadcom DX O2 Agent (optional — leave APMIA_EM_HOST empty to disable)
-APMIA_EM_HOST=""
-APMIA_EM_PORT="5001"
-APMIA_AGENT_NAME="bpa-demo-agent"
-APMIA_APP_NAME="BPA-Demo"
-APMIA_LOG_LEVEL="INFO"
-```
+`.config` is gitignored and must never be committed.  See `.config.example` for
+the full variable set with documentation.
 
 ---
 
-## Kubernetes deployment (production)
+## Kubernetes deployment
 
 ### 1 — Build images
 
@@ -231,20 +187,26 @@ build-scripts/build.sh
 
 Steps performed automatically:
 
-1. Calls `package-app.sh` → `src/php-fpm/app.tar.gz`
-2. Builds **php-fpm** (multi-stage) tagged `<REGISTRY>/<IMAGE_PREFIX>/php-fpm:<TAG>b<N>`
-3. Builds **nginx** tagged `<REGISTRY>/<IMAGE_PREFIX>/nginx:<TAG>b<N>`
-4. Builds **dx-o2-agents** — only when `src/dx-o2-agents/installers/apmia-*.tar.gz` is present; skipped gracefully otherwise
-5. Removes the temporary archive; updates `IMAGE_TAG` in `.config` with the new `b<N>` suffix
+1. Calls `package-app.sh` → `src/apache-php/app.tar.gz`
+2. Builds **apache-php** (multi-stage) tagged `<REGISTRY>/<IMAGE_PREFIX>/apache-php:<TAG>b<N>`
+3. Builds **dx-o2-agents** — only when the three installer archives are present in
+   `src/dx-o2-agents/installers/`; skipped gracefully otherwise
+4. Removes the temporary archive; updates `IMAGE_TAG` in `.config` with the new `b<N>` suffix
 
 Add `--push` to push immediately after a successful build.
 
-### 2 — (Optional) Download the DX O2 agent installer
+### 2 — (Optional) Download the DX O2 agent packages
 
-To enable Broadcom monitoring, download the **Broadcom Infrastructure Agent**
-(`apmia-*.tar.gz`) from [Broadcom Support](https://support.broadcom.com/) and
-place it in `src/dx-o2-agents/installers/`.  The directory is gitignored.
-Re-run `build.sh` — Step 4 will then build the dx-o2-agents image.
+Download three packages from your **DX O2 interface** (not from
+support.broadcom.com).  See **[DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)**
+for full instructions.
+
+```bash
+# Place all three archives here:
+src/dx-o2-agents/installers/PHP_apmia_*.tar
+src/dx-o2-agents/installers/Business_Transaction_Listener.zip
+src/dx-o2-agents/installers/Business_Payload_Analyzer_WebServer_Plugins.zip
+```
 
 ### 3 — Push images to registry
 
@@ -252,11 +214,8 @@ Re-run `build.sh` — Step 4 will then build the dx-o2-agents image.
 build-scripts/push.sh
 ```
 
-Authenticates with `REGISTRY` using `--password-stdin` (credentials never on
-the command line), pushes all three images, and removes credentials from the
-local Docker credential store afterwards.
-
-Use `--skip-dxo2` if the dx-o2-agents image was not built.
+Authenticates with `REGISTRY` using `--password-stdin`.  Use `--skip-dxo2` if
+the dx-o2-agents image was not built.
 
 ### 4 — Deploy to Kubernetes
 
@@ -264,55 +223,34 @@ Use `--skip-dxo2` if the dx-o2-agents image was not built.
 build-scripts/deploy.sh
 ```
 
-Steps performed:
-
+Steps:
 1. Validates all required variables and cluster reachability.
 2. Creates the target namespace if absent.
-3. Renders a transient `values.local.yaml` with registry credentials, DB
-   passwords, ingress configuration, and DX O2 settings from `.config`.
+3. Renders a transient `values.local.yaml` from `.config`.
 4. Runs `helm upgrade --install php-demo helm/php-demo`.
-5. Deletes `values.local.yaml` immediately so no credentials remain on disk.
+5. Deletes `values.local.yaml` immediately.
 6. Runs `init_users.php` via `kubectl exec` to confirm DB connectivity.
 
 Use `--skip-init` to bypass the post-deploy DB check.
 
-### 5 — Kubernetes resources created by Helm
-
-| Resource | Kind | Purpose |
-|---|---|---|
-| `<rel>-php-demo-registry-pull` | Secret (dockerconfigjson) | Registry pull credentials |
-| `<rel>-php-demo` | ServiceAccount | Carries the pull secret; no API token mounted |
-| `<rel>-php-demo-db-secret` | Secret (Opaque) | MariaDB passwords |
-| `<rel>-php-demo-config` | ConfigMap | nginx + PHP-FPM runtime configuration |
-| `<rel>-php-demo-db-init` | ConfigMap | schema.sql + seed.sql for MariaDB initialisation |
-| `<rel>-php-demo` | Deployment | Pod with nginx + php-fpm + mariadb (+ dx-o2 sidecar) |
-| `<rel>-php-demo` | Service | ClusterIP on port 8080 |
-| `<rel>-php-demo` | Ingress | TLS termination via cert-manager |
-| `<rel>-php-demo-mariadb-data` | PersistentVolumeClaim | MariaDB data directory (1 Gi) |
-
-### 6 — Verify
+### 5 — Verify
 
 ```bash
-# Watch pod come up (all containers must reach Running)
+# Watch pod come up
 kubectl get pods -n php-demo -w
-
-# List containers and images
-kubectl get pod -n php-demo -l app.kubernetes.io/name=php-demo \
-  -o jsonpath='{range .items[0].spec.containers[*]}{.name}{"\t"}{.image}{"\n"}{end}'
 
 # Port-forward if ingress is not yet reachable
 kubectl port-forward -n php-demo svc/php-demo-php-demo 8080:8080
 # then open http://localhost:8080/
+
+# Check DX O2 agent activity
+kubectl logs -n php-demo <pod> -c apache-php | grep -E "probe|BPA"
+kubectl logs -n php-demo <pod> -c dx-o2-agent | grep -E "started|connected"
 ```
 
 ---
 
 ## Local development with Docker Compose
-
-Docker Compose runs the application stack locally without a registry or TLS.
-NGINX routes FastCGI to the `phpfpm` service by hostname rather than
-`127.0.0.1`, so the containers run independently (not in a shared network
-namespace as they do in Kubernetes).
 
 ```bash
 # Start (builds images locally if absent)
@@ -331,11 +269,8 @@ build-scripts/compose.sh down
 build-scripts/compose.sh down -v
 ```
 
-`compose.sh` sources `.config`, exports the required environment variables, and
-calls `package-app.sh` automatically before any build.  Only `REGISTRY`,
-`IMAGE_PREFIX`, `IMAGE_TAG`, and the four `MARIADB_*` variables are required
-for Compose; Kubernetes/Helm variables are ignored.
-
+`compose.sh` sources `.config`, exports **all** required DX O2 variables with
+safe defaults, and calls `package-app.sh` automatically before any build.
 The application is reachable at **http://localhost:8080/** after `up`.
 
 ---
@@ -346,99 +281,25 @@ The application is reachable at **http://localhost:8080/** after `up`.
 > complete download instructions, installer structure, build walkthrough,
 > runtime injection diagrams, verification steps, and troubleshooting.
 
-### Components
-
-All four Broadcom monitoring components ship in a **single installer archive**
-(`apmia-<version>-linux.tar.gz`) downloaded from
-[Broadcom Support](https://support.broadcom.com/):
-
-| Component | Runs in | Path after install |
-|---|---|---|
-| Infrastructure Agent | `dx-o2-agent` sidecar | `bin/APMIAgent` |
-| Business Transaction Listener (BTL) | `dx-o2-agent` sidecar | `bin/btl` |
-| PHP Probe | `php-fpm` (injected at startup) | `extensions/PHPAgent/wily_php_agent.so` |
-| BPA WebServer Plugin | `nginx` (injected at startup) | `extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module.so` |
-
-### How it works
-
-Broadcom monitoring uses an **opportunistic injection** pattern so agent binaries
-are never baked into the application images:
-
-1. `dxo2-init` (Kubernetes initContainer) copies the pre-installed APMIA tree
-   from `/opt/apmia` inside the dx-o2-agents image to a shared `emptyDir` volume.
-2. `dx-o2-agent` (sidecar container) runs the Infrastructure Agent daemon and
-   the BTL binary, connected to the Enterprise Manager.
-3. The **php-fpm** entrypoint detects `wily_php_agent.ini` in the mounted
-   volume and loads the PHP probe by copying the `.so` to PHP's `extension_dir`.
-4. The **nginx** entrypoint detects the BPA `.so` in the mounted volume and
-   writes a `load_module` directive to `/etc/nginx/modules-enabled/bpa.conf`.
-
-Without the DX O2 image (or with `dxo2.enabled=false`), all containers start
-cleanly with no agent overhead.
-
 ### Quick-start (Kubernetes)
 
 ```bash
-# 1. Download apmia-<version>-linux.tar.gz from support.broadcom.com
-#    and verify its checksum, then:
-cp ~/Downloads/apmia-<version>-linux.tar.gz src/dx-o2-agents/installers/
-
-# 2. Configure EM connection in .config
-APMIA_EM_HOST="em.example.internal"
-APMIA_EM_PORT="5001"
+# 1. Download three packages from your DX O2 interface and place in installers/
+# 2. Configure agent identity in .config:
 APMIA_AGENT_NAME="bpa-demo-agent"
-APMIA_APP_NAME="BPA-Demo"
-APMIA_LOG_LEVEL="INFO"
+APMIA_APP_NAME="bpa-demo"
+APMIA_HOST_NAME="bpa-demo-host"
+APMIA_EM_HOST="placeholder"   # non-empty triggers dxo2.enabled=true
 
-# 3. Build — Step 4 now builds dx-o2-agents
+# 3. Build (dx-o2-agents image is built when installers are present)
 build-scripts/build.sh
 
 # 4. Push all images including dx-o2-agents
 build-scripts/push.sh
 
-# 5. Deploy — deploy.sh sets dxo2.enabled=true when APMIA_EM_HOST is non-empty
+# 5. Deploy — dxo2.enabled=true is set automatically when APMIA_EM_HOST is non-empty
 build-scripts/deploy.sh
 ```
-
-### Manual Helm override
-
-```bash
-helm upgrade --install php-demo helm/php-demo \
-  --set dxo2.enabled=true \
-  --set dxo2.emHost="em.example.internal" \
-  --set dxo2.emPort="5001" \
-  --set image.dxo2.repository="registry.example.com/php-demo/dx-o2-agents" \
-  --set image.dxo2.tag="1.0.0b1"
-```
-
----
-
-## Registry credentials
-
-Pull credentials flow from `.config` to Kubernetes through the following chain:
-
-```
-.config  (REGISTRY / REGISTRY_USER / REGISTRY_PASSWORD)
-   │
-   ▼  build-scripts/deploy.sh → values.local.yaml (deleted after deploy)
-   │
-   ▼  Helm: registry-secret.yaml
-   │  Secret type: kubernetes.io/dockerconfigjson
-   │  Name: <release>-php-demo-registry-pull
-   │
-   ▼  Helm: serviceaccount.yaml
-   │  ServiceAccount: <release>-php-demo
-   │  imagePullSecrets: [registry-pull]
-   │  automountServiceAccountToken: false
-   │
-   ▼  Helm: deployment.yaml
-      serviceAccountName: <release>-php-demo
-      → kubelet uses the pull secret for all containers automatically
-```
-
-The registry Secret and `imagePullSecrets` are only rendered when both
-`imageCredentials.username` and `imageCredentials.password` are non-empty,
-so the chart works against a public registry with no credential configuration.
 
 ---
 
@@ -450,76 +311,19 @@ Chart: `helm/php-demo` — version **0.2.0**
 
 | Value | Default | Description |
 |---|---|---|
-| `image.phpfpm.tag` | `1.0.0` | PHP-FPM image tag |
-| `image.nginx.tag` | `1.0.0` | NGINX image tag |
+| `image.apachephp.tag` | `1.0.0` | Apache+PHP image tag |
 | `image.dxo2.tag` | `1.0.0` | DX O2 agents image tag |
 | `image.mariadb.tag` | `11` | MariaDB major version pin |
-| `imageCredentials.registry` | `""` | Registry hostname |
-| `imageCredentials.username` | `""` | Registry login — set via `values.local.yaml` |
-| `imageCredentials.password` | `""` | Registry password — set via `values.local.yaml` |
 | `service.port` | `8080` | ClusterIP service port |
-| `ingress.enabled` | `true` | Toggle Ingress resource creation |
-| `ingress.className` | `""` | IngressClass — set via `INGRESS_CLASS_NAME` in `.config` |
-| `persistence.enabled` | `true` | Use a PVC for MariaDB data |
-| `persistence.size` | `1Gi` | PVC capacity |
-| `mariadb.auth.rootPassword` | _(required)_ | MariaDB root password |
-| `mariadb.auth.password` | _(required)_ | Application DB password |
+| `persistence.size` | `1Gi` | PVC capacity for MariaDB data |
 | `dxo2.enabled` | `false` | Enable DX O2 agent sidecar and probe injection |
-| `dxo2.emHost` | `""` | Enterprise Manager hostname (required when enabled) |
-| `dxo2.emPort` | `5001` | EM collector port |
-| `dxo2.agentName` | `bpa-demo-agent` | Logical agent name in the EM console |
-| `dxo2.appName` | `BPA-Demo` | Application name for metric grouping |
-| `dxo2.logLevel` | `INFO` | Agent log verbosity: DEBUG \| INFO \| WARN \| ERROR |
-
-### Manual Helm install (without deploy.sh)
-
-```bash
-helm upgrade --install php-demo helm/php-demo \
-  --namespace php-demo --create-namespace \
-  --set imageCredentials.registry="registry.example.com" \
-  --set imageCredentials.username="<user>" \
-  --set imageCredentials.password="<password>" \
-  --set mariadb.auth.rootPassword="<root-pw>" \
-  --set mariadb.auth.password="<user-pw>" \
-  --set image.phpfpm.repository="registry.example.com/php-demo/php-fpm" \
-  --set image.nginx.repository="registry.example.com/php-demo/nginx" \
-  --set ingress.hosts[0].host="php-demo.example.com" \
-  --set ingress.tls[0].hosts[0]="php-demo.example.com" \
-  --set 'ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod'
-```
-
----
-
-## Updating configuration without rebuilding
-
-NGINX and PHP-FPM runtime configuration lives in
-`helm/php-demo/templates/configmap.yaml` and is mounted over image defaults at
-pod start.  Edit the ConfigMap and re-run `deploy.sh` — the pod restarts
-automatically because the deployment template includes a `checksum/config`
-annotation that changes whenever the ConfigMap content changes.
-
----
-
-## Removing the deployment
-
-```bash
-helm uninstall php-demo --namespace php-demo
-
-# Optionally remove persistent data and the namespace
-kubectl delete pvc -n php-demo --all
-kubectl delete namespace php-demo
-```
-
-### Resetting the database
-
-```bash
-helm uninstall php-demo -n php-demo
-kubectl delete pvc -n php-demo --all
-build-scripts/deploy.sh
-```
-
-MariaDB reinitialises automatically from the SQL files embedded in the
-`db-init` ConfigMap (`helm/php-demo/sql/schema.sql` + `seed.sql`).
+| `dxo2.deploy` | `"true"` | `"false"` = passive volume only (seed without starting IA) |
+| `dxo2.agentName` | `bpa-demo-agent` | Agent name in the DX O2 console (APMENV_*) |
+| `dxo2.appName` | `bpa-demo` | Application name for metric grouping (APMENV_*) |
+| `dxo2.hostName` | `bpa-demo-host` | Pod hostname + APMENV_INTROSCOPE_AGENT_HOSTNAME |
+| `dxo2.logLevel` | `INFO` | APMENV_LOG4J_LOGGER_INTROSCOPEAGENT level |
+| `dxo2.dbMonitor.enabled` | `true` | Enable APMIA DB Monitor for MariaDB |
+| `dxo2.browserSnippet` | `""` | Browser agent snippet (empty = disabled) |
 
 ---
 
@@ -535,8 +339,7 @@ MariaDB reinitialises automatically from the SQL files embedded in the
 
 ### Demo accounts
 
-All accounts use the password **`demo123`** (automatically upgraded to bcrypt on
-first successful login; stored as `$SETUP$...` in the DB until then).
+All accounts use the password **`demo123`**.
 
 | Username | Role | Behaviour |
 |---|---|---|
@@ -563,8 +366,6 @@ first successful login; stored as `$SETUP$...` in the DB until then).
 
 ### Monitoring HTTP headers
 
-Every response carries the following headers for APM and tracing:
-
 | Header | Format | Example |
 |---|---|---|
 | `X-Page-ID` | `MODULE-ACTION-TARGET` | `SHOP-LIST-SHELLY` |
@@ -572,18 +373,6 @@ Every response carries the following headers for APM and tracing:
 | `X-Basket-Total` | EUR float | `49.80` |
 | `X-Alert` | string (on errors) | `LOGIN_FAILED` |
 | `X-Use-Case` | use-case name | `trouble` |
-
-### Use-case system
-
-Use cases are PHP files in `app/src/usecases/<name>.php`, each defining
-`usecase_<name>(PDO $db, array &$ctx): void`.
-
-| Use case | Effect |
-|---|---|
-| `trouble` | 5 000 sequential DB reads against 300 product IDs per request |
-| `empty_basket` | Forces `basket_total()` to return `0.00` |
-
-The admin panel assigns or removes use cases per user.
 
 ### Database schema
 
@@ -599,25 +388,25 @@ orders               → id, user_id, session_id, status, subtotal, total,
 order_items          → id, order_id, product_id, product_name, quantity, unit_price
 ```
 
-SQL files live in `helm/php-demo/sql/` and are embedded in the `db-init`
-ConfigMap (`db-init-configmap.yaml`), mounted at
-`/docker-entrypoint-initdb.d/` in the MariaDB container.  They run
-automatically on first start when the data directory is empty.
+SQL files live in `helm/php-demo/sql/` and are mounted at
+`/docker-entrypoint-initdb.d/` in the MariaDB container.
 
 ---
 
-## Security update cron job
+## Removing the deployment
 
-Each custom image installs a `cron.d` rule that runs `apt-get upgrade` once
-per day.  The jobs are offset to avoid simultaneous load:
+```bash
+helm uninstall php-demo --namespace php-demo
 
+# Optionally remove persistent data and the namespace
+kubectl delete pvc -n php-demo --all
+kubectl delete namespace php-demo
 ```
-php-fpm:  03:15 daily  (root)
-nginx:    03:30 daily  (root)
+
+### Resetting the database
+
+```bash
+helm uninstall php-demo -n php-demo
+kubectl delete pvc -n php-demo --all
+build-scripts/deploy.sh
 ```
-
-The `entrypoint.sh` of each container starts `cron` before the main process.
-
-> In-container upgrades complement, but do not replace, image rebuilds.  The
-> recommended practice is to rebuild and redeploy images whenever upstream
-> Ubuntu security notices (USNs) are published.
