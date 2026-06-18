@@ -132,7 +132,8 @@ The Broadcom APMIA agent is **never baked into application images**.  Instead:
 4. The **`apache-php` container** mounts `apmia-share` at `/opt/apmia` (readOnly).
    Its `entrypoint.sh` performs **opportunistic injection** for both agents:
    - **PHP probe**: copies `extensions/PHPAgent/wily_php_agent.so` into PHP's
-     `extension_dir`; symlinks `wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`;
+     `extension_dir`; copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/` and
+     symlinks it as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`;
      patches `collectorHost/Port`, `application.name`, `logdir`, `agentName`;
      handles browser agent snippet (see below).
    - **BPA plugin (Apache)**: finds any `mod_*.so` in `extensions/WebServerPlugin/`;
