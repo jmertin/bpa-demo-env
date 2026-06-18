@@ -5,6 +5,103 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 21:00 - [Docs – CLAUDE.md, README.md update for all session changes]:
+  Updated CLAUDE.md and README.md to document all changes introduced during
+  the 2026-06-18 session that were not yet reflected in the project guide.
+
+  CLAUDE.md additions and changes:
+  - Build versioning: describe the compute/commit split; commit_build_tag() is
+    now called only after all docker builds succeed so no build number is
+    wasted on a failed build.
+  - DX O2 sidecar (item 3): document that BTListener.sh requires the 'start'
+    argument, the _btl_watchdog background loop, pgrep-based process detection,
+    and the shutdown sequence (watchdog first, then IA, then pkill).
+  - New section "Container image contents": table of 6 troubleshooting packages
+    in both images (curl, dnsutils, iputils-ping, less, net-tools, procps).
+  - New section "Demo use cases": table of all three use cases; detailed
+    description of the locked flow (session flash, login gate, already-logged-in
+    eviction); seed user details.
+  - New section "Admin diagnostic pages": routes, probe INI glob detection
+    pattern, caplugin_module detection via apache2ctl DUMP_MODULES, full
+    description of all ?page=dxo2 checks.
+  - New section "Entrypoint coding style": ASCII-only rule, == Section ==
+    separator pattern, verification command.
+  - Key file paths table: added info.php, db.php, dxo2.php, locked.php; updated
+    DX O2 entrypoint description to mention BTL watchdog.
+
+  README.md:
+  - Project structure: usecases/ now lists locked.php.
+  - Admin diagnostic pages: mention the Diagnostics sidebar section.
+
+  Files changed: CLAUDE.md, README.md
+
+------------------------------------------------------------------------------
+2026-06-18 @ 20:00 - [Fix – ASCII-only entrypoints; BTListener.sh start argument]:
+  Two issues found when running the dx-o2-agents entrypoint interactively:
+
+  1. BTListener.sh printed its usage line and exited immediately because it
+     was called without an argument.  BTListener.sh requires an explicit 'start'
+     argument to daemonize the Java process.  The entrypoint now calls
+     "${BTL_SCRIPT}" start (no background '&' needed as start handles that).
+
+  2. Both entrypoint.sh files contained non-ASCII characters used as section
+     separators: U+2500 box-drawing (─), U+2013 en dash (–), U+2192 arrow (→).
+     These can cause byte-sequence errors in strict locale environments and make
+     the files harder to grep or process with standard POSIX tools.
+
+  Both files were fully rewritten replacing all separators with plain ASCII:
+    # ── Title ─────  →  # == Title ===
+    –                →  -
+    →                →  ->
+
+  Verified: grep -Pc '[^\x00-\x7F]' returns 0 on both files.
+
+  Files changed:
+  - src/dx-o2-agents/entrypoint.sh: BTListener.sh start; ASCII-only separators.
+  - src/apache-php/entrypoint.sh: ASCII-only separators (no functional change).
+
+------------------------------------------------------------------------------
+2026-06-18 @ 15:30 - [Fix – dxo2.php: probe INI glob detection; BPA via apache2ctl]:
+  Two detection methods in app/src/pages/dxo2.php were incorrect.
+
+  PHP probe INI detection:
+  - Previous: hardcoded /etc/php/8.1/apache2/conf.d/wily_php_agent.ini.
+  - Actual layout: the real INI file lives in mods-available/ and is symlinked
+    into conf.d/ as 99-wily_php_agent.ini.  The entrypoint may produce any
+    numeric prefix (99-, etc.) so exact-name matching is fragile.
+  - Fix: glob $phpConfD . '/*-wily_php_agent.ini' (where phpConfD is built from
+    PHP_MAJOR_VERSION / PHP_MINOR_VERSION at runtime), take the first match, and
+    resolve its real path with realpath() to display both the symlink and the
+    actual mods-available target.
+
+  BPA module detection:
+  - Previous: parsed /etc/apache2/conf-enabled/bpa.conf for the LoadModule name,
+    then checked apache_get_modules() for that derived name.
+  - Actual: the BPA Apache module always registers internally as caplugin_module
+    regardless of the filename.  apache_get_modules() (mod_php SAPI) may not
+    reflect modules loaded outside the main httpd.conf; apache2ctl DUMP_MODULES
+    is authoritative.
+  - Fix: shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1'), parse lines matching
+    /^\s+(\w+_module)\b/, search for caplugin_module specifically.  Falls back
+    to apache_get_modules() if shell_exec is unavailable.  Raw DUMP_MODULES
+    output displayed verbatim in a scrollable block.
+
+  File changed: app/src/pages/dxo2.php
+
+------------------------------------------------------------------------------
+2026-06-18 @ 15:00 - [Feat – Diagnostics sidebar section for admin users]:
+  Admin users now see a Diagnostics section in the left navigation sidebar
+  with direct links to the three diagnostic pages.  Non-admin users see no
+  change.  The active page receives the CSS 'active' class via the existing
+  $page variable so the current page is highlighted in the sidebar.
+
+  - app/src/templates/layout.php: added <?php if (auth_is_admin()): ?> block
+    with a Diagnostics <div class="sidebar-section"> containing links to
+    ?page=dxo2, ?page=info, and ?page=db, each with active-class binding.
+
+  File changed: app/src/templates/layout.php
+
+------------------------------------------------------------------------------
 2026-06-18 @ 19:00 - [Fix – build number committed only after all images succeed]:
   Previously compute_build_tag() incremented .build_number and wrote the new
   IMAGE_TAG to .config at the start of the build.  If any docker build step

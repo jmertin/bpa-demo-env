@@ -28,7 +28,7 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 │       ├── lib/                  # auth, product, basket, order, usecase, validate, headers
 │       ├── pages/                # shop, product, basket, checkout, order, login, admin
 │       ├── templates/            # layout.php (full CSS), footer.php
-│       ├── usecases/             # trouble.php, empty_basket.php
+│       ├── usecases/             # trouble.php, empty_basket.php, locked.php
 │       └── setup/                # init_users.php (CLI only, not web-accessible)
 │
 ├── src/
@@ -371,8 +371,9 @@ All accounts use the password **`demo123`**.
 ### Admin diagnostic pages
 
 Three diagnostic pages are accessible only to users with the **admin** role.
-They are useful for verifying the runtime environment and DX O2 agent stack
-from inside the running container without needing shell access.
+They appear as a **Diagnostics** section in the left sidebar when an admin is
+logged in, and are useful for verifying the runtime environment and DX O2 agent
+stack from inside the running container without needing shell access.
 
 **PHP runtime info** (`?page=info`)
 
