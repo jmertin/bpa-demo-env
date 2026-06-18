@@ -5,6 +5,28 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 16:00 - [Feat – locked use case; blocks user login]:
+  New use case 'locked' that prevents the assigned user from logging in.
+  When the login form is submitted with valid credentials but the account
+  has the locked use case assigned, auth_login() succeeds internally but
+  login.php detects the use case immediately, revokes all session auth
+  keys, and displays the error message without ever granting access.
+  If a locked use case is assigned to an already-logged-in user, the next
+  request triggers usecase_locked() which evicts the session auth data,
+  stores a flash message, and redirects to the login page.
+
+  - app/src/usecases/locked.php: new use-case function usecase_locked();
+    clears auth session keys, regenerates session ID, stores flash error,
+    redirects to ?page=login.
+  - app/src/pages/login.php: reads and clears $_SESSION['login_error']
+    flash before the already-logged-in redirect; adds elseif branch after
+    successful auth_login() to check $_SESSION['usecase'] === 'locked',
+    revoke session keys, and set the error inline.
+  - helm/php-demo/sql/seed.sql: added demo user id=14 'locked' / 'Laura
+    Locked' with the locked use case pre-assigned by the admin.
+  - README.md: demo accounts table updated with the locked entry.
+
+------------------------------------------------------------------------------
 2026-06-18 @ 14:00 - [Feat – DX O2 agent status page (?page=dxo2)]:
   New admin-only diagnostic page that verifies the full DX O2 monitoring
   stack from inside the running apache-php container.

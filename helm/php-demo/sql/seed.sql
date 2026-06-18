@@ -422,9 +422,11 @@ INSERT INTO users (id, username, password_hash, email, role, full_name) VALUES
 (10, 'grace',   '$SETUP$demo123', 'grace@bpa.demo',   'user',  'Grace García'),
 (11, 'henry',   '$SETUP$demo123', 'henry@bpa.demo',   'user',  'Henry Hansen'),
 (12, 'iris',    '$SETUP$demo123', 'iris@bpa.demo',    'user',  'Iris Ivanova'),
-(13, 'jack',    '$SETUP$demo123', 'jack@bpa.demo',    'user',  'Jack Johnson');
+(13, 'jack',    '$SETUP$demo123', 'jack@bpa.demo',    'user',  'Jack Johnson'),
+(14, 'locked',  '$SETUP$demo123', 'locked@bpa.demo',  'user',  'Laura Locked');
 
 -- ── Pre-assigned use cases ────────────────────────────────────────────────────
 INSERT INTO user_usecases (user_id, usecase_name, assigned_by) VALUES
-(2, 'trouble',      1),
-(3, 'empty_basket', 1);
+(2,  'trouble',      1),
+(3,  'empty_basket', 1),
+(14, 'locked',       1);
