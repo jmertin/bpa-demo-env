@@ -128,7 +128,12 @@ The Broadcom APMIA agent is **never baked into application images**.  Instead:
    - `Business_Payload_Analyzer_WebServer_Plugins.zip` — BPA plugin (nginx + Apache variants)
 2. At pod startup a **`dxo2-init` initContainer** copies `/opt/apmia/ → emptyDir volume` (`apmia-share`).
 3. The **`dx-o2-agent` sidecar** runs the IA via `bin/APMIAgent.sh console` and the
-   BTL via `/opt/btlistener/bin/BTListener.sh`.  `JAVA_HOME` is set to the bundled JRE.
+   BTL via `BTListener.sh start` (`start` is a required argument; omitting it causes
+   the script to print usage and exit immediately).  A background watchdog loop
+   (`_btl_watchdog`) polls every 30 s using `pgrep -f 'BTListener'` and restarts the
+   BTL if it exits.  Shutdown (`SIGTERM/INT`) kills the watchdog first, then the IA,
+   then `pkill -f BTListener` to catch any process the watchdog may have restarted.
+   `JAVA_HOME` is set to the bundled JRE.
 4. The **`apache-php` container** mounts `apmia-share` at `/opt/apmia` (readOnly).
    Its `entrypoint.sh` performs **opportunistic injection** for both agents:
    - **PHP probe**: copies `extensions/PHPAgent/wily_php_agent.so` into PHP's
@@ -237,11 +242,16 @@ conf/custom/application.properties                 ← Pre-configured: DXC URL +
 
 ## Build versioning
 
-`build.sh` maintains `.build_number` (git-ignored).  On every run it:
-1. Reads the counter, increments it, writes it back.
-2. Strips any existing `b<N>` suffix from `IMAGE_TAG`.
-3. Derives `FULL_TAG = <base>b<N>` (e.g. `1.0.0b7`).
-4. Writes the new tag back to `.config` via `sed -i` and re-sources the file.
+`build.sh` maintains `.build_number` (git-ignored).  The counter is computed and
+persisted in two separate steps so a failed build never wastes a build number:
+
+1. `compute_build_tag()` — reads the current counter, increments it **in memory**,
+   strips any existing `b<N>` suffix from `IMAGE_TAG`, and sets the globals
+   `FULL_TAG` (e.g. `1.0.0b7`) and `BUILD_NUM`.  **No file is written at this point.**
+2. All docker builds run using `${FULL_TAG}`.  If any build fails, `set -euo pipefail`
+   causes the script to exit before the next step.
+3. `commit_build_tag()` — called **only after every docker build succeeds**.  Writes
+   `BUILD_NUM` to `.build_number` and updates `IMAGE_TAG` in `.config` via `sed -i`.
 
 **Never manually edit `IMAGE_TAG` to include `b<N>`** — build.sh manages that.  Set the base version only (e.g. `IMAGE_TAG="1.0.0"`).
 
@@ -353,6 +363,111 @@ APMIA_BROWSER_SNIPPET  # default ""    – <script> snippet from DX O2 → Exper
 
 ---
 
+## Container image contents (both images)
+
+Both `apache-php` and `dx-o2-agents` images install the following troubleshooting
+utilities in their `apt-get` layer (Ubuntu 22.04 package names):
+
+| Package | Commands provided |
+|---|---|
+| `curl` | HTTP/HTTPS connectivity checks |
+| `dnsutils` | `dig`, `nslookup`, `host` (equiv. `bind-utils` on RHEL/Fedora) |
+| `iputils-ping` | `ping` |
+| `less` | scrollable pager |
+| `net-tools` | `netstat`, `ifconfig`, `route`, `arp` |
+| `procps` | `ps`, `top`, `free`, `kill`, `pgrep` |
+
+These are available in both `docker exec` / `kubectl exec` sessions and make
+in-container network and process diagnostics possible without additional tooling.
+
+---
+
+## Demo use cases
+
+Use cases alter application behaviour for a specific user and are assigned through
+the admin panel.  The active use case is recorded in `$_SESSION['usecase']`.
+
+| Use case | File | Behaviour |
+|---|---|---|
+| `trouble` | `usecases/trouble.php` | 5 000 sequential DB reads per request (APM load simulation) |
+| `empty_basket` | `usecases/empty_basket.php` | Basket total always rendered as €0.00 |
+| `locked` | `usecases/locked.php` | Blocks login entirely; session flash shows an error message |
+
+**`locked` flow:**
+- After `auth_login()` succeeds, `login.php` checks `$_SESSION['usecase'] === 'locked'`,
+  revokes all auth session keys, and renders the error inline without granting access.
+- If a locked use case is assigned to an already-logged-in user, the next request
+  dispatches `usecase_locked()`, which evicts auth session keys, regenerates the
+  session ID, stores `$_SESSION['login_error']` (flash), and redirects to `?page=login`.
+- The login page reads and clears the flash on its next load before the
+  already-logged-in redirect check, so the message is displayed exactly once.
+
+Seed user: `locked` / `demo123` — id 14, email `locked@bpa.demo`, full name
+"Laura Locked", role `user`, use case `locked` pre-assigned.
+
+---
+
+## Admin diagnostic pages
+
+Three pages accessible only to users with the **admin** role (enforced by
+`auth_require_admin()` at the top of each page file).  They are reachable from the
+**Diagnostics** sidebar section that appears in the left menu when an admin is
+logged in.
+
+| Route | File | Purpose |
+|---|---|---|
+| `?page=info` | `pages/info.php` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| `?page=db` | `pages/db.php` | Live PDO connection test; server version, uptime, connection params |
+| `?page=dxo2` | `pages/dxo2.php` | Full DX O2 monitoring stack health check |
+
+### `?page=dxo2` — checks performed
+
+**PHP probe:**
+- Extension loaded: `extension_loaded('wily_php_agent')`.
+- INI file: glob `$phpConfD/*-wily_php_agent.ini` (where `$phpConfD` is
+  `/etc/php/<major>.<minor>/apache2/conf.d`); the symlink resolves via `realpath()`
+  to the actual file in `/etc/php/<ver>/mods-available/wily_php_agent.ini`.
+- Key properties displayed: `agentName`, `collectorHost`, `collectorPort`, `logdir`,
+  `enable.browseragent.snippet.autoInjection`, `browseragent.autoInjection.snippetString`.
+
+**BPA Apache module:**
+- Config file: `/etc/apache2/conf-enabled/bpa.conf` presence.
+- Module loaded: `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → search for
+  `caplugin_module` in the output (`caplugin_module` is the internal module name
+  regardless of the `.so` filename).  Falls back to `apache_get_modules()` if
+  `shell_exec` is unavailable.
+- Raw `DUMP_MODULES` output and raw `bpa.conf` contents are shown verbatim.
+
+**Browser agent:** INI flags and whether `snippetString` is present.
+
+**APMIA connectivity:** live `fsockopen` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT`
+and `APMIA_BTL_HOST:PORT`.
+
+**Environment variables:** all `APMIA_*` and `APMENV_*` container vars in a table;
+credential-bearing keys are redacted.
+
+**Log tails:** last 40 lines of every `*.log` in `/opt/apmia/logs/`, in scrollable
+terminal blocks.
+
+The page loads cleanly when the apmia volume is absent (e.g. `dxo2.enabled=false`);
+all probes report "not loaded" and no log files appear.
+
+---
+
+## Entrypoint coding style
+
+Both `src/apache-php/entrypoint.sh` and `src/dx-o2-agents/entrypoint.sh` must use
+**ASCII-only characters**.  Section separators use the pattern:
+
+```bash
+# == Section title ============================================================
+```
+
+No Unicode box-drawing characters (`─`, `━`), en/em dashes (`–`, `—`), or arrows
+(`→`, `➜`).  Verify with `grep -Pc '[^\x00-\x7F]' entrypoint.sh` — output must be `0`.
+
+---
+
 ## Docker Compose notes
 
 - `compose.sh` wraps `docker compose`, sources `.config`, and calls `package-app.sh` before any build.
@@ -374,8 +489,14 @@ APMIA_BROWSER_SNIPPET  # default ""    – <script> snippet from DX O2 → Exper
 | Apache+PHP entrypoint (probe + BPA injection) | `src/apache-php/entrypoint.sh` |
 | Apache VirtualHost config (baked + ConfigMap) | `src/apache-php/config/vhost.conf` |
 | DX O2 Dockerfile | `src/dx-o2-agents/Dockerfile` |
-| DX O2 entrypoint (agent + BTL daemon) | `src/dx-o2-agents/entrypoint.sh` |
+| DX O2 entrypoint (agent + BTL daemon + watchdog) | `src/dx-o2-agents/entrypoint.sh` |
 | DX O2 installers (git-ignored) | `src/dx-o2-agents/installers/` |
+| Admin page — PHP runtime info | `app/src/pages/info.php` |
+| Admin page — MariaDB connection test | `app/src/pages/db.php` |
+| Admin page — DX O2 agent status | `app/src/pages/dxo2.php` |
+| Use case — trouble (DB load) | `app/src/usecases/trouble.php` |
+| Use case — empty basket | `app/src/usecases/empty_basket.php` |
+| Use case — locked (blocks login) | `app/src/usecases/locked.php` |
 | Helm values (defaults, committed) | `helm/php-demo/values.yaml` |
 | Helm values (secrets, generated + deleted) | `helm/php-demo/values.local.yaml` |
 | Kubernetes deployment template | `helm/php-demo/templates/deployment.yaml` |
