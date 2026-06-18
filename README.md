@@ -346,6 +346,7 @@ All accounts use the password **`demo123`**.
 | `admin` | admin | Full access to the admin panel |
 | `trouble` | user | **Use case: trouble** — 5 000 sequential DB reads per request |
 | `empty` | user | **Use case: empty_basket** — basket total always shown as €0.00 |
+| `locked` | user | **Use case: locked** — login blocked; error message shown on the login page |
 | `alice` … `jack` | user | 10 regular accounts |
 
 ### Application routes

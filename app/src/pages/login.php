@@ -1,11 +1,17 @@
 <?php
+// Consume any flash error set by usecase_locked (before auth_user() redirect).
+$error = '';
+if (!empty($_SESSION['login_error'])) {
+  $error = $_SESSION['login_error'];
+  unset($_SESSION['login_error']);
+}
+
 // Redirect if already logged in.
 if (auth_user()) {
   header('Location: ?page=shop');
   exit;
 }
 
-$error  = '';
 $values = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -20,6 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   elseif (!auth_login($username, $password)) {
     $error = 'Invalid username or password.';
+  }
+  elseif (($_SESSION['usecase'] ?? '') === 'locked') {
+    // Credential was valid but the account is locked — revoke immediately.
+    foreach (['user_id', 'username', 'role', 'full_name', 'usecase', 'csrf_token'] as $key) {
+      unset($_SESSION[$key]);
+    }
+    $error = 'Your account is not allowed to log in. Please contact the web administrator.';
   }
   else {
     $redirect = validate_slug($_GET['from'] ?? 'shop') ?? 'shop';
