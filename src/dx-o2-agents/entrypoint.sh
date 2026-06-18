@@ -78,12 +78,13 @@ fi
 
 # ── Signal handler for graceful shutdown ───────────────────────────────────────
 AGENT_PID=""
-BTL_PID=""
+WATCHDOG_PID=""
 
 _shutdown() {
     echo "[entrypoint] Received shutdown signal – stopping agents..."
-    [[ -n "${AGENT_PID}" ]] && kill "${AGENT_PID}" 2>/dev/null || true
-    [[ -n "${BTL_PID}"   ]] && kill "${BTL_PID}"   2>/dev/null || true
+    [[ -n "${WATCHDOG_PID}" ]] && kill "${WATCHDOG_PID}" 2>/dev/null || true
+    [[ -n "${AGENT_PID}"    ]] && kill "${AGENT_PID}"    2>/dev/null || true
+    pkill -f 'BTListener' 2>/dev/null || true
     wait 2>/dev/null || true
     echo "[entrypoint] Agents stopped."
     exit 0
@@ -99,14 +100,42 @@ echo "[entrypoint] Starting Broadcom Infrastructure Agent (console mode)..."
 AGENT_PID=$!
 echo "[entrypoint] Infrastructure Agent started (PID ${AGENT_PID})"
 
-# ── Start Business Transaction Listener ───────────────────────────────────────
-if [[ -x "${BTL_SCRIPT}" ]]; then
+# ── BTL helpers ────────────────────────────────────────────────────────────────
+# Use pgrep to find the BTL Java process regardless of how BTListener.sh
+# launches it (inline exec vs. background daemon pattern).
+
+_btl_is_alive() {
+    pgrep -f 'BTListener' >/dev/null 2>&1
+}
+
+_start_btl() {
     echo "[entrypoint] Starting Business Transaction Listener..."
     "${BTL_SCRIPT}" &
-    BTL_PID=$!
-    echo "[entrypoint] BTL started (PID ${BTL_PID})"
+    echo "[entrypoint] BTL started (PID $!)"
+}
+
+# ── Start Business Transaction Listener ───────────────────────────────────────
+if [[ ! -x "${BTL_SCRIPT}" ]]; then
+    echo "[entrypoint] WARNING: BTL script not found at ${BTL_SCRIPT} – BTL not started."
 else
-    echo "[entrypoint] BTL script not found at ${BTL_SCRIPT} – BTL not started."
+    _start_btl
+
+    # ── BTL watchdog ──────────────────────────────────────────────────────────
+    # Runs in the background; every 30 s checks whether a BTListener process is
+    # alive (via pgrep) and restarts it if not.
+    _btl_watchdog() {
+        while true; do
+            sleep 30
+            if ! _btl_is_alive; then
+                echo "[entrypoint] BTL process has exited – restarting..."
+                _start_btl
+            fi
+        done
+    }
+
+    _btl_watchdog &
+    WATCHDOG_PID=$!
+    echo "[entrypoint] BTL watchdog started (PID ${WATCHDOG_PID})"
 fi
 
 # ── Wait ───────────────────────────────────────────────────────────────────────

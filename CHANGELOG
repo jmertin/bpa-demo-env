@@ -5,6 +5,28 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 18:00 - [Fix – BTL watchdog in dx-o2-agents entrypoint]:
+  The BTListener was started once but never monitored.  If it exited for any
+  reason (connection failure, OOM, etc.) it would stay dead for the lifetime
+  of the container.
+
+  - _btl_is_alive(): new helper using pgrep -f 'BTListener' to detect the
+    Java process regardless of whether BTListener.sh exec's Java directly or
+    launches it as a background daemon and exits.
+  - _start_btl(): extracted start logic so both initial launch and watchdog
+    restarts use the same code path.
+  - _btl_watchdog(): new background loop (sleep 30 → pgrep check → restart)
+    that keeps the BTL alive as long as the container is running.  Its PID
+    is stored in WATCHDOG_PID so the shutdown handler can terminate it cleanly
+    before sending SIGTERM to the IA and pkill'ing any remaining BTListener
+    Java processes.
+  - _shutdown(): updated to kill WATCHDOG_PID first, then AGENT_PID, then
+    pkill -f 'BTListener' to catch any BTL process the watchdog may have
+    restarted after the PID variable was last updated.
+
+  File changed: src/dx-o2-agents/entrypoint.sh
+
+------------------------------------------------------------------------------
 2026-06-18 @ 17:00 - [Chore – add troubleshooting tools to both images]:
   Added a set of troubleshooting utilities to the apt-get install layer
   of both container images.  Ubuntu 22.04 package names used throughout:
