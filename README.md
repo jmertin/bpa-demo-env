@@ -275,6 +275,78 @@ The application is reachable at **http://localhost:8080/** after `up`.
 
 ---
 
+## Accessing the application
+
+### Docker Compose
+
+After `build-scripts/compose.sh up -d` the application is immediately reachable at:
+
+```
+http://localhost:8080/
+```
+
+No further setup is needed.  The shop is public — browsing and adding items to the
+basket works without logging in.
+
+### Kubernetes
+
+After `build-scripts/deploy.sh` the application is served via TLS Ingress at the
+hostname set in `.config`:
+
+```bash
+# The URL is:
+https://<APP_HOSTNAME>/
+```
+
+To confirm the Ingress address and TLS status:
+
+```bash
+kubectl get ingress -n <APP_NAMESPACE>
+```
+
+**If the Ingress is not yet reachable** (cert-manager still issuing, DNS not
+propagated, or no external load balancer assigned), use a port-forward:
+
+```bash
+kubectl port-forward -n <APP_NAMESPACE> svc/php-demo-php-demo 8080:8080
+# then open: http://localhost:8080/
+```
+
+Replace `<APP_NAMESPACE>` with the value of `APP_NAMESPACE` from your `.config`
+(default: `php-demo`).
+
+### Logging in
+
+Click **Sign in** in the top-right corner, or navigate directly to `?page=login`.
+All demo accounts use the password **`demo123`**.
+
+| Username | Role | Notes |
+|---|---|---|
+| `admin` | admin | Admin panel + all three diagnostic pages |
+| `alice` … `jack` | user | Regular shoppers |
+| `trouble` | user | APM load simulation — 5 000 DB reads per request |
+| `empty` | user | Basket total always shown as €0.00 |
+| `locked` | user | Login blocked — demonstrates the locked use case |
+
+### Admin panel
+
+Log in as `admin`, then click **Admin Panel** in the left sidebar.  From there you
+can view all users and assign or remove use cases.
+
+A **Diagnostics** section also appears in the sidebar, giving access to three
+pages that inspect the runtime from inside the container:
+
+| Page | URL | Shows |
+|---|---|---|
+| DX O2 Status | `?page=dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, agent log tails |
+| PHP Info | `?page=info` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| Database | `?page=db` | Live MariaDB connection result, server version, uptime |
+
+These pages are available even when DX O2 is not deployed — all probes will report
+"not loaded", which is the expected state for a vanilla deployment.
+
+---
+
 ## DX O2 agent setup
 
 > **Full guide:** see **[DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)** for
