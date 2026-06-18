@@ -1,78 +1,103 @@
-# CLAUDE.md – BPA-Demo Project Guide
+# CLAUDE.md
 
-## Project overview
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-BPA-Demo is a PHP web shop (300 smart-home products, three brands) used as a
-Broadcom DX O2 APM demonstration target.  The stack is **Apache 2.4 + mod_php +
-MariaDB** deployed as a single Kubernetes pod via Helm, with an optional
-Broadcom APMIA sidecar for live monitoring.  Docker Compose is provided for
-local development.
+## Project
+
+BPA-Demo is a PHP 8.1 + Apache 2.4 + MariaDB web shop (300 smart-home products, three brands) used as a Broadcom DX O2 APM demonstration target. Deployed via Helm/Kubernetes or Docker Compose with an optional APMIA monitoring sidecar.
 
 ---
 
-## Repository layout
+## Build & deploy commands
 
+```bash
+build-scripts/build.sh                # package app, docker build all images
+build-scripts/build.sh --push         # build + push to registry in one step
+build-scripts/push.sh                 # push only (--skip-dxo2 if dxo2 not built)
+build-scripts/deploy.sh               # helm upgrade; generates + deletes values.local.yaml
+build-scripts/deploy.sh --skip-init   # skip post-deploy kubectl exec DB check
+build-scripts/compose.sh up -d        # local dev stack
+build-scripts/compose.sh down -v      # tear down + wipe DB volume
 ```
-.config               ← git-ignored; shell vars; ALL scripts source this
-.config.example       ← safe-to-commit template (copy → .config, fill in)
-.build_number         ← git-ignored; auto-incremented by build.sh
-app/src/              ← PHP application source (Backdrop CMS standards)
-src/apache-php/       ← Apache 2.4 + mod_php container (ubuntu:22.04, multi-stage)
-src/dx-o2-agents/     ← Broadcom APMIA container; installers/ is git-ignored
-build-scripts/        ← OWF-compliant bash scripts (build/push/deploy/compose)
-helm/php-demo/        ← Helm chart v0.2.0
-docker-compose.yml    ← local dev stack (no TLS, no registry)
-CHANGELOG             ← timestamped change log; update on every change
-```
+
+There is no test suite and no linter. Verify changes by running the app locally with `compose.sh up -d`.
+
+All scripts source `.config` from the project root (copy from `.config.example`; never commit `.config`).
 
 ---
 
-## Technology stack
+## PHP application architecture
 
-| Layer | Choice | Version / notes |
-|---|---|---|
-| Base OS | ubuntu:22.04 (Jammy LTS) | glibc 2.35; within DX O2 agent ceilings |
-| PHP | libapache2-mod-php8.1 (ubuntu repos) | mod_php; ≤ DX O2 PHP Agent ceiling PHP 8.4 |
-| Web server | apache2 2.4 (ubuntu repos) | single apache-php container; replaces former nginx + php-fpm pair |
-| Database | mariadb:11 (Docker Hub) | official image, pinned major |
-| Monitoring | Broadcom APMIA (3 DX O2 packages) | identity via APMENV_*; never patches IntroscopeAgent.profile |
-| Orchestration | Kubernetes + Helm 3.12+ | chart at helm/php-demo/ |
-| Local dev | Docker Compose v2 | compose.sh wrapper |
+### Front controller
+
+`app/src/index.php` is the single entry point for all requests. It:
+1. Bootstraps session and CSRF via `config/app.php`.
+2. Opens the PDO singleton via `config/database.php`.
+3. Resolves `?page=<slug>` against a static `$routes` array.
+4. Calls `usecase_run($ctx)` to apply any behaviour modifier assigned to the current user.
+5. Requires the resolved page file.
+
+### Library layer (`app/src/lib/`)
+
+Plain functions in the global namespace — no classes, no autoloader.
+
+| File | Key public API |
+|---|---|
+| `auth.php` | `auth_login()`, `auth_logout()`, `auth_user()`, `auth_require_admin()`, `auth_is_admin()` |
+| `usecase.php` | `usecase_run(&$ctx)` — loads `usecases/<name>.php`, calls `usecase_<name>($db, &$ctx)` |
+| `basket.php` | Session-backed basket (no DB persistence) |
+| `product.php` | PDO queries for product listing and detail |
+| `order.php` | Order creation, item insertion, order history |
+| `validate.php` | `validate_slug()`, `validate_luhn()`, input sanitisation |
+| `page_id.php` | `set_page_id()` — writes `X-Page-ID`, `X-User-Role`, `X-Basket-Total`, `X-Alert`, `X-Use-Case` headers |
+
+### Page rendering pattern
+
+Pages set `$pageTitle`, then `require templates/layout.php` (outputs `<head>` through opening content div) and `require templates/footer.php` (closes layout). No templating engine.
+
+### Use case system
+
+Files in `app/src/usecases/` each define one function: `usecase_<name>(PDO $db, array &$ctx): void`. `usecase_run()` loads the matching file and calls it on every request for the assigned user. Adding a use case only requires creating the file — no registration step.
+
+### Authentication
+
+`auth.php` handles two password formats:
+- `$SETUP$<plain>` — seed format; verified plain-text, upgraded to bcrypt on first successful login.
+- `$2y$…` — standard bcrypt.
+
+Session is regenerated on login/logout. CSRF token is one-per-session, generated in `config/app.php`, verified in `csrf_verify()` on every POST.
 
 ---
 
 ## PHP coding standards (mandatory — Backdrop CMS)
 
-- **Indentation:** 2 spaces, no tabs.
-- **Braces:** K&R style — opening brace on the same line as the function/control signature (`function foo(): void {`).
-- **else / catch:** on their own line after the closing `}` of the preceding block.
-- **Strings:** single quotes for literals without interpolation.
-- **No closing `?>`** in pure-PHP files.
-- **PHPDoc** on every function, including private helpers.  Minimum: `@param` and `@return` for typed functions; always include a one-sentence description.
-- Reference: https://docs.backdropcms.org/php-standards
-
-### PHPDoc template
+- **Indent:** 2 spaces, no tabs.
+- **Braces:** K&R — opening brace on the same line. `else` / `catch` on their own line after `}`.
+- **Strings:** single quotes for literals without interpolation. No closing `?>` in pure-PHP files.
+- **PHPDoc on every function**, including private helpers. Minimum: one-sentence description + `@param` / `@return` (with type and description on an indented line).
 
 ```php
 /**
- * One-sentence description of what this function does.
+ * One-sentence description.
  *
- * @param type $name
- *   Description of the parameter.
+ * @param string $name
+ *   Description.
  *
- * @return type
- *   Description of the return value.
+ * @return string
+ *   Description.
  */
 function example(string $name): string {
-  // 2-space indent inside
+  // 2-space indent
 }
 ```
 
+Reference: https://docs.backdropcms.org/php-standards
+
 ---
 
-## Shell scripting standards (mandatory — OpenWaterFoundation)
+## Shell scripting standards (mandatory — OWF)
 
-Every script in `build-scripts/` must have:
+Every script in `build-scripts/` must open with:
 
 ```bash
 #!/usr/bin/env bash
@@ -80,90 +105,80 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
-
-usage() { sed -n '/^# Usage:/,/^[^#]/{ /^[^#]/d; s/^# \{0,1\}//; p }' "${BASH_SOURCE[0]}"; }
-info()  { echo "[script-name] $*"; }
-fatal() { echo "[script-name] ERROR: $*" >&2; exit 1; }
-
-check_prerequisites() { ... }   # verify binaries + daemon availability
-load_config() { source "${ROOT_DIR}/.config"; : "${VAR:?must be set}"; }
 ```
 
-Rules:
-- `readonly` for all top-level constants.
-- `local [-r]` for all function-local variables.
-- `-h|--help` flag on every script.
-- No credentials on the command line — use `printf '%s' | --password-stdin`.
-- `fatal()` for unrecoverable errors; `info()` for progress messages.
+- `readonly` for all top-level constants; `local [-r]` for function-local variables.
+- `info()` for progress, `fatal()` for unrecoverable errors. `-h|--help` on every script.
+- No credentials on the command line: `printf '%s' "${VAR}" | --password-stdin`.
+
+---
+
+## Entrypoint coding style
+
+Both `src/apache-php/entrypoint.sh` and `src/dx-o2-agents/entrypoint.sh` must be **ASCII-only**. Section separators use:
+
+```bash
+# == Section title ============================================================
+```
+
+No box-drawing (`─`), en/em dashes (`–`, `—`), or arrows (`→`). Verify: `grep -Pc '[^\x00-\x7F]' entrypoint.sh` must print `0`.
 
 ---
 
 ## Security rules (non-negotiable)
 
-1. **`.config` is the single source of truth** for all credentials, image tags, registry URLs, hostnames, and passwords.  Never hardcode any of these in tracked files.
-2. **`.config` must never appear in the git tree.**  It is listed in `.gitignore`.  Check before every commit.
-3. **`values.local.yaml`** is generated by `deploy.sh` at deploy time and **deleted immediately** after `helm upgrade` returns.  It is also in `.helmignore`.
-4. **Registry login** must use `printf '%s' "${REGISTRY_PASSWORD}" | docker login --password-stdin`.  Never `echo` the password.
-5. **All image sources must be cryptographically signed/official:** Ubuntu `apt` packages (Ubuntu GPG key) and the official `mariadb:11` Docker Hub image only.  No third-party or unsigned sources.
-6. **`automountServiceAccountToken: false`** on the Kubernetes ServiceAccount — the pod needs no cluster API access.
-7. **`allowPrivilegeEscalation: false`** on every container and initContainer.
-8. **No secrets or credentials in CHANGELOG, README, or any tracked doc.**
-9. **DB Monitor credentials** in Kubernetes must be injected via `secretKeyRef` from the mariadb Secret — never plain-text in values files.
+1. **`.config`** is the single source of truth for all credentials, image tags, registry URLs. Never hardcode. Never commit.
+2. **`values.local.yaml`** is generated by `deploy.sh` and deleted immediately after `helm upgrade`. Never commit.
+3. **Registry login:** `printf '%s' "${REGISTRY_PASSWORD}" | docker login --password-stdin`. Never `echo`.
+4. **`automountServiceAccountToken: false`** on the Kubernetes ServiceAccount.
+5. **`allowPrivilegeEscalation: false`** on every container and initContainer.
+6. **DB Monitor credentials** in Kubernetes via `secretKeyRef` — never plain-text in values files.
+7. **No secrets or credentials** in CHANGELOG, README, or any tracked doc.
+
+---
+
+## Build versioning
+
+`build.sh` separates compute from commit so a failed build never wastes a build number:
+
+1. **`compute_build_tag()`** — increments counter **in memory**, sets globals `FULL_TAG` (e.g. `1.0.0b7`) and `BUILD_NUM`. No file is written.
+2. All `docker build` calls use `${FULL_TAG}`.
+3. **`commit_build_tag()`** — called **only after every build succeeds**. Writes `BUILD_NUM` to `.build_number` and updates `IMAGE_TAG` in `.config` via `sed -i`.
+
+Never manually set `IMAGE_TAG` to include `b<N>` — set the base version only (e.g. `IMAGE_TAG="1.0.0"`).
 
 ---
 
 ## DX O2 agent injection pattern
 
-> Full setup guide: **`DX-O2-AGENT-SETUP.md`** — download steps, installer
-> structure, build walkthrough, verification commands, troubleshooting.
+The APMIA agent is never baked into application images. At pod startup:
 
-The Broadcom APMIA agent is **never baked into application images**.  Instead:
+1. **`dxo2-init` initContainer** copies `/opt/apmia/` from the `dx-o2-agents` image into an `emptyDir` volume (`apmia-share`).
+2. **`dx-o2-agent` sidecar** starts the IA (`APMIAgent.sh console`) and BTL (`BTListener.sh start` — `start` is required; omitting it prints usage and exits). A `_btl_watchdog` background loop polls via `pgrep -f 'BTListener'` every 30 s and restarts if dead. Shutdown order: kill watchdog → kill IA → `pkill -f BTListener`.
+3. **`apache-php` container** mounts `apmia-share` read-only at `/opt/apmia`. Its entrypoint performs opportunistic injection and starts cleanly when the volume is absent.
 
-1. `src/dx-o2-agents/` image is built when three DX O2 installer packages are present
-   in `installers/` (git-ignored; download from your **DX O2 interface**, not from
-   support.broadcom.com — the DX O2 download includes a pre-configured profile with
-   the tenant EM URL and JWT credential already embedded):
-   - `PHP_apmia_<date>_v<n>.tar` — IA + PHP probe + bundled JRE + pre-configured profile
-   - `Business_Transaction_Listener.zip` — BTL Java application
-   - `Business_Payload_Analyzer_WebServer_Plugins.zip` — BPA plugin (nginx + Apache variants)
-2. At pod startup a **`dxo2-init` initContainer** copies `/opt/apmia/ → emptyDir volume` (`apmia-share`).
-3. The **`dx-o2-agent` sidecar** runs the IA via `bin/APMIAgent.sh console` and the
-   BTL via `BTListener.sh start` (`start` is a required argument; omitting it causes
-   the script to print usage and exit immediately).  A background watchdog loop
-   (`_btl_watchdog`) polls every 30 s using `pgrep -f 'BTListener'` and restarts the
-   BTL if it exits.  Shutdown (`SIGTERM/INT`) kills the watchdog first, then the IA,
-   then `pkill -f BTListener` to catch any process the watchdog may have restarted.
-   `JAVA_HOME` is set to the bundled JRE.
-4. The **`apache-php` container** mounts `apmia-share` at `/opt/apmia` (readOnly).
-   Its `entrypoint.sh` performs **opportunistic injection** for both agents:
-   - **PHP probe**: copies `extensions/PHPAgent/wily_php_agent.so` into PHP's
-     `extension_dir`; copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/` and
-     symlinks it as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`;
-     patches `collectorHost/Port`, `application.name`, `logdir`, `agentName`;
-     handles browser agent snippet (see below).
-   - **BPA plugin (Apache)**: finds any `mod_*.so` in `extensions/WebServerPlugin/`;
-     derives the module name from the filename (`mod_<name>.so → <name>_module`);
-     writes a `LoadModule` + `SetEnv APMIA_WEB_AGENT_NAME` directive to
-     `/etc/apache2/conf-enabled/bpa.conf`; validates with `apache2ctl configtest` —
-     disables if rejected, starts cleanly.
-   - Container starts cleanly when the volume is absent.
+All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is activated when `APMIA_EM_HOST` is non-empty in `.config`.
 
-All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`.  When `false`
-(the default): no initContainer, no sidecar, no emptyDir volume is created.
+### PHP probe injection
 
-`APMIA_EM_HOST` in `.config` being non-empty causes `deploy.sh` to set
-`dxo2.enabled: true` in the generated `values.local.yaml`.  When using the
-pre-configured DX O2 packages, `APMIA_EM_HOST` does not need to point to a real
-host — it is used only as a truthy flag.
+`apache-php/entrypoint.sh`:
+- Copies `wily_php_agent.so` into PHP's `extension_dir`.
+- Copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/`; symlinks as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`.
+- Patches `collectorHost`, `collectorPort`, `application.name`, `logdir`, `agentName` via `sed -i`.
+- Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes).
+
+### BPA Apache module injection
+
+- Finds `mod_*.so` in `extensions/WebServerPlugin/`. Derives module name: `mod_<name>.so → <name>_module`.
+- Writes `LoadModule` + `SetEnv APMIA_WEB_AGENT_NAME` to `/etc/apache2/conf-enabled/bpa.conf`.
+- Validates with `apache2ctl configtest`; disables on rejection.
+- The module always registers internally as **`caplugin_module`**, detected via `apache2ctl -t -D DUMP_MODULES`.
 
 ### APMENV_* identity mechanism
 
-Agent identity is configured via `APMENV_*` environment variables — the native
-APMIA Docker container mechanism.  The agent startup script reads them and
-overrides the corresponding `introscope.*` profile properties **without any file
-patching**.  `APMIA_*` fallback vars are also accepted and promoted internally.
+Agent identity is configured via `APMENV_*` environment variables — the native APMIA Docker mechanism. These override `introscope.*` profile properties at startup without touching the profile file. **Never patch or overwrite `core/config/IntroscopeAgent.profile`** — it contains the tenant JWT and WSS EM URL from the DX O2 installer.
 
-| APMENV_* variable | introscope.* property overridden |
+| `APMENV_*` variable | Property overridden |
 |---|---|
 | `APMENV_INTROSCOPE_AGENT_AGENTNAME` | `introscope.agent.agentName` |
 | `APMENV_INTROSCOPE_AGENT_APPLICATION_NAME` | `introscope.agent.application.name` |
@@ -172,150 +187,96 @@ patching**.  `APMIA_*` fallback vars are also accepted and promoted internally.
 | `APMENV_LOG4J_LOGGER_INTROSCOPEAGENT` | log4j logger spec, e.g. `"INFO, logfile"` |
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_*` | DB Monitor MySQL properties |
 
-**Critical:** `core/config/IntroscopeAgent.profile` contains the tenant's JWT
-credential and WSS EM URL pre-configured by the DX O2 installer.  This file must
-**never be patched, overwritten, or modified by any script.**  Use APMENV_* only.
+### Container hostname (metric path)
 
-### Container hostname (metric path fix)
-
-`APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA (Java process).  The PHP
-probe and BPA Apache module read the OS `gethostname()` of their own container.
-To prevent auto-generated container IDs appearing in the metric path:
-- **Kubernetes**: `spec.hostname: {{ .Values.dxo2.hostName }}` in the pod template.
-- **Compose**: `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` on the `apachephp` service.
+`APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA (Java). The PHP probe and BPA module read the OS `gethostname()`. To prevent auto-generated IDs in the metric path:
+- **Kubernetes:** `spec.hostname: {{ .Values.dxo2.hostName }}` in the pod template.
+- **Compose:** `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` on the `apachephp` service.
 
 ### APMIA_DEPLOY flag
 
 | Value | Behaviour |
 |---|---|
-| `true` (default) | Start the IA and BTL daemons from the container |
-| `false` | Passive volume mode: seed the agent tree but `exec sleep infinity` (use when IA is external) |
+| `true` (default) | Start IA and BTL daemons |
+| `false` | Passive: seed the volume only, `exec sleep infinity` |
 
-### Browser agent auto-injection
-
-The PHP probe supports injecting a JavaScript snippet into every HTML response.
-
-- Set `APMIA_BROWSER_SNIPPET` in `.config` to the `<script>` tag from your DX O2 tenant
-  (Experience View → Browser Agent → Snippet).  It is enclosed in single-quotes in `.config`
-  because the value contains double-quotes.
-- When set, the entrypoint writes to `wily_php_agent.ini`:
-  ```
-  wily_php_agent.enable.browseragent.snippet.autoInjection=1
-  wily_php_agent.browseragent.autoInjection.snippetString='<script ...>'
-  ```
-- When empty, the entrypoint explicitly sets `autoInjection=0`, removes any
-  pre-existing `snippetString`, and deletes the legacy
-  `wily_php_agent.browseragent.autoInjection.enabled` property (the DX O2 installer
-  may have pre-configured these; `.config` is always the authoritative source).
-
-### DB Monitor (MariaDB)
-
-- Enabled by `MYSQL_MONITOR=true` (default) in `.config`.
-- Uses `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_*` env vars; profile name `bpadb`.
-- Hostname in Compose: `mariadb` (service name).  Hostname in Kubernetes: `127.0.0.1` (same-pod).
-- Credentials: never plain-text in values files.  In Kubernetes they are pulled via
-  `secretKeyRef` from the mariadb Secret.  In Compose they are exported by `compose.sh`
-  from `.config` and passed as passthrough env vars.
-
-### Expected paths inside /opt/apmia after install
+### Expected paths inside `/opt/apmia`
 
 ```
-bin/APMIAgent.sh                                   ← IA start script
-APMIACtrl.sh                                       ← Agent control script
-jre/                                               ← Bundled JRE (JAVA_HOME at runtime)
-core/config/IntroscopeAgent.profile                ← Pre-configured profile (NEVER overwrite)
-extensions/PHPAgent/wily_php_agent.so              ← PHP probe .so (normalised by Dockerfile)
-extensions/PHPAgent/wily_php_agent.ini             ← PHP INI snippet (normalised by Dockerfile)
-extensions/WebServerPlugin/ngx_http_ca_plugin_filter_module_<ver>.so  ← nginx BPA variants
-extensions/WebServerPlugin/mod_<name>.so           ← Apache BPA module (if present in BPA zip)
-logs/                                              ← Runtime log directory
+bin/APMIAgent.sh
+jre/                                               ← JAVA_HOME at runtime
+core/config/IntroscopeAgent.profile                ← NEVER overwrite
+extensions/PHPAgent/wily_php_agent.so
+extensions/PHPAgent/wily_php_agent.ini
+extensions/WebServerPlugin/mod_<name>.so           ← Apache BPA module
+logs/
 ```
 
-BTL is installed at `/opt/btlistener/` (from `Business_Transaction_Listener.zip`):
-
-```
-bin/BTListener.sh                                  ← BTL start script
-conf/custom/application.properties                 ← Pre-configured: DXC URL + tenantId + port 8000
-```
+BTL at `/opt/btlistener/bin/BTListener.sh`; config at `/opt/btlistener/conf/custom/application.properties`.
 
 ---
 
-## Build versioning
+## Container image contents (both images)
 
-`build.sh` maintains `.build_number` (git-ignored).  The counter is computed and
-persisted in two separate steps so a failed build never wastes a build number:
+Both `apache-php` and `dx-o2-agents` include these troubleshooting packages (Ubuntu 22.04):
 
-1. `compute_build_tag()` — reads the current counter, increments it **in memory**,
-   strips any existing `b<N>` suffix from `IMAGE_TAG`, and sets the globals
-   `FULL_TAG` (e.g. `1.0.0b7`) and `BUILD_NUM`.  **No file is written at this point.**
-2. All docker builds run using `${FULL_TAG}`.  If any build fails, `set -euo pipefail`
-   causes the script to exit before the next step.
-3. `commit_build_tag()` — called **only after every docker build succeeds**.  Writes
-   `BUILD_NUM` to `.build_number` and updates `IMAGE_TAG` in `.config` via `sed -i`.
-
-**Never manually edit `IMAGE_TAG` to include `b<N>`** — build.sh manages that.  Set the base version only (e.g. `IMAGE_TAG="1.0.0"`).
+| Package | Commands |
+|---|---|
+| `curl` | HTTP/HTTPS checks |
+| `dnsutils` | `dig`, `nslookup`, `host` |
+| `iputils-ping` | `ping` |
+| `less` | pager |
+| `net-tools` | `netstat`, `ifconfig`, `route` |
+| `procps` | `ps`, `top`, `pgrep`, `kill` |
 
 ---
 
-## Helm chart conventions
+## Demo use cases
 
-Chart: `helm/php-demo/` — version **0.2.0**
+Assigned per user via the admin panel. Active use case is in `$_SESSION['usecase']`; `usecase_run()` dispatches on every request.
 
-- All sensitive values come via `values.local.yaml` (generated; never committed).
-- `dxo2.emHost` is **optional** when using the DX O2 installer download (the EM URL is pre-configured in the agent profile).  Set it to any non-empty string to trigger `dxo2.enabled: true` in `deploy.sh`.
-- The ConfigMap holds a single key `vhost.conf` mounted into the `apache-php` container at `/etc/apache2/sites-available/bpa-demo.conf` via `subPath`; the `sites-enabled/` symlink created by `a2ensite` in the Dockerfile follows this file.
-- Pod template carries `checksum/config` and `checksum/secret` annotations so pods are automatically recreated when config or secrets change.
-- `image.*.pullPolicy: Always` for custom images (apachephp, dxo2).  `IfNotPresent` for `mariadb`.
+| Use case | File | Behaviour |
+|---|---|---|
+| `trouble` | `usecases/trouble.php` | 5 000 sequential DB reads per request |
+| `empty_basket` | `usecases/empty_basket.php` | Basket total always €0.00 |
+| `locked` | `usecases/locked.php` | Blocks login; session flash shown once on login page |
 
----
+**`locked` flow:** after `auth_login()` succeeds, `login.php` checks `$_SESSION['usecase'] === 'locked'`, revokes all auth session keys, and displays the error without granting access. Already-logged-in users are evicted by `usecase_locked()` on the next request (evicts keys → `session_regenerate_id(true)` → stores `$_SESSION['login_error']` → redirects to login). The login page reads and clears the flash before the already-logged-in redirect check.
 
-## CHANGELOG format (update on every substantive change)
-
-```
-CHANGELOG – php-demo / BPA-Demo
-================================
-
-All changes are listed in reverse chronological order.
-Format: YYYY-MM-DD @ HH:MM  <summary>
-
-------------------------------------------------------------------------------
-YYYY-MM-DD @ HH:MM - [Phase N – Task Name]:
-  Description of what changed and why.
-
-  - Bullet point detail
-  - Another detail
-```
-
-- Every commit that changes tracked files must have a corresponding CHANGELOG entry.
-- Entries are prepended (newest first).
-- Include file names and the reason for each change.
+Seed user: `locked` / `demo123` — id 14, Laura Locked, use case pre-assigned.
 
 ---
 
-## Git practices
+## Admin diagnostic pages
 
-- Branch: `master` (default).
-- Commit message format: `<type>: <short description>` — types: `feat`, `fix`, `refactor`, `docs`, `chore`.
-- Every commit includes `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
-- Commit frequently — at least once per completed phase or significant task.
-- **Never commit:** `.config`, `.build_number`, `src/dx-o2-agents/installers/*`, `src/apache-php/app.tar.gz`, `helm/*/values.local.yaml`, `.claude/`.
+Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section visible only when admin is logged in.
+
+| Route | File | Purpose |
+|---|---|---|
+| `?page=info` | `pages/info.php` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| `?page=db` | `pages/db.php` | Live PDO connection test, server version, uptime |
+| `?page=dxo2` | `pages/dxo2.php` | Full DX O2 stack health check |
+
+### `?page=dxo2` checks
+
+- **PHP probe:** `extension_loaded('wily_php_agent')`; globs `$phpConfD/*-wily_php_agent.ini` (phpConfD built from `PHP_MAJOR_VERSION`/`PHP_MINOR_VERSION`); `realpath()` to resolve symlink to mods-available; displays key INI properties.
+- **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.
+- **Connectivity:** `fsockopen()` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT` and `APMIA_BTL_HOST:PORT`.
+- **Env vars:** all `APMIA_*` / `APMENV_*` in a table; credential-bearing keys redacted.
+- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/` in scrollable blocks.
+
+Page loads cleanly when `dxo2.enabled=false`; all probes report "not loaded".
 
 ---
 
-## Build-scripts pipeline
+## Helm chart
 
-```
-build-scripts/package-app.sh   # tars app/src/ → src/apache-php/app.tar.gz
-build-scripts/build.sh         # calls package-app.sh, docker build all images
-build-scripts/build.sh --push  # build + push in one step
-build-scripts/push.sh          # push to registry (--skip-dxo2 if not built)
-build-scripts/deploy.sh        # generate values.local.yaml → helm upgrade → delete values.local.yaml
-build-scripts/deploy.sh --skip-init  # skip post-deploy kubectl exec DB check
-build-scripts/compose.sh up -d       # local dev stack
-build-scripts/compose.sh down -v     # tear down + wipe DB volume
-```
+Chart: `helm/php-demo/` — version 0.2.0.
 
-All scripts: `source "${ROOT_DIR}/.config"` at startup, `fatal()` on any missing required variable.
+- ConfigMap holds `vhost.conf` mounted via `subPath`.
+- `checksum/config` and `checksum/secret` annotations on the pod template force pod restart on config/secret change.
+- `dxo2.emHost` is optional when using the DX O2 installer download (EM URL is pre-configured in the profile). Any non-empty string triggers `dxo2.enabled: true` in `deploy.sh`.
+- `image.*.pullPolicy: Always` for custom images; `IfNotPresent` for `mariadb`.
 
 ---
 
@@ -323,185 +284,78 @@ All scripts: `source "${ROOT_DIR}/.config"` at startup, `fatal()` on any missing
 
 ```bash
 # Registry
-REGISTRY REGISTRY_USER REGISTRY_PASSWORD
+REGISTRY  REGISTRY_USER  REGISTRY_PASSWORD
 
 # Images
-IMAGE_PREFIX IMAGE_TAG BUILD_PLATFORM
+IMAGE_PREFIX  IMAGE_TAG  BUILD_PLATFORM
 
 # MariaDB
-MARIADB_ROOT_PASSWORD MARIADB_DATABASE MARIADB_USER MARIADB_PASSWORD
+MARIADB_ROOT_PASSWORD  MARIADB_DATABASE  MARIADB_USER  MARIADB_PASSWORD
 
 # Kubernetes / Helm
-APP_NAMESPACE APP_HOSTNAME TLS_CLUSTER_ISSUER INGRESS_CLASS_NAME KUBECONFIG
-HELM_CHART_PATH   # optional; defaults to helm/php-demo
+APP_NAMESPACE  APP_HOSTNAME  TLS_CLUSTER_ISSUER  INGRESS_CLASS_NAME  KUBECONFIG
+HELM_CHART_PATH          # optional; defaults to helm/php-demo
 
-# DX O2 – agent lifecycle
-APMIA_DEPLOY        # true (default) = run IA; false = passive volume only
-APMIA_EM_HOST       # non-empty → deploy.sh sets dxo2.enabled=true; value is informational
-APMIA_EM_PORT       # default 8443
+# DX O2 – lifecycle
+APMIA_DEPLOY             # true (default) = run IA+BTL; false = passive volume
+APMIA_EM_HOST            # non-empty → dxo2.enabled=true; value is informational only
+APMIA_EM_PORT            # default 8443
 
-# DX O2 – agent identity (exposed as APMENV_* to the dx-o2-agent container)
-APMIA_AGENT_NAME    # default bpa-demo-agent   (APMENV_INTROSCOPE_AGENT_AGENTNAME)
-APMIA_APP_NAME      # default bpa-demo          (APMENV_INTROSCOPE_AGENT_APPLICATION_NAME)
-APMIA_HOST_NAME     # default bpa-demo-host     (APMENV_INTROSCOPE_AGENT_HOSTNAME + OS hostname)
-APMIA_PROCESS_NAME  # default bpa-demo          (APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME)
-APMIA_PHP_AGENT_NAME  # default bpa-demo-php-probe   (wily_php_agent.agentName in PHP INI)
-APMIA_WEB_AGENT_NAME  # default bpa-demo-web-plugin  (APMIA_WEB_AGENT_NAME env for BPA Apache)
-APMIA_LOG_LEVEL     # default INFO  → APMENV_LOG4J_LOGGER_INTROSCOPEAGENT="INFO, logfile"
+# DX O2 – identity (exposed as APMENV_* to dx-o2-agent container)
+APMIA_AGENT_NAME         # → APMENV_INTROSCOPE_AGENT_AGENTNAME
+APMIA_APP_NAME           # → APMENV_INTROSCOPE_AGENT_APPLICATION_NAME
+APMIA_HOST_NAME          # → APMENV_INTROSCOPE_AGENT_HOSTNAME + OS hostname
+APMIA_PROCESS_NAME       # → APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME
+APMIA_PHP_AGENT_NAME     # → wily_php_agent.agentName in PHP INI
+APMIA_WEB_AGENT_NAME     # → APMIA_WEB_AGENT_NAME env for BPA Apache module
+APMIA_LOG_LEVEL          # default INFO → APMENV_LOG4J_LOGGER_INTROSCOPEAGENT
 
-# DX O2 – same-pod IPC (defaults match DX O2 installer; override for external IA)
-APMIA_PHP_COLLECTOR_HOST   # default 127.0.0.1  (Compose override: dxo2 service name)
-APMIA_PHP_COLLECTOR_PORT   # default 5005
-APMIA_BTL_HOST             # default 127.0.0.1  (Compose override: dxo2 service name)
-APMIA_BTL_PORT             # default 8000
+# DX O2 – IPC (defaults: same-pod 127.0.0.1; Compose overrides to dxo2 service name)
+APMIA_PHP_COLLECTOR_HOST  APMIA_PHP_COLLECTOR_PORT   # default 127.0.0.1:5005
+APMIA_BTL_HOST            APMIA_BTL_PORT             # default 127.0.0.1:8000
 
-# DX O2 – optional extensions
-MYSQL_MONITOR          # default true  – enable APMIA DB Monitor for MariaDB
-APMIA_BROWSER_SNIPPET  # default ""    – <script> snippet from DX O2 → Experience View → Browser Agent
-                       # Enclose in single quotes in .config: APMIA_BROWSER_SNIPPET='<script ...>'
+# DX O2 – optional
+MYSQL_MONITOR            # default true – enable DB Monitor for MariaDB
+APMIA_BROWSER_SNIPPET    # default "" – <script> tag; enclose in single quotes in .config
 ```
-
----
-
-## Container image contents (both images)
-
-Both `apache-php` and `dx-o2-agents` images install the following troubleshooting
-utilities in their `apt-get` layer (Ubuntu 22.04 package names):
-
-| Package | Commands provided |
-|---|---|
-| `curl` | HTTP/HTTPS connectivity checks |
-| `dnsutils` | `dig`, `nslookup`, `host` (equiv. `bind-utils` on RHEL/Fedora) |
-| `iputils-ping` | `ping` |
-| `less` | scrollable pager |
-| `net-tools` | `netstat`, `ifconfig`, `route`, `arp` |
-| `procps` | `ps`, `top`, `free`, `kill`, `pgrep` |
-
-These are available in both `docker exec` / `kubectl exec` sessions and make
-in-container network and process diagnostics possible without additional tooling.
-
----
-
-## Demo use cases
-
-Use cases alter application behaviour for a specific user and are assigned through
-the admin panel.  The active use case is recorded in `$_SESSION['usecase']`.
-
-| Use case | File | Behaviour |
-|---|---|---|
-| `trouble` | `usecases/trouble.php` | 5 000 sequential DB reads per request (APM load simulation) |
-| `empty_basket` | `usecases/empty_basket.php` | Basket total always rendered as €0.00 |
-| `locked` | `usecases/locked.php` | Blocks login entirely; session flash shows an error message |
-
-**`locked` flow:**
-- After `auth_login()` succeeds, `login.php` checks `$_SESSION['usecase'] === 'locked'`,
-  revokes all auth session keys, and renders the error inline without granting access.
-- If a locked use case is assigned to an already-logged-in user, the next request
-  dispatches `usecase_locked()`, which evicts auth session keys, regenerates the
-  session ID, stores `$_SESSION['login_error']` (flash), and redirects to `?page=login`.
-- The login page reads and clears the flash on its next load before the
-  already-logged-in redirect check, so the message is displayed exactly once.
-
-Seed user: `locked` / `demo123` — id 14, email `locked@bpa.demo`, full name
-"Laura Locked", role `user`, use case `locked` pre-assigned.
-
----
-
-## Admin diagnostic pages
-
-Three pages accessible only to users with the **admin** role (enforced by
-`auth_require_admin()` at the top of each page file).  They are reachable from the
-**Diagnostics** sidebar section that appears in the left menu when an admin is
-logged in.
-
-| Route | File | Purpose |
-|---|---|---|
-| `?page=info` | `pages/info.php` | PHP version, SAPI, OS, memory limit, loaded extensions |
-| `?page=db` | `pages/db.php` | Live PDO connection test; server version, uptime, connection params |
-| `?page=dxo2` | `pages/dxo2.php` | Full DX O2 monitoring stack health check |
-
-### `?page=dxo2` — checks performed
-
-**PHP probe:**
-- Extension loaded: `extension_loaded('wily_php_agent')`.
-- INI file: glob `$phpConfD/*-wily_php_agent.ini` (where `$phpConfD` is
-  `/etc/php/<major>.<minor>/apache2/conf.d`); the symlink resolves via `realpath()`
-  to the actual file in `/etc/php/<ver>/mods-available/wily_php_agent.ini`.
-- Key properties displayed: `agentName`, `collectorHost`, `collectorPort`, `logdir`,
-  `enable.browseragent.snippet.autoInjection`, `browseragent.autoInjection.snippetString`.
-
-**BPA Apache module:**
-- Config file: `/etc/apache2/conf-enabled/bpa.conf` presence.
-- Module loaded: `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → search for
-  `caplugin_module` in the output (`caplugin_module` is the internal module name
-  regardless of the `.so` filename).  Falls back to `apache_get_modules()` if
-  `shell_exec` is unavailable.
-- Raw `DUMP_MODULES` output and raw `bpa.conf` contents are shown verbatim.
-
-**Browser agent:** INI flags and whether `snippetString` is present.
-
-**APMIA connectivity:** live `fsockopen` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT`
-and `APMIA_BTL_HOST:PORT`.
-
-**Environment variables:** all `APMIA_*` and `APMENV_*` container vars in a table;
-credential-bearing keys are redacted.
-
-**Log tails:** last 40 lines of every `*.log` in `/opt/apmia/logs/`, in scrollable
-terminal blocks.
-
-The page loads cleanly when the apmia volume is absent (e.g. `dxo2.enabled=false`);
-all probes report "not loaded" and no log files appear.
-
----
-
-## Entrypoint coding style
-
-Both `src/apache-php/entrypoint.sh` and `src/dx-o2-agents/entrypoint.sh` must use
-**ASCII-only characters**.  Section separators use the pattern:
-
-```bash
-# == Section title ============================================================
-```
-
-No Unicode box-drawing characters (`─`, `━`), en/em dashes (`–`, `—`), or arrows
-(`→`, `➜`).  Verify with `grep -Pc '[^\x00-\x7F]' entrypoint.sh` — output must be `0`.
 
 ---
 
 ## Docker Compose notes
 
-- `compose.sh` wraps `docker compose`, sources `.config`, and calls `package-app.sh` before any build.
-- `load_config()` in `compose.sh` **explicitly exports every DX O2 variable** with safe defaults before running `docker compose`.  Variables not exported are invisible to Docker Compose YAML interpolation.
-- The `apachephp` service environment block uses **uniform list form** (`- KEY` or `- KEY=value`).  Mixing mapping and list style in a single YAML `environment` block is illegal YAML and causes a parse error.
-- `APMIA_BROWSER_SNIPPET` uses the passthrough form (`- APMIA_BROWSER_SNIPPET`, no `=` sign) to prevent YAML parser issues with the snippet's embedded double-quotes.
-- `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` is set on the `apachephp` service so the PHP probe and BPA Apache module report the correct hostname in the metric path.
-- **Compose networking vs Kubernetes:** `APMIA_PHP_COLLECTOR_HOST` and `APMIA_BTL_HOST` are hardcoded to `dxo2` (the service name) in `docker-compose.yml`, not read from `.config`.  In Kubernetes the same-pod default of `127.0.0.1` applies.
-- The `dxo2` service populates the `apmia_data` named volume on first start.  `apachephp` mounts it read-only.
+- `load_config()` in `compose.sh` explicitly exports all DX O2 variables with safe defaults before `docker compose`. Un-exported variables are invisible to YAML interpolation.
+- The `apachephp` environment block uses **uniform list form** (`- KEY` or `- KEY=value`). Mixing mapping and list style is illegal YAML.
+- `APMIA_BROWSER_SNIPPET` uses passthrough form (`- APMIA_BROWSER_SNIPPET`, no `=`) to prevent YAML parser corruption of the embedded double-quotes.
+- `APMIA_PHP_COLLECTOR_HOST` and `APMIA_BTL_HOST` are hardcoded to `dxo2` (service name) in `docker-compose.yml`. In Kubernetes the same-pod default `127.0.0.1` applies.
 
 ---
 
-## Key file paths (quick reference)
+## CHANGELOG
+
+Update on every commit. Format: `YYYY-MM-DD @ HH:MM - [Type – Description]`. Prepend newest first. Include file names and the reason for each change. No secrets or credentials.
+
+## Git practices
+
+- Branch: `master`. Commit format: `<type>: <short description>` (feat/fix/refactor/docs/chore).
+- Every commit includes `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
+- Never commit: `.config`, `.build_number`, `src/dx-o2-agents/installers/*`, `src/apache-php/app.tar.gz`, `helm/*/values.local.yaml`, `.claude/`.
+
+---
+
+## Key file paths
 
 | Purpose | Path |
 |---|---|
-| PHP application source | `app/src/` |
-| Apache+PHP Dockerfile | `src/apache-php/Dockerfile` |
+| Front controller + routing | `app/src/index.php` |
+| Session bootstrap + CSRF | `app/src/config/app.php` |
+| PDO singleton | `app/src/config/database.php` |
+| Layout template (full CSS inline) | `app/src/templates/layout.php` |
 | Apache+PHP entrypoint (probe + BPA injection) | `src/apache-php/entrypoint.sh` |
-| Apache VirtualHost config (baked + ConfigMap) | `src/apache-php/config/vhost.conf` |
-| DX O2 Dockerfile | `src/dx-o2-agents/Dockerfile` |
-| DX O2 entrypoint (agent + BTL daemon + watchdog) | `src/dx-o2-agents/entrypoint.sh` |
-| DX O2 installers (git-ignored) | `src/dx-o2-agents/installers/` |
-| Admin page — PHP runtime info | `app/src/pages/info.php` |
-| Admin page — MariaDB connection test | `app/src/pages/db.php` |
-| Admin page — DX O2 agent status | `app/src/pages/dxo2.php` |
-| Use case — trouble (DB load) | `app/src/usecases/trouble.php` |
-| Use case — empty basket | `app/src/usecases/empty_basket.php` |
-| Use case — locked (blocks login) | `app/src/usecases/locked.php` |
-| Helm values (defaults, committed) | `helm/php-demo/values.yaml` |
-| Helm values (secrets, generated + deleted) | `helm/php-demo/values.local.yaml` |
-| Kubernetes deployment template | `helm/php-demo/templates/deployment.yaml` |
-| Apache VirtualHost ConfigMap | `helm/php-demo/templates/configmap.yaml` |
+| DX O2 entrypoint (IA + BTL + watchdog) | `src/dx-o2-agents/entrypoint.sh` |
+| Admin page — DX O2 status | `app/src/pages/dxo2.php` |
+| Use case — locked | `app/src/usecases/locked.php` |
 | MariaDB schema + seed | `helm/php-demo/sql/schema.sql` / `seed.sql` |
+| Helm values defaults | `helm/php-demo/values.yaml` |
 | Config template | `.config.example` |
-| Version matrix | `COMPATIBILITY.md` |
-| DX O2 agent setup guide | `DX-O2-AGENT-SETUP.md` |
+| DX O2 setup guide | `DX-O2-AGENT-SETUP.md` |
+| Version compatibility matrix | `COMPATIBILITY.md` |

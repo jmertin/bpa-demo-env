@@ -5,6 +5,33 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 23:00 - [Docs – normalize CLAUDE.md to Claude Code init format]:
+  Rewrote CLAUDE.md from scratch using the normalized Claude Code init format.
+  The new file starts with the required "This file provides guidance to Claude
+  Code..." prefix and is reorganized around the two things future Claude Code
+  instances need most: build/deploy commands and high-level architecture.
+
+  Changes from the previous version:
+  - Added required Claude Code prefix header.
+  - Added "Build & deploy commands" quick-reference block as the first section.
+  - Added "PHP application architecture" section documenting the front-controller
+    pattern, library layer API, page rendering pattern, use-case dispatch, and
+    authentication internals — all of which require reading multiple files to
+    understand.
+  - Added "Authentication" subsection covering the $SETUP$ seed format and CSRF.
+  - Removed generic project overview and technology stack table (inferable from
+    Dockerfile / package files).
+  - Removed repository layout section (redundant with key file paths + ls).
+  - Removed CHANGELOG template block (replaced with one-line format summary).
+  - Tightened DX O2 section; preserved all non-obvious details.
+  - Consolidated .config variables into a compact annotated block.
+  - All other sections (security rules, build versioning, use cases, admin
+    diagnostic pages, Helm, Docker Compose, key file paths) retained and
+    reformatted for consistency.
+
+  File changed: CLAUDE.md
+
+------------------------------------------------------------------------------
 2026-06-18 @ 22:00 - [Docs – add "Accessing the application" section to README.md]:
   New section inserted between the Docker Compose and DX O2 agent setup sections.
   Covers Docker Compose URL, Kubernetes Ingress URL discovery and port-forward
