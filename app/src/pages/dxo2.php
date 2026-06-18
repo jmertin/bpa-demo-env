@@ -125,8 +125,32 @@ $bpaModuleName  = '';
 if (preg_match('/LoadModule\s+(\S+)\s/', $bpaConfContent, $bm)) {
   $bpaModuleName = $bm[1];
 }
-$apacheModules   = function_exists('apache_get_modules') ? apache_get_modules() : [];
-$bpaModuleLoaded = $bpaModuleName !== '' && in_array($bpaModuleName, $apacheModules, true);
+
+// Authoritative detection: apache2ctl -t -D DUMP_MODULES lists every loaded
+// module by its internal name.  The BPA Apache module is always registered as
+// 'caplugin_module'.  Fall back to apache_get_modules() when shell_exec is
+// unavailable (e.g. PHP disable_functions).
+$dumpRaw    = '';
+$dumpList   = [];
+$dumpViaCmd = false;
+if (function_exists('shell_exec')) {
+  $raw = shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1') ?? '';
+  if ($raw !== '') {
+    $dumpRaw    = trim($raw);
+    $dumpViaCmd = true;
+    foreach (explode("\n", $raw) as $line) {
+      if (preg_match('/^\s+(\w+_module)\b/', $line, $mm)) {
+        $dumpList[] = $mm[1];
+      }
+    }
+  }
+}
+if (empty($dumpList) && function_exists('apache_get_modules')) {
+  $dumpList   = apache_get_modules();
+  $dumpViaCmd = false;
+}
+
+$bpaModuleLoaded = in_array('caplugin_module', $dumpList, true);
 
 // ── 3. Browser agent ───────────────────────────────────────────────────────────
 $baEnabled = ($iniValues['wily_php_agent.enable.browseragent.snippet.autoInjection'] ?? '0') === '1';
@@ -269,42 +293,45 @@ foreach ($badges as [$label, $ok, $state]):
         <?php endif ?></td>
       </tr>
       <tr>
-        <td>Module name</td>
+        <td>LoadModule name<br>
+            <span style="font-size:.75rem;color:#90a4ae">from bpa.conf</span></td>
         <td><?php if ($bpaModuleName !== ''): ?>
           <code style="font-size:.82rem"><?= htmlspecialchars($bpaModuleName) ?></code>
         <?php else: ?>
-          <span style="color:#607d8b">unknown — conf not parsed</span>
+          <span style="color:#607d8b">unknown — conf not found or not parsed</span>
         <?php endif ?></td>
       </tr>
       <tr>
-        <td>Apache module loaded</td>
+        <td>caplugin_module loaded<br>
+            <span style="font-size:.75rem;color:#90a4ae">
+              <?= $dumpViaCmd ? 'apache2ctl -t -D DUMP_MODULES' : 'apache_get_modules()' ?>
+            </span></td>
         <td><?php if ($bpaModuleLoaded): ?>
           <span style="color:#2e7d32;font-weight:700">&#10003; yes</span>
-        <?php elseif ($bpaModuleName !== ''): ?>
+        <?php elseif (!empty($dumpList)): ?>
           <span style="color:#c62828;font-weight:700">&#10007; no</span>
-          <span style="color:#607d8b;font-size:.8rem"> — <?= htmlspecialchars($bpaModuleName) ?> not in apache_get_modules()</span>
+          <span style="color:#607d8b;font-size:.8rem"> — caplugin_module not in module list</span>
         <?php else: ?>
-          <span style="color:#607d8b">n/a</span>
+          <span style="color:#f57f17">&#9888; unable to determine — shell_exec and apache_get_modules() both unavailable</span>
         <?php endif ?></td>
       </tr>
-      <?php if (function_exists('apache_get_modules')): ?>
-      <tr>
-        <td>apache_get_modules() available</td>
-        <td><span style="color:#2e7d32">&#10003; yes (mod_php SAPI)</span></td>
-      </tr>
-      <?php else: ?>
-      <tr>
-        <td>apache_get_modules() available</td>
-        <td><span style="color:#f57f17">&#9888; no — cannot verify module load</span></td>
-      </tr>
-      <?php endif ?>
     </tbody>
   </table>
   <?php if ($bpaConfContent !== ''): ?>
   <div style="font-size:.8rem;color:#607d8b;margin-bottom:.3rem">
     <strong>bpa.conf contents:</strong>
   </div>
-  <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all"><?= htmlspecialchars($bpaConfContent) ?></pre>
+  <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-bottom:1rem"><?= htmlspecialchars($bpaConfContent) ?></pre>
+  <?php endif ?>
+  <?php if ($dumpRaw !== ''): ?>
+  <div style="font-size:.8rem;color:#607d8b;margin-bottom:.3rem">
+    <strong>apache2ctl -t -D DUMP_MODULES output:</strong>
+  </div>
+  <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.75rem;max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"><?= htmlspecialchars($dumpRaw) ?></pre>
+  <?php elseif (!$dumpViaCmd && function_exists('apache_get_modules')): ?>
+  <p style="font-size:.8rem;color:#90a4ae;font-style:italic">
+    shell_exec unavailable — module list sourced from apache_get_modules().
+  </p>
   <?php endif ?>
 </div>
 
