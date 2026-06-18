@@ -83,26 +83,29 @@ load_config() {
     : "${BUILD_PLATFORM:?BUILD_PLATFORM must be set in .config}"
 }
 
-## Increment the build counter and derive the full image tag.
-# Sets global FULL_TAG.
+## Compute the next build tag without touching any file yet.
+# Sets globals FULL_TAG and BUILD_NUM.  Call commit_build_tag() only after
+# every image that should be built has been built successfully.
 compute_build_tag() {
     local build_num
     build_num=$(( $(cat "${BUILD_FILE}" 2>/dev/null || echo 0) + 1 ))
-    printf '%s\n' "${build_num}" > "${BUILD_FILE}"
 
     # Strip any existing b<N> suffix so the base version is always clean,
     # regardless of whether .config currently holds "1.0.0" or "1.0.0b3".
     local base_tag="${IMAGE_TAG%%b*}"
     FULL_TAG="${base_tag}b${build_num}"
     BUILD_NUM="${build_num}"
+}
 
-    # Persist the new tag back to .config so push.sh / deploy.sh read it
-    # automatically without needing extra command-line arguments.
+## Persist the build counter and new tag after all images have been built.
+# Writes BUILD_NUM to .build_number and FULL_TAG back to .config so that
+# push.sh and deploy.sh automatically use the new tag.
+commit_build_tag() {
+    printf '%s\n' "${BUILD_NUM}" > "${BUILD_FILE}"
     sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=\"${FULL_TAG}\"|" "${ROOT_DIR}/.config"
-
-    # Re-source so IMAGE_TAG is updated in the current shell environment.
     # shellcheck source=../.config
     source "${ROOT_DIR}/.config"
+    info "Build tag committed: ${FULL_TAG} (build #${BUILD_NUM})"
 }
 
 ## Build a single Docker image and print status.
@@ -149,15 +152,15 @@ done
 # ── Main ───────────────────────────────────────────────────────────────────────
 check_prerequisites
 load_config
-compute_build_tag
+compute_build_tag   # computes FULL_TAG / BUILD_NUM; does NOT write any file yet
 
-readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
-readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
+readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${FULL_TAG}"
+readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${FULL_TAG}"
 
 echo "=== BPA-Demo image build ==="
 echo "  Registry  : ${REGISTRY}"
 echo "  Prefix    : ${IMAGE_PREFIX}"
-echo "  Tag       : ${IMAGE_TAG}  (build #${BUILD_NUM})"
+echo "  Tag       : ${FULL_TAG}  (build #${BUILD_NUM})"
 echo "  Platform  : ${BUILD_PLATFORM}"
 echo ""
 
@@ -186,6 +189,12 @@ fi
 # Step 4 – remove intermediate artefact
 cleanup
 
+# Step 5 – commit build counter and tag now that all images built successfully.
+# This is intentionally the last write operation: if any build step above
+# failed (set -euo pipefail), this line is never reached and .config retains
+# the previous tag so the next run reuses the same build number.
+commit_build_tag
+
 # ── Build summary ──────────────────────────────────────────────────────────────
 echo "=== Build summary ==="
 echo "  [OK]  ${APACHE_PHP_IMAGE}"
@@ -196,7 +205,7 @@ else
 fi
 echo ""
 
-# Step 5 – optional push
+# Step 6 – optional push
 if [[ "${OPT_PUSH}" == "true" ]]; then
     info "Push requested – invoking push.sh..."
     "${SCRIPT_DIR}/push.sh"

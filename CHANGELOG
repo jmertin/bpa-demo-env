@@ -5,6 +5,26 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 19:00 - [Fix – build number committed only after all images succeed]:
+  Previously compute_build_tag() incremented .build_number and wrote the new
+  IMAGE_TAG to .config at the start of the build.  If any docker build step
+  failed the number was already consumed but no matching image existed.  On the
+  next run the number would skip, and the two images (apache-php, dx-o2-agents)
+  could end up on different tags if one was skipped in an earlier run.
+
+  compute_build_tag() now only computes FULL_TAG and BUILD_NUM in memory.
+  A new commit_build_tag() writes .build_number and updates IMAGE_TAG in .config
+  and is called as the very last step before the optional push, after every
+  docker build has returned successfully.  Because build.sh uses set -euo
+  pipefail, any build failure exits before commit_build_tag() is reached, so
+  .config retains the previous tag and no build number is wasted.
+
+  Image refs in the main section now use ${FULL_TAG} directly (rather than
+  ${IMAGE_TAG} which was only valid after the old commit-upfront approach).
+
+  File changed: build-scripts/build.sh
+
+------------------------------------------------------------------------------
 2026-06-18 @ 18:00 - [Fix – BTL watchdog in dx-o2-agents entrypoint]:
   The BTListener was started once but never monitored.  If it exited for any
   reason (connection failure, OOM, etc.) it would stay dead for the lifetime
