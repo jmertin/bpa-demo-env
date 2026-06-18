@@ -36,10 +36,18 @@ ENV BTL_HOME=/opt/btlistener
 
 # Install unzip (needed for BTL and BPA archives).
 # The PHP_apmia package includes a bundled JRE – openjdk is not required.
+# Troubleshooting tools: curl, dnsutils (dig/nslookup/host), iputils-ping,
+#   less, net-tools (netstat/ifconfig/route), procps (ps/top/free/kill).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         unzip \
-        ca-certificates && \
+        ca-certificates \
+        curl \
+        dnsutils \
+        iputils-ping \
+        less \
+        net-tools \
+        procps && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

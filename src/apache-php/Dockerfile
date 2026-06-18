@@ -38,6 +38,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # entrypoint can call `php8.1 -r 'echo ini_get("extension_dir");'` to locate
 # the correct path for the APMIA probe .so at runtime.
 # cron: daily security-update job.
+# Troubleshooting tools: curl, dnsutils (dig/nslookup/host), iputils-ping,
+#   less, net-tools (netstat/ifconfig/route), procps (ps/top/free/kill).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         apache2 \
@@ -46,7 +48,13 @@ RUN apt-get update && \
         php8.1-mysql \
         php8.1-mbstring \
         cron \
-        ca-certificates && \
+        ca-certificates \
+        curl \
+        dnsutils \
+        iputils-ping \
+        less \
+        net-tools \
+        procps && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Enable required Apache modules; disable the distro default site.
