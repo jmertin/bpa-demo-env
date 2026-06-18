@@ -276,9 +276,18 @@ footer span{color:#7c83ff}
       <a href="?page=order">📦 My Orders</a>
     <?php endif ?>
     <?php if (auth_is_admin()): ?>
-      <a href="?page=admin">⚙ Admin Panel</a>
+      <a href="?page=admin" class="<?= ($page === 'admin') ? 'active' : '' ?>">⚙ Admin Panel</a>
     <?php endif ?>
   </div>
+
+  <?php if (auth_is_admin()): ?>
+  <div class="sidebar-section">
+    <h3>Diagnostics</h3>
+    <a href="?page=dxo2" class="<?= ($page === 'dxo2') ? 'active' : '' ?>">&#128202; DX O2 Status</a>
+    <a href="?page=info" class="<?= ($page === 'info') ? 'active' : '' ?>">&#128196; PHP Info</a>
+    <a href="?page=db"   class="<?= ($page === 'db')   ? 'active' : '' ?>">&#128421; Database</a>
+  </div>
+  <?php endif ?>
 </aside>
 
 <main class="main">
