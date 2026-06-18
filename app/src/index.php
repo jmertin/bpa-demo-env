@@ -25,6 +25,7 @@ $routes = [
   'admin'    => 'pages/admin.php',
   'info'     => 'pages/info.php',
   'db'       => 'pages/db.php',
+  'dxo2'     => 'pages/dxo2.php',
 ];
 
 if (!array_key_exists($page, $routes)) {

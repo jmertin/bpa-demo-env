@@ -365,11 +365,12 @@ All accounts use the password **`demo123`**.
 | `?page=admin` | Admin panel (admin role required) |
 | `?page=info` | PHP runtime diagnostics — **admin only** |
 | `?page=db` | MariaDB connection test — **admin only** |
+| `?page=dxo2` | DX O2 agent status and log tails — **admin only** |
 
 ### Admin diagnostic pages
 
-Two diagnostic pages are accessible only to users with the **admin** role.
-They are useful for verifying the runtime environment and database connectivity
+Three diagnostic pages are accessible only to users with the **admin** role.
+They are useful for verifying the runtime environment and DX O2 agent stack
 from inside the running container without needing shell access.
 
 **PHP runtime info** (`?page=info`)
@@ -379,9 +380,8 @@ time, and all loaded extensions (including `wily_php_agent` when the DX O2 PHP
 probe is active).
 
 Access:
-1. Open the application in a browser.
-2. Log in as `admin` (password: `demo123`).
-3. Navigate to `http://<host>:8080/?page=info`
+1. Log in as `admin` (password: `demo123`).
+2. Navigate to `http://<host>:8080/?page=info`
 
 **MariaDB connection test** (`?page=db`)
 
@@ -394,11 +394,39 @@ Access:
 1. Log in as `admin` (password: `demo123`).
 2. Navigate to `http://<host>:8080/?page=db`
 
-From Kubernetes you can also reach these pages via port-forward:
+**DX O2 agent status** (`?page=dxo2`)
+
+Comprehensive health check for the DX O2 monitoring stack.  Checks:
+
+- **PHP probe** — whether `wily_php_agent` extension is loaded, the INI
+  file path, and key properties (agentName, collectorHost/Port, logdir,
+  browser-agent auto-injection flag and snippet presence).
+- **BPA Apache module** — whether `/etc/apache2/conf-enabled/bpa.conf`
+  exists, the parsed `LoadModule` directive, and whether the module is
+  present in `apache_get_modules()`.  The raw conf is shown verbatim.
+- **Browser agent** — INI flags and whether `snippetString` is configured.
+- **APMIA connectivity** — live TCP probe of the PHP collector port
+  (`APMIA_PHP_COLLECTOR_HOST:PORT`) and BTL port (`APMIA_BTL_HOST:PORT`).
+- **Environment variables** — all `APMIA_*` and `APMENV_*` container
+  variables in a table; credential-bearing keys are redacted.
+- **Log tails** — last 40 lines of every `*.log` file found in
+  `/opt/apmia/logs/`, displayed in scrollable terminal blocks.
+
+Access:
+1. Log in as `admin` (password: `demo123`).
+2. Navigate to `http://<host>:8080/?page=dxo2`
+
+> **Note:** when `dxo2.enabled=false` (the default), the apmia volume is
+> absent.  The page loads cleanly but reports all probes as not-loaded and
+> no log files.  This is the expected state when running without DX O2.
+
+From Kubernetes you can reach all diagnostic pages via port-forward:
 ```bash
 kubectl port-forward -n php-demo svc/php-demo-php-demo 8080:8080
-# then open http://localhost:8080/?page=info
-#      or   http://localhost:8080/?page=db
+# then open:
+#   http://localhost:8080/?page=info
+#   http://localhost:8080/?page=db
+#   http://localhost:8080/?page=dxo2
 ```
 
 ### Monitoring HTTP headers

@@ -1,0 +1,415 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../lib/product.php';
+
+auth_require_admin();
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/**
+ * Return the last $n lines of a file without reading the whole thing.
+ *
+ * @param string $path  Absolute path to the file.
+ * @param int    $n     Number of lines to return.
+ *
+ * @return string  Tail content, or empty string if unreadable.
+ */
+function tail_file(string $path, int $n = 40): string {
+  if (!is_readable($path)) {
+    return '';
+  }
+  $fp = fopen($path, 'rb');
+  if (!$fp) {
+    return '';
+  }
+  fseek($fp, 0, SEEK_END);
+  $size = ftell($fp);
+  if ($size === 0) {
+    fclose($fp);
+    return '';
+  }
+  $buffer = '';
+  $lines  = 0;
+  $chunk  = 4096;
+  $pos    = $size;
+  while ($pos > 0 && $lines <= $n) {
+    $read  = min($chunk, $pos);
+    $pos  -= $read;
+    fseek($fp, $pos);
+    $buffer = fread($fp, $read) . $buffer;
+    $lines  = substr_count($buffer, "\n");
+  }
+  fclose($fp);
+  $parts = explode("\n", $buffer);
+  return implode("\n", array_slice($parts, -$n));
+}
+
+/**
+ * Try to open a TCP connection; return true if reachable within $timeout.
+ *
+ * @param string $host     Hostname or IP.
+ * @param int    $port     TCP port.
+ * @param int    $timeout  Seconds to wait.
+ *
+ * @return bool  True when a connection was established.
+ */
+function check_tcp(string $host, int $port, int $timeout = 2): bool {
+  $fp = @fsockopen($host, $port, $errno, $errstr, $timeout);
+  if ($fp) {
+    fclose($fp);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Parse a flat key=value INI file into an associative array.
+ * Lines starting with ; or # are skipped.
+ *
+ * @param string $path  Absolute path to the INI file.
+ *
+ * @return array<string,string>  Parsed key/value pairs.
+ */
+function parse_ini_flat(string $path): array {
+  if (!is_readable($path)) {
+    return [];
+  }
+  $result = [];
+  foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+    $line = trim($line);
+    if ($line === '' || $line[0] === ';' || $line[0] === '#') {
+      continue;
+    }
+    $eq = strpos($line, '=');
+    if ($eq === false) {
+      continue;
+    }
+    $result[trim(substr($line, 0, $eq))] = trim(substr($line, $eq + 1));
+  }
+  return $result;
+}
+
+// ── Static paths ───────────────────────────────────────────────────────────────
+define('PROBE_INI_PATH',  '/etc/php/8.1/apache2/conf.d/wily_php_agent.ini');
+define('BPA_CONF_PATH',   '/etc/apache2/conf-enabled/bpa.conf');
+define('APMIA_LOGS_DIR',  '/opt/apmia/logs');
+
+// ── 1. PHP Probe ───────────────────────────────────────────────────────────────
+$probeLoaded = extension_loaded('wily_php_agent');
+$iniExists   = file_exists(PROBE_INI_PATH);
+$iniValues   = parse_ini_flat(PROBE_INI_PATH);
+
+$probeIniDisplay = [
+  'wily_php_agent.agentName'                                   => 'Agent name',
+  'wily_php_agent.collectorHost'                               => 'Collector host',
+  'wily_php_agent.collectorPort'                               => 'Collector port',
+  'wily_php_agent.logdir'                                      => 'Log directory',
+  'wily_php_agent.enable.browseragent.snippet.autoInjection'   => 'Browser-agent auto-injection',
+  'wily_php_agent.browseragent.autoInjection.snippetString'    => 'Browser snippet configured',
+];
+
+// ── 2. BPA Apache module ───────────────────────────────────────────────────────
+$bpaConfExists  = file_exists(BPA_CONF_PATH);
+$bpaConfContent = $bpaConfExists ? (file_get_contents(BPA_CONF_PATH) ?: '') : '';
+$bpaModuleName  = '';
+if (preg_match('/LoadModule\s+(\S+)\s/', $bpaConfContent, $bm)) {
+  $bpaModuleName = $bm[1];
+}
+$apacheModules   = function_exists('apache_get_modules') ? apache_get_modules() : [];
+$bpaModuleLoaded = $bpaModuleName !== '' && in_array($bpaModuleName, $apacheModules, true);
+
+// ── 3. Browser agent ───────────────────────────────────────────────────────────
+$baEnabled = ($iniValues['wily_php_agent.enable.browseragent.snippet.autoInjection'] ?? '0') === '1';
+$baSnippet = $iniValues['wily_php_agent.browseragent.autoInjection.snippetString'] ?? '';
+
+// ── 4. APMIA connectivity ──────────────────────────────────────────────────────
+$phpCollectorHost = getenv('APMIA_PHP_COLLECTOR_HOST') ?: '127.0.0.1';
+$phpCollectorPort = (int) (getenv('APMIA_PHP_COLLECTOR_PORT') ?: 5005);
+$btlHost          = getenv('APMIA_BTL_HOST') ?: '127.0.0.1';
+$btlPort          = (int) (getenv('APMIA_BTL_PORT') ?: 8000);
+$phpReachable     = check_tcp($phpCollectorHost, $phpCollectorPort);
+$btlReachable     = check_tcp($btlHost, $btlPort);
+
+// ── 5. APMIA log files ─────────────────────────────────────────────────────────
+$logFiles = [];
+if (is_dir(APMIA_LOGS_DIR)) {
+  $found = glob(APMIA_LOGS_DIR . '/*.log') ?: [];
+  sort($found);
+  foreach ($found as $logPath) {
+    $logFiles[basename($logPath)] = tail_file($logPath, 40);
+  }
+}
+
+// ── 6. APMIA environment variables ────────────────────────────────────────────
+$apmiaEnv = [];
+foreach ($_SERVER as $k => $v) {
+  if (!is_string($k) || !is_string($v)) {
+    continue;
+  }
+  if (str_starts_with($k, 'APMIA_') || str_starts_with($k, 'APMENV_')) {
+    if (preg_match('/PASSWORD|SECRET|TOKEN|KEY|JWT|CREDENTIAL/i', $k)) {
+      $apmiaEnv[$k] = '*** redacted ***';
+    }
+    else {
+      $apmiaEnv[$k] = $v;
+    }
+  }
+}
+ksort($apmiaEnv);
+
+// ── Overall health flags (used in summary row) ─────────────────────────────────
+$overallOk = $probeLoaded && $bpaModuleLoaded && $phpReachable;
+
+$pageTitle = APP_NAME . ' – DX O2 Status';
+require __DIR__ . '/../templates/layout.php';
+?>
+
+<div class="section-title" style="margin-bottom:1.2rem">&#128202; DX O2 Agent Status</div>
+
+<?php /* ── Summary badges ──────────────────────────────────────────────────── */ ?>
+<div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem">
+<?php
+$badges = [
+  ['PHP probe',      $probeLoaded,     $probeLoaded     ? 'loaded'     : 'not loaded'],
+  ['BPA module',     $bpaModuleLoaded, $bpaModuleLoaded ? 'loaded'     : 'not loaded'],
+  ['Browser agent',  $baEnabled,       $baEnabled       ? 'enabled'    : 'disabled'],
+  ['PHP collector',  $phpReachable,    $phpReachable    ? 'reachable'  : 'unreachable'],
+  ['BTL',            $btlReachable,    $btlReachable    ? 'reachable'  : 'unreachable'],
+];
+foreach ($badges as [$label, $ok, $state]):
+  $bg = $ok ? '#e8f5e9' : '#fff8e1';
+  $col = $ok ? '#2e7d32' : '#f57f17';
+  $icon = $ok ? '&#10003;' : '&#9888;';
+?>
+  <div class="card" style="flex:1;min-width:130px;text-align:center;margin-bottom:0;padding:.9rem">
+    <div style="font-size:1.6rem;color:<?= $col ?>"><?= $icon ?></div>
+    <div style="font-size:.85rem;font-weight:700;color:<?= $col ?>;margin-top:.3rem"><?= $state ?></div>
+    <div style="font-size:.75rem;color:#607d8b;margin-top:.15rem"><?= $label ?></div>
+  </div>
+<?php endforeach ?>
+</div>
+
+<?php /* ── PHP Probe ────────────────────────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>PHP Probe (wily_php_agent)</h2>
+  <table class="admin-table" style="max-width:700px;margin-bottom:1rem">
+    <thead>
+      <tr><th>Check</th><th>Status / Value</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Extension loaded</td>
+        <td><?php if ($probeLoaded): ?>
+          <span style="color:#2e7d32;font-weight:700">&#10003; yes</span>
+        <?php else: ?>
+          <span style="color:#c62828;font-weight:700">&#10007; no</span>
+          <span style="color:#607d8b;font-size:.8rem"> — apmia volume absent or probe injection failed</span>
+        <?php endif ?></td>
+      </tr>
+      <tr>
+        <td>INI file</td>
+        <td><?php if ($iniExists): ?>
+          <span style="color:#2e7d32">&#10003;</span>
+          <code style="font-size:.82rem"><?= htmlspecialchars(PROBE_INI_PATH) ?></code>
+        <?php else: ?>
+          <span style="color:#c62828">&#10007; not found</span>
+          <span style="color:#607d8b;font-size:.8rem"> — <?= htmlspecialchars(PROBE_INI_PATH) ?></span>
+        <?php endif ?></td>
+      </tr>
+      <?php foreach ($probeIniDisplay as $iniKey => $label): ?>
+      <?php
+        $val = $iniValues[$iniKey] ?? null;
+        if ($iniKey === 'wily_php_agent.browseragent.autoInjection.snippetString') {
+          $display = $val !== null ? '&#10003; set (' . mb_strlen(trim($val, "'")) . ' chars)' : '<span style="color:#607d8b">not set</span>';
+        }
+        else {
+          $display = $val !== null ? '<code style="font-size:.82rem">' . htmlspecialchars($val) . '</code>' : '<span style="color:#607d8b">not set</span>';
+        }
+      ?>
+      <tr>
+        <td><?= htmlspecialchars($label) ?><br>
+            <span style="font-size:.75rem;color:#90a4ae"><?= htmlspecialchars($iniKey) ?></span></td>
+        <td><?= $display ?></td>
+      </tr>
+      <?php endforeach ?>
+    </tbody>
+  </table>
+</div>
+
+<?php /* ── BPA Apache module ─────────────────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>BPA Web Server Plugin (Apache)</h2>
+  <table class="admin-table" style="max-width:700px;margin-bottom:1rem">
+    <thead>
+      <tr><th>Check</th><th>Status / Value</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Conf file</td>
+        <td><?php if ($bpaConfExists): ?>
+          <span style="color:#2e7d32">&#10003;</span>
+          <code style="font-size:.82rem"><?= htmlspecialchars(BPA_CONF_PATH) ?></code>
+        <?php else: ?>
+          <span style="color:#c62828">&#10007; not found</span>
+          <span style="color:#607d8b;font-size:.8rem"> — BPA Apache .so absent or conf injection failed</span>
+        <?php endif ?></td>
+      </tr>
+      <tr>
+        <td>Module name</td>
+        <td><?php if ($bpaModuleName !== ''): ?>
+          <code style="font-size:.82rem"><?= htmlspecialchars($bpaModuleName) ?></code>
+        <?php else: ?>
+          <span style="color:#607d8b">unknown — conf not parsed</span>
+        <?php endif ?></td>
+      </tr>
+      <tr>
+        <td>Apache module loaded</td>
+        <td><?php if ($bpaModuleLoaded): ?>
+          <span style="color:#2e7d32;font-weight:700">&#10003; yes</span>
+        <?php elseif ($bpaModuleName !== ''): ?>
+          <span style="color:#c62828;font-weight:700">&#10007; no</span>
+          <span style="color:#607d8b;font-size:.8rem"> — <?= htmlspecialchars($bpaModuleName) ?> not in apache_get_modules()</span>
+        <?php else: ?>
+          <span style="color:#607d8b">n/a</span>
+        <?php endif ?></td>
+      </tr>
+      <?php if (function_exists('apache_get_modules')): ?>
+      <tr>
+        <td>apache_get_modules() available</td>
+        <td><span style="color:#2e7d32">&#10003; yes (mod_php SAPI)</span></td>
+      </tr>
+      <?php else: ?>
+      <tr>
+        <td>apache_get_modules() available</td>
+        <td><span style="color:#f57f17">&#9888; no — cannot verify module load</span></td>
+      </tr>
+      <?php endif ?>
+    </tbody>
+  </table>
+  <?php if ($bpaConfContent !== ''): ?>
+  <div style="font-size:.8rem;color:#607d8b;margin-bottom:.3rem">
+    <strong>bpa.conf contents:</strong>
+  </div>
+  <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all"><?= htmlspecialchars($bpaConfContent) ?></pre>
+  <?php endif ?>
+</div>
+
+<?php /* ── Browser Agent ─────────────────────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>Browser Agent Auto-Injection</h2>
+  <table class="admin-table" style="max-width:700px">
+    <thead>
+      <tr><th>Check</th><th>Status / Value</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Auto-injection enabled<br>
+            <span style="font-size:.75rem;color:#90a4ae">wily_php_agent.enable.browseragent.snippet.autoInjection</span></td>
+        <td><?php if ($baEnabled): ?>
+          <span style="color:#2e7d32;font-weight:700">&#10003; enabled (1)</span>
+        <?php else: ?>
+          <span style="color:#607d8b">disabled (0 or not set)</span>
+          <span style="font-size:.8rem;color:#90a4ae"> — set APMIA_BROWSER_SNIPPET in .config to activate</span>
+        <?php endif ?></td>
+      </tr>
+      <tr>
+        <td>Snippet configured<br>
+            <span style="font-size:.75rem;color:#90a4ae">wily_php_agent.browseragent.autoInjection.snippetString</span></td>
+        <td><?php if ($baSnippet !== ''): ?>
+          <span style="color:#2e7d32;font-weight:700">&#10003; set</span>
+          <span style="color:#607d8b;font-size:.8rem"> (<?= mb_strlen(trim($baSnippet, "'")) ?> chars)</span>
+        <?php else: ?>
+          <span style="color:#607d8b">not set</span>
+        <?php endif ?></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<?php /* ── APMIA Connectivity ────────────────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>APMIA Connectivity</h2>
+  <table class="admin-table" style="max-width:700px">
+    <thead>
+      <tr><th>Endpoint</th><th>Address</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>PHP collector</td>
+        <td><code style="font-size:.82rem"><?= htmlspecialchars($phpCollectorHost) ?>:<?= $phpCollectorPort ?></code></td>
+        <td><?php if ($phpReachable): ?>
+          <span style="color:#2e7d32;font-weight:700">&#10003; reachable</span>
+        <?php else: ?>
+          <span style="color:#c62828;font-weight:700">&#10007; unreachable</span>
+          <span style="color:#607d8b;font-size:.8rem"> — IA sidecar not running or wrong host/port</span>
+        <?php endif ?></td>
+      </tr>
+      <tr>
+        <td>Business Transaction Listener</td>
+        <td><code style="font-size:.82rem"><?= htmlspecialchars($btlHost) ?>:<?= $btlPort ?></code></td>
+        <td><?php if ($btlReachable): ?>
+          <span style="color:#2e7d32;font-weight:700">&#10003; reachable</span>
+        <?php else: ?>
+          <span style="color:#c62828;font-weight:700">&#10007; unreachable</span>
+          <span style="color:#607d8b;font-size:.8rem"> — BTL sidecar not running or wrong host/port</span>
+        <?php endif ?></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<?php /* ── APMIA environment variables ──────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>APMIA / APMENV Environment Variables</h2>
+  <?php if (empty($apmiaEnv)): ?>
+    <p class="alert alert-info">No APMIA_* or APMENV_* variables found in the container environment — dxo2 sidecar not enabled.</p>
+  <?php else: ?>
+  <table class="admin-table" style="max-width:900px">
+    <thead>
+      <tr><th>Variable</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      <?php foreach ($apmiaEnv as $k => $v): ?>
+      <tr>
+        <td><code style="font-size:.8rem"><?= htmlspecialchars($k) ?></code></td>
+        <td style="word-break:break-all;max-width:500px">
+          <?php if ($v === '*** redacted ***'): ?>
+            <span style="color:#90a4ae;font-style:italic">*** redacted ***</span>
+          <?php else: ?>
+            <code style="font-size:.8rem"><?= htmlspecialchars($v) ?></code>
+          <?php endif ?>
+        </td>
+      </tr>
+      <?php endforeach ?>
+    </tbody>
+  </table>
+  <?php endif ?>
+</div>
+
+<?php /* ── APMIA log tails ───────────────────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>APMIA Logs
+    <span style="font-size:.8rem;font-weight:400;color:#607d8b">
+      &nbsp;(<?= htmlspecialchars(APMIA_LOGS_DIR) ?> — last 40 lines per file)
+    </span>
+  </h2>
+  <?php if (empty($logFiles)): ?>
+    <p class="alert alert-info">No log files found — apmia volume absent or not yet written to.</p>
+  <?php else: ?>
+    <?php foreach ($logFiles as $name => $content): ?>
+    <div style="margin-bottom:1rem">
+      <div style="font-size:.85rem;font-weight:700;color:#3949ab;margin-bottom:.3rem">
+        &#128196; <?= htmlspecialchars($name) ?>
+      </div>
+      <?php if ($content === ''): ?>
+        <p style="font-size:.8rem;color:#90a4ae;font-style:italic">Empty.</p>
+      <?php else: ?>
+        <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.75rem;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"><?= htmlspecialchars($content) ?></pre>
+      <?php endif ?>
+    </div>
+    <?php endforeach ?>
+  <?php endif ?>
+</div>
+
+<?php require __DIR__ . '/../templates/footer.php' ?>
