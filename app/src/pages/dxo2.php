@@ -91,14 +91,23 @@ function parse_ini_flat(string $path): array {
 }
 
 // ── Static paths ───────────────────────────────────────────────────────────────
-define('PROBE_INI_PATH',  '/etc/php/8.1/apache2/conf.d/wily_php_agent.ini');
-define('BPA_CONF_PATH',   '/etc/apache2/conf-enabled/bpa.conf');
-define('APMIA_LOGS_DIR',  '/opt/apmia/logs');
+define('BPA_CONF_PATH',  '/etc/apache2/conf-enabled/bpa.conf');
+define('APMIA_LOGS_DIR', '/opt/apmia/logs');
+
+// Build the apache2 conf.d path from the running PHP version (avoids hardcoding 8.1).
+$phpConfD = sprintf('/etc/php/%d.%d/apache2/conf.d', PHP_MAJOR_VERSION, PHP_MINOR_VERSION);
 
 // ── 1. PHP Probe ───────────────────────────────────────────────────────────────
 $probeLoaded = extension_loaded('wily_php_agent');
-$iniExists   = file_exists(PROBE_INI_PATH);
-$iniValues   = parse_ini_flat(PROBE_INI_PATH);
+
+// The entrypoint places the INI as a symlink with a numeric prefix, e.g.:
+//   /etc/php/8.1/apache2/conf.d/99-wily_php_agent.ini -> /etc/php/8.1/mods-available/wily_php_agent.ini
+// Glob for any *-wily_php_agent.ini so the check works regardless of priority prefix.
+$iniSymlinks    = glob($phpConfD . '/*-wily_php_agent.ini') ?: [];
+$iniSymlinkPath = $iniSymlinks[0] ?? null;
+$iniRealPath    = $iniSymlinkPath ? (realpath($iniSymlinkPath) ?: $iniSymlinkPath) : null;
+$iniExists      = $iniSymlinkPath !== null;
+$iniValues      = $iniRealPath ? parse_ini_flat($iniRealPath) : [];
 
 $probeIniDisplay = [
   'wily_php_agent.agentName'                                   => 'Agent name',
@@ -208,13 +217,17 @@ foreach ($badges as [$label, $ok, $state]):
         <?php endif ?></td>
       </tr>
       <tr>
-        <td>INI file</td>
+        <td>INI symlink<br>
+            <span style="font-size:.75rem;color:#90a4ae"><?= htmlspecialchars($phpConfD) ?>/*-wily_php_agent.ini</span></td>
         <td><?php if ($iniExists): ?>
           <span style="color:#2e7d32">&#10003;</span>
-          <code style="font-size:.82rem"><?= htmlspecialchars(PROBE_INI_PATH) ?></code>
+          <code style="font-size:.82rem"><?= htmlspecialchars((string) $iniSymlinkPath) ?></code>
+          <?php if ($iniRealPath && $iniRealPath !== $iniSymlinkPath): ?>
+            <br><span style="font-size:.75rem;color:#90a4ae">&#8594; <?= htmlspecialchars($iniRealPath) ?></span>
+          <?php endif ?>
         <?php else: ?>
           <span style="color:#c62828">&#10007; not found</span>
-          <span style="color:#607d8b;font-size:.8rem"> — <?= htmlspecialchars(PROBE_INI_PATH) ?></span>
+          <span style="color:#607d8b;font-size:.8rem"> — no *-wily_php_agent.ini in <?= htmlspecialchars($phpConfD) ?></span>
         <?php endif ?></td>
       </tr>
       <?php foreach ($probeIniDisplay as $iniKey => $label): ?>
