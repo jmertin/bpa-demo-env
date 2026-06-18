@@ -23,6 +23,8 @@ $routes = [
   'login'    => 'pages/login.php',
   'logout'   => 'pages/logout.php',
   'admin'    => 'pages/admin.php',
+  'info'     => 'pages/info.php',
+  'db'       => 'pages/db.php',
 ];
 
 if (!array_key_exists($page, $routes)) {
