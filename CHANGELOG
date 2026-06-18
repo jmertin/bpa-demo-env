@@ -5,6 +5,24 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 17:00 - [Chore – add troubleshooting tools to both images]:
+  Added a set of troubleshooting utilities to the apt-get install layer
+  of both container images.  Ubuntu 22.04 package names used throughout:
+
+    curl          – HTTP/HTTPS connectivity checks
+    dnsutils      – dig, nslookup, host  (≡ bind-utils on RHEL/Fedora)
+    iputils-ping  – ping
+    less          – scrollable pager
+    net-tools     – netstat, ifconfig, route, arp
+    procps        – ps, top, free, kill, pgrep
+
+  Files changed:
+  - src/apache-php/Dockerfile: six packages added to the Stage 2 runtime
+    apt-get install block (Stage 1 app-builder is unaffected).
+  - src/dx-o2-agents/Dockerfile: same six packages added to the single
+    apt-get install block alongside unzip and ca-certificates.
+
+------------------------------------------------------------------------------
 2026-06-18 @ 16:00 - [Feat – locked use case; blocks user login]:
   New use case 'locked' that prevents the assigned user from logging in.
   When the login form is submitted with valid credentials but the account
