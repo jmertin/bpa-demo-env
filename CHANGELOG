@@ -5,6 +5,17 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 22:00 - [Docs – add "Accessing the application" section to README.md]:
+  New section inserted between the Docker Compose and DX O2 agent setup sections.
+  Covers Docker Compose URL, Kubernetes Ingress URL discovery and port-forward
+  fallback, login instructions with the full demo-account table, and how to
+  reach the admin panel and the Diagnostics sidebar pages (dxo2, info, db).
+  Intended for users who have deployed the stack but are unfamiliar with how
+  to find the URL or navigate to the admin and user interfaces.
+
+  File changed: README.md
+
+------------------------------------------------------------------------------
 2026-06-18 @ 21:00 - [Docs – CLAUDE.md, README.md update for all session changes]:
   Updated CLAUDE.md and README.md to document all changes introduced during
   the 2026-06-18 session that were not yet reflected in the project guide.
