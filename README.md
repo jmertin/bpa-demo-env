@@ -363,6 +363,43 @@ All accounts use the password **`demo123`**.
 | `?page=order` | Order history (login required) |
 | `?page=login` | Sign in |
 | `?page=admin` | Admin panel (admin role required) |
+| `?page=info` | PHP runtime diagnostics — **admin only** |
+| `?page=db` | MariaDB connection test — **admin only** |
+
+### Admin diagnostic pages
+
+Two diagnostic pages are accessible only to users with the **admin** role.
+They are useful for verifying the runtime environment and database connectivity
+from inside the running container without needing shell access.
+
+**PHP runtime info** (`?page=info`)
+
+Displays the PHP version, SAPI, OS, architecture, memory limit, max execution
+time, and all loaded extensions (including `wily_php_agent` when the DX O2 PHP
+probe is active).
+
+Access:
+1. Open the application in a browser.
+2. Log in as `admin` (password: `demo123`).
+3. Navigate to `http://<host>:8080/?page=info`
+
+**MariaDB connection test** (`?page=db`)
+
+Attempts a live PDO connection to MariaDB using the environment variables
+(`MARIADB_HOST`, `MARIADB_PORT`, `MARIADB_DATABASE`, `MARIADB_USER`,
+`MARIADB_PASSWORD`) and displays the server version, uptime, and connection
+parameters, or a formatted error message on failure.
+
+Access:
+1. Log in as `admin` (password: `demo123`).
+2. Navigate to `http://<host>:8080/?page=db`
+
+From Kubernetes you can also reach these pages via port-forward:
+```bash
+kubectl port-forward -n php-demo svc/php-demo-php-demo 8080:8080
+# then open http://localhost:8080/?page=info
+#      or   http://localhost:8080/?page=db
+```
 
 ### Monitoring HTTP headers
 

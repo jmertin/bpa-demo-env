@@ -5,6 +5,22 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 09:00 - [Fix – info.php and db.php 500 error; add admin diagnostic pages]:
+  Both app/src/info.php and app/src/db.php called render_header() and
+  render_footer() which do not exist in the codebase.  The correct pattern
+  is to set $pageTitle then require templates/layout.php and footer.php.
+  Both files were also missing from the routes table in index.php, and
+  located in app/src/ root instead of pages/.
+
+  - app/src/info.php → app/src/pages/info.php: fixed layout, added
+    auth_require_admin() gate, uses admin-table CSS class.
+  - app/src/db.php   → app/src/pages/db.php: same; alert-success /
+    alert-error CSS classes applied for connection result display.
+  - app/src/index.php: 'info' and 'db' routes added.
+  - README.md: routes table updated; new "Admin diagnostic pages" section
+    documents ?page=info and ?page=db with access instructions.
+
+------------------------------------------------------------------------------
 2026-06-17 @ 18:00 - [Docs – full documentation overhaul to reflect current stack]:
   All documentation files rewritten to accurately reflect the current state
   of the project after the Apache migration, APMENV_* adoption, and all
