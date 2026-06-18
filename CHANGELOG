@@ -5,6 +5,33 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-18 @ 14:00 - [Feat – DX O2 agent status page (?page=dxo2)]:
+  New admin-only diagnostic page that verifies the full DX O2 monitoring
+  stack from inside the running apache-php container.
+
+  Checks performed:
+  - PHP probe: extension_loaded('wily_php_agent'), INI file presence,
+    key INI properties (agentName, collectorHost/Port, logdir,
+    browser-agent auto-injection settings).
+  - BPA Apache module: /etc/apache2/conf-enabled/bpa.conf presence,
+    LoadModule directive parsed, module verified via apache_get_modules().
+    Conf file contents displayed verbatim.
+  - Browser agent: enable flag and snippetString presence shown.
+  - APMIA connectivity: TCP probe of PHP collector and BTL ports with
+    configurable host/port from APMIA_PHP_COLLECTOR_HOST/PORT and
+    APMIA_BTL_HOST/PORT environment variables.
+  - Environment variables: all APMIA_* and APMENV_* container vars
+    shown in a table (credentials/secrets redacted).
+  - Log tails: last 40 lines of each *.log file in /opt/apmia/logs/
+    displayed in scrollable terminal-style pre blocks.
+
+  Files changed:
+  - app/src/pages/dxo2.php: new page (auth_require_admin gated).
+  - app/src/index.php: 'dxo2' route added.
+  - README.md: ?page=dxo2 added to routes table and admin diagnostic
+    pages section updated.
+
+------------------------------------------------------------------------------
 2026-06-18 @ 09:00 - [Fix – info.php and db.php 500 error; add admin diagnostic pages]:
   Both app/src/info.php and app/src/db.php called render_header() and
   render_footer() which do not exist in the codebase.  The correct pattern
