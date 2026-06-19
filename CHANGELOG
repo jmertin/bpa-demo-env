@@ -5,6 +5,28 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 22:00 - [Fix – APMIA_BROWSER_SNIPPET breaks Helm YAML when wrapped in double quotes]:
+  The browser snippet value contains double-quotes (HTML src="..." attrs).
+  deploy.sh was writing browserSnippet: "${apmia_browser_snippet}" into the
+  generated values.local.yaml, producing invalid YAML that Helm could not
+  parse.
+
+  build-scripts/deploy.sh:
+  - Added apmia_browser_snippet_yaml local that escapes any literal single-
+    quotes in the snippet value as '' (YAML single-quote escaping rule).
+  - Changed the browserSnippet heredoc line from double-quoted to YAML
+    single-quoted: browserSnippet: '${apmia_browser_snippet_yaml}'.
+    YAML single-quoted strings allow embedded double-quotes without escaping.
+  - Added comment explaining why single-quoting is required.
+
+  helm/php-demo/values.yaml:
+  - Changed default browserSnippet from "" to '' for consistency and to
+    signal the correct quoting style.
+  - Added comment explaining the YAML single-quote requirement.
+
+  Files changed: build-scripts/deploy.sh, helm/php-demo/values.yaml, CHANGELOG
+
+------------------------------------------------------------------------------
 2026-06-19 @ 21:00 - [Docs – align README with build-counter ownership change]:
   README.md had three stale references describing build.sh as the owner of
   the build counter and IMAGE_TAG increment.
