@@ -164,7 +164,8 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 `apache-php/entrypoint.sh`:
 - Copies `wily_php_agent.so` into PHP's `extension_dir`.
 - Copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/`; symlinks as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`.
-- Patches `collectorHost`, `collectorPort`, `application.name`, `logdir`, `agentName` via `sed -i`.
+- Patches `collectorHost`, `collectorPort`, `application.name`, `agentName` via `sed -i`.
+- Sets `logdir="/var/log/php-probe"`, `disableLogging=0`, `logLevel="${APMIA_PHP_LOG_LEVEL}"`. The directory is created in the Dockerfile and owned by `www-data` so the Apache process can write logs without privilege escalation.
 - Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes).
 
 ### BPA Apache module injection
@@ -263,7 +264,7 @@ Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section
 - **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.
 - **Connectivity:** `fsockopen()` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT` and `APMIA_BTL_HOST:PORT`.
 - **Env vars:** all `APMIA_*` / `APMENV_*` in a table; credential-bearing keys redacted.
-- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/` plus `/opt/btlistener/logs/BTListener.log` in scrollable blocks.
+- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/`, all `*.log` in `/var/log/php-probe/`, and `/opt/btlistener/logs/BTListener.log`, each in its own scrollable card.
 
 When `/opt/apmia` is absent (`dxo2.enabled=false`) only the summary badges and a "not deployed" notice are shown — all detail cards are hidden. Deployment is detected via `is_dir('/opt/apmia')`.
 
@@ -307,6 +308,7 @@ APMIA_APP_NAME           # → APMENV_INTROSCOPE_AGENT_APPLICATION_NAME
 APMIA_HOST_NAME          # → APMENV_INTROSCOPE_AGENT_HOSTNAME + OS hostname
 APMIA_PROCESS_NAME       # → APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME
 APMIA_PHP_AGENT_NAME     # → wily_php_agent.agentName in PHP INI
+APMIA_PHP_LOG_LEVEL      # default INFO → wily_php_agent.logLevel (probe log verbosity)
 APMIA_WEB_AGENT_NAME     # → APMIA_WEB_AGENT_NAME env for BPA Apache module
 APMIA_LOG_LEVEL          # default INFO → APMENV_LOG4J_LOGGER_INTROSCOPEAGENT
 

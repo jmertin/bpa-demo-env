@@ -91,10 +91,11 @@ function parse_ini_flat(string $path): array {
 }
 
 // ── Static paths ───────────────────────────────────────────────────────────────
-define('BPA_CONF_PATH',  '/etc/apache2/conf-enabled/bpa.conf');
-define('APMIA_HOME',     '/opt/apmia');
-define('APMIA_LOGS_DIR', '/opt/apmia/logs');
-define('BTL_LOG_PATH',   '/opt/btlistener/logs/BTListener.log');
+define('BPA_CONF_PATH',       '/etc/apache2/conf-enabled/bpa.conf');
+define('APMIA_HOME',          '/opt/apmia');
+define('APMIA_LOGS_DIR',      '/opt/apmia/logs');
+define('BTL_LOG_PATH',        '/opt/btlistener/logs/BTListener.log');
+define('PHP_PROBE_LOGS_DIR',  '/var/log/php-probe');
 
 // The /opt/apmia directory is populated by the dxo2-init initContainer.
 // Its absence means the DX O2 sidecar is not enabled (dxo2.enabled=false in Helm).
@@ -120,6 +121,8 @@ $probeIniDisplay = [
   'wily_php_agent.collectorHost'                               => 'Collector host',
   'wily_php_agent.collectorPort'                               => 'Collector port',
   'wily_php_agent.logdir'                                      => 'Log directory',
+  'wily_php_agent.disableLogging'                              => 'Logging disabled flag',
+  'wily_php_agent.logLevel'                                    => 'Log level',
   'wily_php_agent.enable.browseragent.snippet.autoInjection'   => 'Browser-agent auto-injection',
   'wily_php_agent.browseragent.autoInjection.snippetString'    => 'Browser snippet configured',
 ];
@@ -180,7 +183,17 @@ if (is_dir(APMIA_LOGS_DIR)) {
   }
 }
 
-// ── 6. BTListener log ──────────────────────────────────────────────────────────
+// ── 6. PHP probe log files ─────────────────────────────────────────────────────
+$phpProbeLogFiles = [];
+if (is_dir(PHP_PROBE_LOGS_DIR)) {
+  $found = glob(PHP_PROBE_LOGS_DIR . '/*.log') ?: [];
+  sort($found);
+  foreach ($found as $logPath) {
+    $phpProbeLogFiles[basename($logPath)] = tail_file($logPath, 40);
+  }
+}
+
+// ── 7. BTListener log ──────────────────────────────────────────────────────────
 $btlLogContent = tail_file(BTL_LOG_PATH, 40);
 
 // ── 6. APMIA environment variables ────────────────────────────────────────────
@@ -458,6 +471,31 @@ foreach ($badges as [$label, $ok, $state]):
     <p class="alert alert-info">No log files found — apmia volume absent or not yet written to.</p>
   <?php else: ?>
     <?php foreach ($logFiles as $name => $content): ?>
+    <div style="margin-bottom:1rem">
+      <div style="font-size:.85rem;font-weight:700;color:#3949ab;margin-bottom:.3rem">
+        &#128196; <?= htmlspecialchars($name) ?>
+      </div>
+      <?php if ($content === ''): ?>
+        <p style="font-size:.8rem;color:#90a4ae;font-style:italic">Empty.</p>
+      <?php else: ?>
+        <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.75rem;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"><?= htmlspecialchars($content) ?></pre>
+      <?php endif ?>
+    </div>
+    <?php endforeach ?>
+  <?php endif ?>
+</div>
+
+<?php /* ── PHP probe log tail ──────────────────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>PHP Probe Logs
+    <span style="font-size:.8rem;font-weight:400;color:#607d8b">
+      &nbsp;(<?= htmlspecialchars(PHP_PROBE_LOGS_DIR) ?> — last 40 lines per file)
+    </span>
+  </h2>
+  <?php if (empty($phpProbeLogFiles)): ?>
+    <p class="alert alert-info">No log files found in <?= htmlspecialchars(PHP_PROBE_LOGS_DIR) ?> — probe not yet active or logging not yet triggered.</p>
+  <?php else: ?>
+    <?php foreach ($phpProbeLogFiles as $name => $content): ?>
     <div style="margin-bottom:1rem">
       <div style="font-size:.85rem;font-weight:700;color:#3949ab;margin-bottom:.3rem">
         &#128196; <?= htmlspecialchars($name) ?>
