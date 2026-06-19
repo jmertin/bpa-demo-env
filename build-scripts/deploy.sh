@@ -115,7 +115,11 @@ generate_values() {
     local apmia_process_name="${APMIA_PROCESS_NAME:-bpa-demo}"
     local apmia_php_agent_name="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
     local apmia_web_agent_name="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
+    # The browser snippet contains double-quotes (HTML src="..." attributes).
+    # Embed it as a YAML single-quoted string so those double-quotes are safe.
+    # Escape any literal single-quote in the value as '' per YAML spec.
     local apmia_browser_snippet="${APMIA_BROWSER_SNIPPET:-}"
+    local apmia_browser_snippet_yaml="${apmia_browser_snippet//\'/\'\'}"
     local apmia_log_level="${APMIA_LOG_LEVEL:-INFO}"
     local apmia_php_collector_host="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
     local apmia_php_collector_port="${APMIA_PHP_COLLECTOR_PORT:-5005}"
@@ -172,7 +176,7 @@ dxo2:
   processName: "${apmia_process_name}"
   phpAgentName: "${apmia_php_agent_name}"
   webAgentName: "${apmia_web_agent_name}"
-  browserSnippet: "${apmia_browser_snippet}"
+  browserSnippet: '${apmia_browser_snippet_yaml}'
   logLevel: "${apmia_log_level}"
   phpCollectorHost: "${apmia_php_collector_host}"
   phpCollectorPort: "${apmia_php_collector_port}"
