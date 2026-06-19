@@ -281,6 +281,7 @@ Chart: `helm/php-demo/` — version 0.2.0.
 - `checksum/config` and `checksum/secret` annotations on the pod template force pod restart on config/secret change.
 - `dxo2.emHost` is optional when using the DX O2 installer download (EM URL is pre-configured in the profile). Any non-empty string triggers `dxo2.enabled: true` in `deploy.sh`.
 - `image.*.pullPolicy: Always` for custom images; `IfNotPresent` for `mariadb`.
+- **Kubernetes probes** (`startupProbe`, `livenessProbe`, `readinessProbe`) all target `GET /health` — a static file (`app/src/health`) served by Apache without invoking PHP. This keeps probes independent of APMIA state: the PHP probe extension is not triggered, so the `dx-o2-agent` sidecar (PHP collector `127.0.0.1:5005`) does not need to be ready before probes pass. Access log entries for `/health` are suppressed via `SetEnvIf` in `vhost.conf`.
 
 ---
 
