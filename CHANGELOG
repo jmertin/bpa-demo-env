@@ -5,6 +5,22 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-20 @ 00:30 - [Fix – dx-o2-agent logs not visible in kubectl logs / docker compose logs]:
+  The IA (IntroscopeAgent.log) and BTL (BTListener.log) write to files
+  rather than stdout.  kubectl logs and docker compose logs only capture
+  stdout/stderr, so neither log was visible.
+  Fix: added _await_and_tail() helper to src/dx-o2-agents/entrypoint.sh.
+  After starting each daemon, a background tailer waits up to 60 s for
+  the log file to appear (JVM start-up delay), then exec's tail -F to
+  stream it to stdout indefinitely.  Two tailers are started:
+  - BTListener.log: inside the BTL else block (only when BTL is present)
+  - IntroscopeAgent.log: unconditionally after the BTL block
+  IA_TAIL_PID and BTL_TAIL_PID are tracked and killed in _shutdown() so
+  the tailers stop cleanly on SIGTERM/SIGINT.
+  Works identically in Kubernetes (kubectl logs) and Docker Compose
+  (docker compose logs) -- no Helm or Compose changes required.
+
+------------------------------------------------------------------------------
 2026-06-20 @ 00:15 - [Docs – Document dx-o2-agent memory sizing in README, DX-O2-AGENT-SETUP, CLAUDE.md]:
   README.md: added dxo2.resources.requests.memory and
     dxo2.resources.limits.memory rows to the Helm Key values table with

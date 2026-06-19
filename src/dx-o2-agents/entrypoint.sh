@@ -79,12 +79,16 @@ fi
 # == Signal handler for graceful shutdown =====================================
 AGENT_PID=""
 WATCHDOG_PID=""
+IA_TAIL_PID=""
+BTL_TAIL_PID=""
 
 _shutdown() {
     echo "[entrypoint] Received shutdown signal - stopping agents..."
     [[ -n "${WATCHDOG_PID}" ]] && kill "${WATCHDOG_PID}" 2>/dev/null || true
     [[ -n "${AGENT_PID}"    ]] && kill "${AGENT_PID}"    2>/dev/null || true
     pkill -f 'BTListener' 2>/dev/null || true
+    [[ -n "${IA_TAIL_PID}"  ]] && kill "${IA_TAIL_PID}"  2>/dev/null || true
+    [[ -n "${BTL_TAIL_PID}" ]] && kill "${BTL_TAIL_PID}" 2>/dev/null || true
     wait 2>/dev/null || true
     echo "[entrypoint] Agents stopped."
     exit 0
@@ -100,7 +104,7 @@ echo "[entrypoint] Starting Broadcom Infrastructure Agent (console mode)..."
 AGENT_PID=$!
 echo "[entrypoint] Infrastructure Agent started (PID ${AGENT_PID})"
 
-# == BTL helpers ==============================================================
+# == Helpers ==================================================================
 # Use pgrep to find the BTL Java process regardless of whether BTListener.sh
 # exec's Java directly or daemonizes it in the background.
 
@@ -112,6 +116,23 @@ _start_btl() {
     echo "[entrypoint] Starting Business Transaction Listener..."
     "${BTL_SCRIPT}" start
     echo "[entrypoint] BTL start command completed."
+}
+
+# Wait up to 60 s for a log file to appear, then tail it to stdout forever.
+# Called in the background (&) so the entrypoint continues; the resulting
+# tail output is captured by kubectl logs / docker compose logs via stdout.
+_await_and_tail() {
+    local -r logfile="$1"
+    local waited=0
+    while [[ ! -f "${logfile}" && ${waited} -lt 60 ]]; do
+        sleep 2
+        waited=$(( waited + 2 ))
+    done
+    if [[ -f "${logfile}" ]]; then
+        exec tail -F "${logfile}"
+    else
+        echo "[entrypoint] WARNING: log not found after 60 s: ${logfile}" >&2
+    fi
 }
 
 # == Start Business Transaction Listener ======================================
@@ -146,7 +167,18 @@ else
     _btl_watchdog &
     WATCHDOG_PID=$!
     echo "[entrypoint] BTL watchdog started (PID ${WATCHDOG_PID})"
+
+    _await_and_tail "${APMIA_HOME}/logs/BTListener.log" &
+    BTL_TAIL_PID=$!
+    echo "[entrypoint] BTL log tailer started (PID ${BTL_TAIL_PID})"
 fi
+
+# == Stream IA log to stdout ==================================================
+# BTListener.log is tailed inside the BTL block above when BTL is present.
+# IntroscopeAgent.log is tailed here unconditionally after the JVM starts.
+_await_and_tail "${APMIA_HOME}/logs/IntroscopeAgent.log" &
+IA_TAIL_PID=$!
+echo "[entrypoint] IA log tailer started (PID ${IA_TAIL_PID})"
 
 # == Wait =====================================================================
 wait "${AGENT_PID}"
