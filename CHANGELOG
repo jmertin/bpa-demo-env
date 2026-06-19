@@ -5,6 +5,42 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 12:00 - [Feat – PHP probe logging to /var/log/php-probe; shown on ?page=dxo2]:
+  Enables structured log output for the DX O2 PHP probe and surfaces the logs
+  in the DX O2 Status admin page.
+
+  src/apache-php/Dockerfile:
+  - Added RUN mkdir -p /var/log/php-probe && chown www-data:www-data &&
+    chmod 0755 so the directory exists with correct ownership in every image,
+    even when the APMIA volume is absent.  The Apache process drops privileges
+    to www-data before handling requests; the probe runs in that context.
+
+  src/apache-php/entrypoint.sh:
+  - Added APMIA_PHP_LOG_LEVEL env var (default: INFO; override to DEBUG for
+    per-request trace output).
+  - Changed wily_php_agent.logdir from /tmp to /var/log/php-probe.
+  - Added patching for wily_php_agent.disableLogging=0 (enables logging).
+  - Added patching for wily_php_agent.logLevel="${APMIA_PHP_LOG_LEVEL}".
+  - Log: "[entrypoint] PHP probe logging: enabled (level=..., dir=...)"
+
+  app/src/pages/dxo2.php:
+  - Added PHP_PROBE_LOGS_DIR constant (/var/log/php-probe).
+  - Added collection of *.log files from PHP_PROBE_LOGS_DIR (section 6).
+  - Added two rows to the PHP Probe INI table: disableLogging flag and
+    logLevel value.
+  - Added "PHP Probe Logs" card (between APMIA logs and BTListener log),
+    displaying the last 40 lines of each probe log file in scrollable blocks.
+
+  .config.example:
+  - Added APMIA_PHP_LOG_LEVEL="INFO" with explanatory comment.
+
+  CLAUDE.md:
+  - Updated PHP probe injection section to document the three new INI
+    properties and the log directory ownership requirement.
+  - Added APMIA_PHP_LOG_LEVEL to the .config variables reference.
+  - Updated ?page=dxo2 log tails description.
+
+------------------------------------------------------------------------------
 2026-06-19 @ 11:00 - [Feat – BTListener log tail and conditional detail display on ?page=dxo2]:
   Two improvements to app/src/pages/dxo2.php:
 

@@ -16,6 +16,8 @@ APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
 APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"
 # PHP probe identity in the APM metric tree (wily_php_agent.agentName).
 APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
+# PHP probe log level (wily_php_agent.logLevel). Common values: INFO, DEBUG.
+APMIA_PHP_LOG_LEVEL="${APMIA_PHP_LOG_LEVEL:-INFO}"
 # Web plugin identity - available to the BPA Apache module via process environment.
 APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
 # Browser agent snippet string from the DX O2 tenant (DX O2 Settings -> Manage Mobile/Browser Web Monitoring -> App to Monitor -> Web App).
@@ -47,8 +49,23 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     sed -i "s|^wily_php_agent\.collectorHost=.*|wily_php_agent.collectorHost=\"${APMIA_PHP_COLLECTOR_HOST}\"|" "${INI_PATH}"
     sed -i "s|^wily_php_agent\.collectorPort=.*|wily_php_agent.collectorPort=\"${APMIA_PHP_COLLECTOR_PORT}\"|" "${INI_PATH}"
     sed -i "s|^wily_php_agent\.application\.name=.*|wily_php_agent.application.name=\"${APMIA_APP_NAME}\"|" "${INI_PATH}"
-    sed -i "s|^wily_php_agent\.logdir=.*|wily_php_agent.logdir=\"/tmp\"|" "${INI_PATH}"
     echo "[entrypoint]   PHP probe IPC: ${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT}"
+
+    # == PHP probe logging =====================================================
+    # Log directory is /var/log/php-probe, created in the Dockerfile and owned
+    # by www-data so Apache's PHP process can write to it without privilege.
+    sed -i "s|^wily_php_agent\.logdir=.*|wily_php_agent.logdir=\"/var/log/php-probe\"|" "${INI_PATH}"
+    if grep -qE "^wily_php_agent\.disableLogging=" "${INI_PATH}"; then
+        sed -i "s|^wily_php_agent\.disableLogging=.*|wily_php_agent.disableLogging=0|" "${INI_PATH}"
+    else
+        printf '\nwily_php_agent.disableLogging=0\n' >> "${INI_PATH}"
+    fi
+    if grep -qE "^wily_php_agent\.logLevel=" "${INI_PATH}"; then
+        sed -i "s|^wily_php_agent\.logLevel=.*|wily_php_agent.logLevel=\"${APMIA_PHP_LOG_LEVEL}\"|" "${INI_PATH}"
+    else
+        printf '\nwily_php_agent.logLevel="%s"\n' "${APMIA_PHP_LOG_LEVEL}" >> "${INI_PATH}"
+    fi
+    echo "[entrypoint]   PHP probe logging: enabled (level=${APMIA_PHP_LOG_LEVEL}, dir=/var/log/php-probe)"
 
     # Set PHP probe agent name (wily_php_agent.agentName controls the probe's
     # identity in the DX O2 metric tree; add the property if absent in the INI).
