@@ -259,6 +259,10 @@ Pod startup
        │    Entrypoint: PHP probe → INI patching → Apache starts
        │    Entrypoint: BPA Apache module → LoadModule → apache2ctl configtest
        │    hostname = dxo2.hostName (set at pod spec level)
+       │    Probes: startupProbe / livenessProbe / readinessProbe → GET /health
+       │            /health is a static file – PHP is NOT invoked, so the
+       │            APMIA PHP probe extension never fires during health checks.
+       │            Probes succeed independently of dx-o2-agent startup timing.
        │
        └─ mariadb  (no agent involvement)
 ```
@@ -465,6 +469,25 @@ kubectl logs -n php-demo <pod> -c dxo2-init
 Then validate manually:
 ```bash
 kubectl exec -n php-demo <pod> -c apache-php -- apache2ctl configtest
+```
+
+### Liveness / readiness probes return HTTP 500 after enabling APMIA
+
+**Symptom:** Pod restarts or stays in `0/1 Running`; probe logs show HTTP 500.
+
+**Cause:** Probes target `GET /` which invokes `index.php`; the APMIA PHP
+probe extension then tries to open a TCP connection to the IA collector at
+`127.0.0.1:5005`.  If the `dx-o2-agent` sidecar has not finished starting,
+the port is not yet listening and the extension fails the request.
+
+**Fix:** All probes target `GET /health` — a static file served by Apache
+without invoking PHP.  The APMIA extension is never triggered during health
+checks, so probes succeed regardless of sidecar state.
+
+Verify the health endpoint is reachable and returns `OK`:
+```bash
+kubectl port-forward -n php-demo svc/php-demo-php-demo 8080:8080 &
+curl -s http://localhost:8080/health    # expected: OK
 ```
 
 ### PHP probe loads but DX O2 shows no data
