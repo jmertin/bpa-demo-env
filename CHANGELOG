@@ -5,6 +5,13 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 23:45 - [Fix – OOMKilled (exit 137) on dx-o2-agent sidecar]:
+  APMIA Infrastructure Agent (Java) + BTL exceed the previous 512Mi limit.
+  Raised dxo2 container memory limit from 512Mi to 4Gi; request bumped
+  from 256Mi to 512Mi to better reflect actual idle footprint.
+  File: helm/php-demo/values.yaml (dxo2.resources)
+
+------------------------------------------------------------------------------
 2026-06-19 @ 23:30 - [Docs – Update README, DX-O2-AGENT-SETUP, and CLAUDE.md for /health probe fix]:
   README.md:
   - Added app/src/health to project structure listing.
