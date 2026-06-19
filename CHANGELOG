@@ -5,6 +5,40 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 14:00 - [Feat – BPA WebServer Plugin logging to /var/log/bpa-plugin; shown on ?page=dxo2]:
+  Enables log output for the BPA Apache module and surfaces the logs in the
+  DX O2 Status admin page.
+
+  src/apache-php/Dockerfile:
+  - Added /var/log/bpa-plugin to the existing log-directory RUN layer
+    (merged with /var/log/php-probe into one RUN for fewer image layers).
+    Directory is owned by www-data:www-data, chmod 0755.
+
+  src/apache-php/entrypoint.sh:
+  - Added APMIA_BPA_LOG_LEVEL env var (default: INFO).
+  - Extended the bpa.conf heredoc with two new SetEnv directives:
+      SetEnv APMIA_WEB_AGENT_LOG_FILE /var/log/bpa-plugin/bpa.log
+      SetEnv APMIA_WEB_AGENT_LOG_LEVEL ${APMIA_BPA_LOG_LEVEL}
+  - Log line confirms level after apache2ctl configtest passes.
+
+  app/src/pages/dxo2.php:
+  - Added BPA_LOGS_DIR constant (/var/log/bpa-plugin).
+  - Added collection of *.log files from BPA_LOGS_DIR (section 6;
+    existing sections renumbered).
+  - Added "BPA WebServer Plugin Logs" card placed between PHP Probe Logs
+    and BTListener log cards.
+
+  .config.example:
+  - Added APMIA_BPA_LOG_LEVEL="INFO" with explanatory comment.
+
+  CLAUDE.md:
+  - Updated BPA injection section and .config variables reference.
+  - Updated ?page=dxo2 log tails description to list all four cards.
+
+  Files changed: src/apache-php/Dockerfile, src/apache-php/entrypoint.sh,
+  app/src/pages/dxo2.php, .config.example, CLAUDE.md
+
+------------------------------------------------------------------------------
 2026-06-19 @ 13:00 - [Fix – BTListener log not visible on ?page=dxo2]:
   Root cause: /opt/btlistener/logs/ is local to the dx-o2-agent container.
   The apache-php container mounts only /opt/apmia (the shared emptyDir /
