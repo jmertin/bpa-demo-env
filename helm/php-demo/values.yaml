@@ -205,7 +205,7 @@ dxo2:
 
   resources:
     requests:
-      memory: "512Mi"
+      memory: "792Mi"
       cpu: "50m"
     limits:
       memory: "4Gi"
