@@ -32,6 +32,11 @@ if (!array_key_exists($page, $routes)) {
   $page = 'shop';
 }
 
+// Emit a baseline page identifier on every response so monitoring tools and
+// browser devtools always see X-Page-ID regardless of which page is served.
+// Pages that call set_monitoring_headers() replace this with a richer value.
+header('X-Page-ID: page_' . $page);
+
 // ── Run use case for logged-in user ────────────────────────────────────────────
 $ctx = ['page' => $page];
 usecase_run($ctx);

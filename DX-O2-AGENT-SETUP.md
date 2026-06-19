@@ -221,6 +221,8 @@ Check: any mod_*.so in /opt/apmia/extensions/WebServerPlugin/?
     Write /etc/apache2/conf-available/bpa.conf:
       LoadModule <name>_module <path>
       SetEnv APMIA_WEB_AGENT_NAME <APMIA_WEB_AGENT_NAME>
+      TcpClientHostAndPort <APMIA_BTL_HOST>:<APMIA_BTL_PORT>
+      TcpClientWaitTimeForReconnectInSecs 30
     Symlink → /etc/apache2/conf-enabled/bpa.conf
     Run: apache2ctl configtest
       PASS → BPA module active.

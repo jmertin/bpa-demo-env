@@ -5,6 +5,79 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 17:00 - [Docs – update README, DX-O2-AGENT-SETUP.md for BPA and X-Page-ID changes]:
+  Documentation pass to align all guides with the two fixes made earlier today:
+  (1) BPA bpa.conf now uses TcpClientHostAndPort instead of SetEnv log vars.
+  (2) X-Page-ID header is now emitted on every page with page_<slug> baseline.
+
+  README.md:
+  - Monitoring headers table updated: X-Page-ID now shows both formats
+    (baseline page_<slug> and override MODULE-ACTION-TARGET) with examples.
+  - DX O2 Status row corrected: log tails listed as APMIA IA / PHP probe /
+    BTListener (three cards; BPA log card was removed as module has no log).
+
+  DX-O2-AGENT-SETUP.md:
+  - Section 6.3 bpa.conf block updated to include TcpClientHostAndPort and
+    TcpClientWaitTimeForReconnectInSecs (native module directives per
+    Broadcom TechDocs; previously missing from the diagram).
+
+  Files changed: README.md, DX-O2-AGENT-SETUP.md, CHANGELOG
+
+------------------------------------------------------------------------------
+2026-06-19 @ 16:00 - [Fix – X-Page-ID header missing on admin diagnostic and logout pages]:
+  The admin diagnostic pages (info, db, dxo2) and logout had no X-Page-ID
+  response header because they never called set_monitoring_headers().
+
+  Moved the baseline header emission to the front controller so every page
+  automatically receives X-Page-ID: page_<slug> (e.g. page_dxo2 for
+  ?page=dxo2).  Pages that call set_monitoring_headers() still override this
+  with their richer MODULE-ACTION-TARGET value.
+
+  app/src/index.php:
+  - After route resolution, emit header('X-Page-ID: page_' . $page) before
+    the use-case run and require dispatch.
+
+  CLAUDE.md:
+  - Updated front controller steps to document the baseline header.
+  - Corrected page_id.php library entry to name both set_page_id() and
+    set_monitoring_headers() separately.
+
+  Files changed: app/src/index.php, CLAUDE.md, CHANGELOG
+
+------------------------------------------------------------------------------
+2026-06-19 @ 15:00 - [Fix – BPA bpa.conf: remove unsupported log SetEnv, add TcpClientHostAndPort]:
+  Validated BPA Apache module configuration against Broadcom TechDocs
+  (Install-and-Configure-the-Plugin, Apache for Linux).  The module uses
+  native Apache directives, not SetEnv variables, for its BTL connection.
+  There is no documented log-file output mechanism for the BPA module.
+
+  src/apache-php/entrypoint.sh:
+  - Removed APMIA_BPA_LOG_LEVEL variable (unsupported).
+  - Replaced SetEnv APMIA_WEB_AGENT_LOG_FILE and SetEnv APMIA_WEB_AGENT_LOG_LEVEL
+    (both fictitious) with the correct module directives:
+      TcpClientHostAndPort ${APMIA_BTL_HOST}:${APMIA_BTL_PORT}
+      TcpClientWaitTimeForReconnectInSecs 30
+  - Updated post-configtest echo to show BTL endpoint instead of log level.
+
+  src/apache-php/Dockerfile:
+  - Removed /var/log/bpa-plugin directory creation (no module log output).
+
+  app/src/pages/dxo2.php:
+  - Removed BPA_LOGS_DIR constant and $bpaLogFiles collection.
+  - Removed "BPA WebServer Plugin Logs" log card (module has no log file).
+
+  .config.example:
+  - Removed APMIA_BPA_LOG_LEVEL variable and its comment.
+
+  CLAUDE.md:
+  - Updated BPA injection section with correct TcpClientHostAndPort directive.
+  - Removed APMIA_BPA_LOG_LEVEL from .config variables reference.
+  - Updated ?page=dxo2 log tails description to three cards (BPA removed).
+
+  Files changed: src/apache-php/entrypoint.sh, src/apache-php/Dockerfile,
+  app/src/pages/dxo2.php, .config.example, CLAUDE.md, CHANGELOG
+
+------------------------------------------------------------------------------
 2026-06-19 @ 14:00 - [Feat – BPA WebServer Plugin logging to /var/log/bpa-plugin; shown on ?page=dxo2]:
   Enables log output for the BPA Apache module and surfaces the logs in the
   DX O2 Status admin page.
