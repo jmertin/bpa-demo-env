@@ -5,6 +5,27 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 11:00 - [Feat – BTListener log tail and conditional detail display on ?page=dxo2]:
+  Two improvements to app/src/pages/dxo2.php:
+
+  1. BTListener log tail:
+     Added a new "BTListener Log" card that reads the last 40 lines of
+     /opt/btlistener/logs/BTListener.log using the existing tail_file() helper.
+     If the file does not exist or is empty (BTL not yet started) an info
+     notice is shown instead.  The new constant BTL_LOG_PATH holds the path.
+
+  2. Conditional detail display:
+     Added $dxo2Deployed = is_dir('/opt/apmia') as a deployment gate.
+     When the /opt/apmia volume is absent (dxo2.enabled=false in Helm) only
+     the summary badges are displayed, followed by a single "DX O2 not
+     deployed" notice card that explains how to enable monitoring.  All
+     detail cards (PHP probe, BPA module, browser agent, connectivity, env
+     vars, APMIA logs, BTListener log) are wrapped in an else block and
+     rendered only when the volume is present.
+
+  File changed: app/src/pages/dxo2.php
+
+------------------------------------------------------------------------------
 2026-06-19 @ 10:00 - [Docs – correct browser agent snippet navigation path in all files]:
   The browser agent snippet was previously documented as being found under
   "Experience View → Browser Agent → Snippet".  The correct location in the

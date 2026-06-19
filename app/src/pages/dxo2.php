@@ -92,7 +92,13 @@ function parse_ini_flat(string $path): array {
 
 // ── Static paths ───────────────────────────────────────────────────────────────
 define('BPA_CONF_PATH',  '/etc/apache2/conf-enabled/bpa.conf');
+define('APMIA_HOME',     '/opt/apmia');
 define('APMIA_LOGS_DIR', '/opt/apmia/logs');
+define('BTL_LOG_PATH',   '/opt/btlistener/logs/BTListener.log');
+
+// The /opt/apmia directory is populated by the dxo2-init initContainer.
+// Its absence means the DX O2 sidecar is not enabled (dxo2.enabled=false in Helm).
+$dxo2Deployed = is_dir(APMIA_HOME);
 
 // Build the apache2 conf.d path from the running PHP version (avoids hardcoding 8.1).
 $phpConfD = sprintf('/etc/php/%d.%d/apache2/conf.d', PHP_MAJOR_VERSION, PHP_MINOR_VERSION);
@@ -174,6 +180,9 @@ if (is_dir(APMIA_LOGS_DIR)) {
   }
 }
 
+// ── 6. BTListener log ──────────────────────────────────────────────────────────
+$btlLogContent = tail_file(BTL_LOG_PATH, 40);
+
 // ── 6. APMIA environment variables ────────────────────────────────────────────
 $apmiaEnv = [];
 foreach ($_SERVER as $k => $v) {
@@ -222,6 +231,17 @@ foreach ($badges as [$label, $ok, $state]):
   </div>
 <?php endforeach ?>
 </div>
+
+<?php if (!$dxo2Deployed): ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <p class="alert alert-info" style="margin:0">
+    <strong>DX O2 not deployed.</strong>
+    The <code>/opt/apmia</code> volume is absent — the DX O2 sidecar has not been enabled.
+    To activate monitoring, set a non-empty <code>APMIA_EM_HOST</code> in <code>.config</code>
+    and redeploy (<code>build-scripts/deploy.sh</code>).
+  </p>
+</div>
+<?php else: ?>
 
 <?php /* ── PHP Probe ────────────────────────────────────────────────────────── */ ?>
 <div class="card" style="margin-bottom:1.2rem">
@@ -451,5 +471,21 @@ foreach ($badges as [$label, $ok, $state]):
     <?php endforeach ?>
   <?php endif ?>
 </div>
+
+<?php /* ── BTListener log tail ─────────────────────────────────────────────────── */ ?>
+<div class="card" style="margin-bottom:1.2rem">
+  <h2>BTListener Log
+    <span style="font-size:.8rem;font-weight:400;color:#607d8b">
+      &nbsp;(<?= htmlspecialchars(BTL_LOG_PATH) ?> — last 40 lines)
+    </span>
+  </h2>
+  <?php if ($btlLogContent === ''): ?>
+    <p class="alert alert-info">Log file not found or empty — BTL not yet started or log not yet written to.</p>
+  <?php else: ?>
+    <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.75rem;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"><?= htmlspecialchars($btlLogContent) ?></pre>
+  <?php endif ?>
+</div>
+
+<?php endif /* $dxo2Deployed */ ?>
 
 <?php require __DIR__ . '/../templates/footer.php' ?>

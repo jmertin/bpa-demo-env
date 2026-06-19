@@ -263,9 +263,9 @@ Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section
 - **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.
 - **Connectivity:** `fsockopen()` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT` and `APMIA_BTL_HOST:PORT`.
 - **Env vars:** all `APMIA_*` / `APMENV_*` in a table; credential-bearing keys redacted.
-- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/` in scrollable blocks.
+- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/` plus `/opt/btlistener/logs/BTListener.log` in scrollable blocks.
 
-Page loads cleanly when `dxo2.enabled=false`; all probes report "not loaded".
+When `/opt/apmia` is absent (`dxo2.enabled=false`) only the summary badges and a "not deployed" notice are shown — all detail cards are hidden. Deployment is detected via `is_dir('/opt/apmia')`.
 
 ---
 
