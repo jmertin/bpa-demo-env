@@ -78,9 +78,6 @@ APMIA_LOG_LEVEL="INFO"
 # PHP probe log written to /var/log/php-probe/.  Values: INFO, DEBUG, WARN, ERROR.
 # DEBUG produces detailed per-request trace output; use INFO in normal operation.
 APMIA_PHP_LOG_LEVEL="INFO"
-# BPA WebServer Plugin log level.  Controls verbosity of the BPA Apache module
-# log written to /var/log/bpa-plugin/.  Values: INFO, DEBUG, WARN, ERROR.
-APMIA_BPA_LOG_LEVEL="INFO"
 APMIA_PHP_COLLECTOR_HOST="127.0.0.1"
 APMIA_PHP_COLLECTOR_PORT="5005"
 APMIA_BTL_HOST="127.0.0.1"

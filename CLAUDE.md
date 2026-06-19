@@ -34,8 +34,9 @@ All scripts source `.config` from the project root (copy from `.config.example`;
 1. Bootstraps session and CSRF via `config/app.php`.
 2. Opens the PDO singleton via `config/database.php`.
 3. Resolves `?page=<slug>` against a static `$routes` array.
-4. Calls `usecase_run($ctx)` to apply any behaviour modifier assigned to the current user.
-5. Requires the resolved page file.
+4. Emits `X-Page-ID: page_<slug>` as a baseline header (e.g. `page_dxo2`) so every response carries a human-readable page identifier. Pages that call `set_monitoring_headers()` override this with a richer value.
+5. Calls `usecase_run($ctx)` to apply any behaviour modifier assigned to the current user.
+6. Requires the resolved page file.
 
 ### Library layer (`app/src/lib/`)
 
@@ -49,7 +50,7 @@ Plain functions in the global namespace — no classes, no autoloader.
 | `product.php` | PDO queries for product listing and detail |
 | `order.php` | Order creation, item insertion, order history |
 | `validate.php` | `validate_slug()`, `validate_luhn()`, input sanitisation |
-| `page_id.php` | `set_page_id()` — writes `X-Page-ID`, `X-User-Role`, `X-Basket-Total`, `X-Alert`, `X-Use-Case` headers |
+| `page_id.php` | `set_page_id()` — writes `X-Page-ID`; `set_monitoring_headers()` — writes `X-Page-ID`, `X-User-Role`, `X-Basket-Total`, `X-Alert`, `X-Use-Case` |
 
 ### Page rendering pattern
 
@@ -171,7 +172,7 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 ### BPA Apache module injection
 
 - Finds `mod_*.so` in `extensions/WebServerPlugin/`. Derives module name: `mod_<name>.so → <name>_module`.
-- Writes `LoadModule`, `SetEnv APMIA_WEB_AGENT_NAME`, `SetEnv APMIA_WEB_AGENT_LOG_FILE /var/log/bpa-plugin/bpa.log`, and `SetEnv APMIA_WEB_AGENT_LOG_LEVEL` to `/etc/apache2/conf-enabled/bpa.conf`. The log directory is created in the Dockerfile and owned by `www-data`.
+- Writes `LoadModule`, `SetEnv APMIA_WEB_AGENT_NAME`, `TcpClientHostAndPort ${APMIA_BTL_HOST}:${APMIA_BTL_PORT}`, and `TcpClientWaitTimeForReconnectInSecs 30` to `/etc/apache2/conf-enabled/bpa.conf`. `TcpClientHostAndPort` is the native module directive (per Broadcom TechDocs) that tells the module where the BTL is listening. The BPA module has no documented log-file output mechanism — do not add `SetEnv APMIA_WEB_AGENT_LOG_*` directives (they are unsupported).
 - Validates with `apache2ctl configtest`; disables on rejection.
 - The module always registers internally as **`caplugin_module`**, detected via `apache2ctl -t -D DUMP_MODULES`.
 
@@ -264,7 +265,7 @@ Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section
 - **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.
 - **Connectivity:** `fsockopen()` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT` and `APMIA_BTL_HOST:PORT`.
 - **Env vars:** all `APMIA_*` / `APMENV_*` in a table; credential-bearing keys redacted.
-- **Log tails (four cards):** APMIA IA logs from `/opt/apmia/logs/*.log` (BTListener.log excluded); PHP probe logs from `/var/log/php-probe/*.log`; BPA plugin logs from `/var/log/bpa-plugin/*.log`; BTListener log from `/opt/apmia/logs/BTListener.log` (redirected there by the sidecar — see BTL log redirect below).
+- **Log tails (three cards):** APMIA IA logs from `/opt/apmia/logs/*.log` (BTListener.log excluded); PHP probe logs from `/var/log/php-probe/*.log`; BTListener log from `/opt/apmia/logs/BTListener.log` (redirected there by the sidecar — see BTL log redirect below). No BPA module log card — the module has no documented log-file output.
 
 When `/opt/apmia` is absent (`dxo2.enabled=false`) only the summary badges and a "not deployed" notice are shown — all detail cards are hidden. Deployment is detected via `is_dir('/opt/apmia')`.
 
@@ -310,7 +311,6 @@ APMIA_PROCESS_NAME       # → APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME
 APMIA_PHP_AGENT_NAME     # → wily_php_agent.agentName in PHP INI
 APMIA_PHP_LOG_LEVEL      # default INFO → wily_php_agent.logLevel (probe log verbosity)
 APMIA_WEB_AGENT_NAME     # → APMIA_WEB_AGENT_NAME env for BPA Apache module
-APMIA_BPA_LOG_LEVEL      # default INFO → APMIA_WEB_AGENT_LOG_LEVEL in bpa.conf
 APMIA_LOG_LEVEL          # default INFO → APMENV_LOG4J_LOGGER_INTROSCOPEAGENT
 
 # DX O2 – IPC (defaults: same-pod 127.0.0.1; Compose overrides to dxo2 service name)

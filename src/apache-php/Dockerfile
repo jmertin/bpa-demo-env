@@ -81,13 +81,12 @@ RUN chmod 0644 /etc/cron.d/security-updates
 COPY --from=app-builder /app /var/www/html
 RUN chown -R www-data:www-data /var/www/html
 
-# Log directories for the DX O2 PHP probe and BPA WebServer Plugin.
-# Created here so they exist even when the APMIA volume is absent.
-# Both processes run inside Apache as www-data; directories must be owned
-# by that user so logs can be written without privilege escalation.
-RUN mkdir -p /var/log/php-probe /var/log/bpa-plugin && \
-    chown www-data:www-data /var/log/php-probe /var/log/bpa-plugin && \
-    chmod 0755 /var/log/php-probe /var/log/bpa-plugin
+# Log directory for the DX O2 PHP probe.
+# Created here so it exists even when the APMIA volume is absent.
+# Apache runs as www-data; the directory must be owned by that user.
+RUN mkdir -p /var/log/php-probe && \
+    chown www-data:www-data /var/log/php-probe && \
+    chmod 0755 /var/log/php-probe
 
 ENV APMIA_HOME=/opt/apmia
 

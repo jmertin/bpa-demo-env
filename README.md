@@ -338,7 +338,7 @@ pages that inspect the runtime from inside the container:
 
 | Page | URL | Shows |
 |---|---|---|
-| DX O2 Status | `?page=dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, agent log tails |
+| DX O2 Status | `?page=dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, APMIA IA / PHP probe / BTListener log tails |
 | PHP Info | `?page=info` | PHP version, SAPI, OS, memory limit, loaded extensions |
 | Database | `?page=db` | Live MariaDB connection result, server version, uptime |
 
@@ -507,7 +507,8 @@ kubectl port-forward -n php-demo svc/php-demo-php-demo 8080:8080
 
 | Header | Format | Example |
 |---|---|---|
-| `X-Page-ID` | `MODULE-ACTION-TARGET` | `SHOP-LIST-SHELLY` |
+| `X-Page-ID` | `page_<slug>` (baseline, every page) | `page_dxo2` |
+| `X-Page-ID` | `MODULE-ACTION-TARGET` (overridden by shop/auth/order pages) | `SHOP-LIST-SHELLY` |
 | `X-User-Role` | `anonymous \| user \| admin` | `user` |
 | `X-Basket-Total` | EUR float | `49.80` |
 | `X-Alert` | string (on errors) | `LOGIN_FAILED` |

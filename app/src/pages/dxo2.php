@@ -96,7 +96,6 @@ define('APMIA_HOME',          '/opt/apmia');
 define('APMIA_LOGS_DIR',      '/opt/apmia/logs');
 define('BTL_LOG_PATH',        '/opt/apmia/logs/BTListener.log');
 define('PHP_PROBE_LOGS_DIR',  '/var/log/php-probe');
-define('BPA_LOGS_DIR',        '/var/log/bpa-plugin');
 
 // The /opt/apmia directory is populated by the dxo2-init initContainer.
 // Its absence means the DX O2 sidecar is not enabled (dxo2.enabled=false in Helm).
@@ -187,17 +186,7 @@ if (is_dir(APMIA_LOGS_DIR)) {
   }
 }
 
-// ── 6. BPA WebServer Plugin log files ─────────────────────────────────────────
-$bpaLogFiles = [];
-if (is_dir(BPA_LOGS_DIR)) {
-  $found = glob(BPA_LOGS_DIR . '/*.log') ?: [];
-  sort($found);
-  foreach ($found as $logPath) {
-    $bpaLogFiles[basename($logPath)] = tail_file($logPath, 40);
-  }
-}
-
-// ── 7. PHP probe log files ─────────────────────────────────────────────────────
+// ── 6. PHP probe log files ─────────────────────────────────────────────────────
 $phpProbeLogFiles = [];
 if (is_dir(PHP_PROBE_LOGS_DIR)) {
   $found = glob(PHP_PROBE_LOGS_DIR . '/*.log') ?: [];
@@ -510,31 +499,6 @@ foreach ($badges as [$label, $ok, $state]):
     <p class="alert alert-info">No log files found in <?= htmlspecialchars(PHP_PROBE_LOGS_DIR) ?> — probe not yet active or logging not yet triggered.</p>
   <?php else: ?>
     <?php foreach ($phpProbeLogFiles as $name => $content): ?>
-    <div style="margin-bottom:1rem">
-      <div style="font-size:.85rem;font-weight:700;color:#3949ab;margin-bottom:.3rem">
-        &#128196; <?= htmlspecialchars($name) ?>
-      </div>
-      <?php if ($content === ''): ?>
-        <p style="font-size:.8rem;color:#90a4ae;font-style:italic">Empty.</p>
-      <?php else: ?>
-        <pre style="background:#1a1a2e;color:#b0bec5;border-radius:8px;padding:1rem;font-size:.75rem;max-height:320px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"><?= htmlspecialchars($content) ?></pre>
-      <?php endif ?>
-    </div>
-    <?php endforeach ?>
-  <?php endif ?>
-</div>
-
-<?php /* ── BPA WebServer Plugin log tail ─────────────────────────────────────── */ ?>
-<div class="card" style="margin-bottom:1.2rem">
-  <h2>BPA WebServer Plugin Logs
-    <span style="font-size:.8rem;font-weight:400;color:#607d8b">
-      &nbsp;(<?= htmlspecialchars(BPA_LOGS_DIR) ?> — last 40 lines per file)
-    </span>
-  </h2>
-  <?php if (empty($bpaLogFiles)): ?>
-    <p class="alert alert-info">No log files found in <?= htmlspecialchars(BPA_LOGS_DIR) ?> — BPA module not active or logging not yet triggered.</p>
-  <?php else: ?>
-    <?php foreach ($bpaLogFiles as $name => $content): ?>
     <div style="margin-bottom:1rem">
       <div style="font-size:.85rem;font-weight:700;color:#3949ab;margin-bottom:.3rem">
         &#128196; <?= htmlspecialchars($name) ?>
