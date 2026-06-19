@@ -252,6 +252,8 @@ Pod startup
        │    APMENV_* identity vars from Helm values
        │    Runs: APMIAgent.sh console → connects to pre-configured EM (WSS)
        │    Runs: BTListener.sh → listens on 127.0.0.1:8000
+       │    Tails: IntroscopeAgent.log → stdout  (kubectl logs / compose logs)
+       │    Tails: BTListener.log    → stdout  (kubectl logs / compose logs)
        │    Named ports: php-collector:5005, btl:8000
        │
        ├─ apache-php
@@ -354,9 +356,22 @@ empty, so the installer's defaults cannot override your `.config` setting.
 
 ### 8.1 Check container logs
 
+The `dx-o2-agent` entrypoint tails `IntroscopeAgent.log` and
+`BTListener.log` to stdout, so both appear in `kubectl logs` and
+`docker compose logs` without needing shell access to the container.
+
 ```bash
-# dx-o2-agent sidecar — verify APMENV_* identity and agent start
+# dx-o2-agent sidecar — entrypoint startup, IA log, and BTL log
 kubectl logs -n php-demo <pod> -c dx-o2-agent
+
+# Filter to entrypoint messages only (excludes IA / BTL log content)
+kubectl logs -n php-demo <pod> -c dx-o2-agent | grep '^\[entrypoint\]'
+
+# Follow live (streams IA + BTL log lines as they are written)
+kubectl logs -n php-demo <pod> -c dx-o2-agent -f
+
+# Docker Compose equivalent
+docker compose logs -f dxo2
 
 # apache-php — verify PHP probe and BPA Apache module injection
 kubectl logs -n php-demo <pod> -c apache-php | grep -E "\[entrypoint\]"
