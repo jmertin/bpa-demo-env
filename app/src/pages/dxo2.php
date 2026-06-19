@@ -187,11 +187,24 @@ if (is_dir(APMIA_LOGS_DIR)) {
 }
 
 // ── 6. PHP probe log files ─────────────────────────────────────────────────────
+// The probe generates two naming groups; keep the 2 most recent per group:
+//   Group A: wily_php_agent_<pid>.log            (active per-process log)
+//   Group B: wily_php_agent_<pid>-<ts>_N.log     (rolled log with sequence suffix)
 $phpProbeLogFiles = [];
 if (is_dir(PHP_PROBE_LOGS_DIR)) {
-  $found = glob(PHP_PROBE_LOGS_DIR . '/*.log') ?: [];
+  $found = glob(PHP_PROBE_LOGS_DIR . '/wily_php_agent*.log') ?: [];
   sort($found);
+  $groupA = [];
+  $groupB = [];
   foreach ($found as $logPath) {
+    if (preg_match('/wily_php_agent_\d+-\d+_\d+\.log$/', basename($logPath))) {
+      $groupB[] = $logPath;
+    }
+    else {
+      $groupA[] = $logPath;
+    }
+  }
+  foreach (array_merge(array_slice($groupA, -2), array_slice($groupB, -2)) as $logPath) {
     $phpProbeLogFiles[basename($logPath)] = tail_file($logPath, 40);
   }
 }
@@ -492,7 +505,7 @@ foreach ($badges as [$label, $ok, $state]):
 <div class="card" style="margin-bottom:1.2rem">
   <h2>PHP Probe Logs
     <span style="font-size:.8rem;font-weight:400;color:#607d8b">
-      &nbsp;(<?= htmlspecialchars(PHP_PROBE_LOGS_DIR) ?> — last 40 lines per file)
+      &nbsp;(<?= htmlspecialchars(PHP_PROBE_LOGS_DIR) ?> — 2 most recent per group, last 40 lines each)
     </span>
   </h2>
   <?php if (empty($phpProbeLogFiles)): ?>
