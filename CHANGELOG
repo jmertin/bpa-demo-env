@@ -5,6 +5,25 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 21:00 - [Docs – align README with build-counter ownership change]:
+  README.md had three stale references describing build.sh as the owner of
+  the build counter and IMAGE_TAG increment.
+
+  README.md:
+  - build-scripts tree: updated package-app.sh and build.sh one-liners to
+    describe their respective roles (bump vs. use-as-is).
+  - Design decisions table: "Build versioning" row updated to name
+    package-app.sh as the counter owner and clarify build.sh/compose.sh role.
+  - Kubernetes build steps: step 1 now shows --no-bump; step 2 tag
+    placeholder changed from <TAG>b<N> to <IMAGE_TAG>; step 4 "updates
+    IMAGE_TAG" removed; added note directing users to run package-app.sh
+    first.
+  - Docker Compose section: noted that compose.sh passes --no-bump
+    internally so the counter is not modified.
+
+  Files changed: README.md, CHANGELOG
+
+------------------------------------------------------------------------------
 2026-06-19 @ 20:00 - [Fix – build counter incremented only by package-app.sh; build.sh and compose.sh never bump]:
   build.sh was computing and committing its own build tag, and compose.sh
   was calling package-app.sh without --no-bump.  This caused the counter to
