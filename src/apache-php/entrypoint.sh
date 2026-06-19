@@ -18,7 +18,7 @@ APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"
 APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
 # Web plugin identity - available to the BPA Apache module via process environment.
 APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
-# Browser agent snippet string from the DX O2 tenant (Experience View -> Browser Agent).
+# Browser agent snippet string from the DX O2 tenant (DX O2 Settings -> Manage Mobile/Browser Web Monitoring -> App to Monitor -> Web App).
 # When non-empty, the PHP probe automatically injects the snippet into every HTML
 # response (wily_php_agent.browseragent.autoInjection).  Leave empty to disable.
 APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET:-}"

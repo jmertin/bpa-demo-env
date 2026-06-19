@@ -81,7 +81,7 @@ APMIA_BTL_PORT="8000"
 MYSQL_MONITOR="true"
 
 # ── DX O2 Browser Agent auto-injection ───────────────────────────────────────
-# Snippet string from your DX O2 tenant: Experience View → Browser Agent → Snippet.
+# Snippet string from your DX O2 tenant: DX O2 Settings → Manage Mobile/Browser Web Monitoring → App to Monitor → Web App.
 # Typically a <script> tag referencing the tenant-specific JavaScript URL.
 # When set, the PHP probe injects the snippet into every HTML response automatically
 # (wily_php_agent.browseragent.autoInjection).  Leave empty to disable.
