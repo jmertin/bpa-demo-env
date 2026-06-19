@@ -2,9 +2,9 @@
 # build.sh – Build all Docker images for the BPA-Demo application stack.
 #
 # Reads all configuration from .config in the project root.
-# Auto-increments a local build counter (.build_number) and appends it to
-# IMAGE_TAG as b<N> (e.g. 1.0.0 → 1.0.0b4) so every build produces a
-# distinct tag that Kubernetes cannot skip due to a cached image.
+# Uses IMAGE_TAG from .config as-is for every image — the build counter is
+# managed exclusively by package-app.sh and must be incremented there before
+# running this script.
 #
 # Usage:
 #   build-scripts/build.sh [--push] [-h|--help]
@@ -32,7 +32,6 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly BUILD_FILE="${ROOT_DIR}/.build_number"
 
 # ── Functions ──────────────────────────────────────────────────────────────────
 
@@ -83,31 +82,6 @@ load_config() {
     : "${BUILD_PLATFORM:?BUILD_PLATFORM must be set in .config}"
 }
 
-## Compute the next build tag without touching any file yet.
-# Sets globals FULL_TAG and BUILD_NUM.  Call commit_build_tag() only after
-# every image that should be built has been built successfully.
-compute_build_tag() {
-    local build_num
-    build_num=$(( $(cat "${BUILD_FILE}" 2>/dev/null || echo 0) + 1 ))
-
-    # Strip any existing b<N> suffix so the base version is always clean,
-    # regardless of whether .config currently holds "1.0.0" or "1.0.0b3".
-    local base_tag="${IMAGE_TAG%%b*}"
-    FULL_TAG="${base_tag}b${build_num}"
-    BUILD_NUM="${build_num}"
-}
-
-## Persist the build counter and new tag after all images have been built.
-# Writes BUILD_NUM to .build_number and FULL_TAG back to .config so that
-# push.sh and deploy.sh automatically use the new tag.
-commit_build_tag() {
-    printf '%s\n' "${BUILD_NUM}" > "${BUILD_FILE}"
-    sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=\"${FULL_TAG}\"|" "${ROOT_DIR}/.config"
-    # shellcheck source=../.config
-    source "${ROOT_DIR}/.config"
-    info "Build tag committed: ${FULL_TAG} (build #${BUILD_NUM})"
-}
-
 ## Build a single Docker image and print status.
 # Arguments: human-readable label, image reference, build-context directory.
 build_image() {
@@ -127,10 +101,8 @@ build_image() {
 }
 
 ## Package the PHP application archive (calls package-app.sh).
-# --no-bump is passed because build.sh owns the counter lifecycle:
-# compute_build_tag() runs before the builds; commit_build_tag() runs only
-# after every image succeeds.  package-app.sh handles its own bump only
-# when invoked standalone (without --no-bump).
+# --no-bump is passed because the build counter is managed exclusively by
+# package-app.sh when called standalone.  build.sh uses IMAGE_TAG as-is.
 package_app() {
     info "Packaging application source archive..."
     "${SCRIPT_DIR}/package-app.sh" --no-bump
@@ -156,19 +128,18 @@ done
 # ── Main ───────────────────────────────────────────────────────────────────────
 check_prerequisites
 load_config
-compute_build_tag   # computes FULL_TAG / BUILD_NUM; does NOT write any file yet
 
-readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${FULL_TAG}"
-readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${FULL_TAG}"
+readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
+readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
 
 echo "=== BPA-Demo image build ==="
 echo "  Registry  : ${REGISTRY}"
 echo "  Prefix    : ${IMAGE_PREFIX}"
-echo "  Tag       : ${FULL_TAG}  (build #${BUILD_NUM})"
+echo "  Tag       : ${IMAGE_TAG}"
 echo "  Platform  : ${BUILD_PLATFORM}"
 echo ""
 
-# Step 1 – package PHP application
+# Step 1 – package PHP application (no build-number bump)
 package_app
 
 # Step 2 – build Apache + mod_php image (multi-stage, replaces nginx + php-fpm)
@@ -193,12 +164,6 @@ fi
 # Step 4 – remove intermediate artefact
 cleanup
 
-# Step 5 – commit build counter and tag now that all images built successfully.
-# This is intentionally the last write operation: if any build step above
-# failed (set -euo pipefail), this line is never reached and .config retains
-# the previous tag so the next run reuses the same build number.
-commit_build_tag
-
 # ── Build summary ──────────────────────────────────────────────────────────────
 echo "=== Build summary ==="
 echo "  [OK]  ${APACHE_PHP_IMAGE}"
@@ -209,7 +174,7 @@ else
 fi
 echo ""
 
-# Step 6 – optional push
+# Step 5 – optional push
 if [[ "${OPT_PUSH}" == "true" ]]; then
     info "Push requested – invoking push.sh..."
     "${SCRIPT_DIR}/push.sh"
