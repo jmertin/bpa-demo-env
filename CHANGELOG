@@ -5,6 +5,18 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-20 @ 00:15 - [Docs – Document dx-o2-agent memory sizing in README, DX-O2-AGENT-SETUP, CLAUDE.md]:
+  README.md: added dxo2.resources.requests.memory and
+    dxo2.resources.limits.memory rows to the Helm Key values table with
+    rationale (observed idle baseline, OOMKill risk).
+  DX-O2-AGENT-SETUP.md: added "dx-o2-agent OOMKilled (exit code 137)"
+    troubleshooting entry in section 9 — covers cause (JVM idle ~757 MiB),
+    current defaults (792Mi request / 4Gi limit), and how to observe live
+    usage via docker stats / kubectl top.
+  CLAUDE.md: added dx-o2-agent memory sizing bullet to Helm chart section
+    with idle baseline figure and minimum safe limit guidance.
+
+------------------------------------------------------------------------------
 2026-06-20 @ 00:00 - [Fix – Tune dx-o2-agent memory request to observed idle baseline]:
   Docker stats show dxo2 idle usage at 757.7 MiB (IA JVM + BTL threads).
   Previous request of 512Mi was below actual idle usage, causing the K8s
