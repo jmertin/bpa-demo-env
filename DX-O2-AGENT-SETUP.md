@@ -471,6 +471,40 @@ Then validate manually:
 kubectl exec -n php-demo <pod> -c apache-php -- apache2ctl configtest
 ```
 
+### dx-o2-agent OOMKilled (exit code 137)
+
+**Symptom:** Pod restarts; `kubectl describe pod` shows `OOMKilled` and
+exit code 137 on the `dx-o2-agent` container.
+
+**Cause:** The APMIA Infrastructure Agent is a Java process.  Its JVM
+heap plus the BTL threads consume ~757 MiB at idle (measured via
+`docker stats`).  Any memory limit below that threshold — including the
+former default of 512 Mi — will OOMKill the container before it can
+connect to the backend.
+
+**Fix:** The current defaults in `values.yaml` are:
+```yaml
+dxo2:
+  resources:
+    requests:
+      memory: "792Mi"   # ≈ observed idle baseline + small buffer
+    limits:
+      memory: "4Gi"     # headroom for APM load (transaction correlation, DB monitor)
+```
+If OOMKilled persists under heavy APM load, increase `limits.memory`
+further.  Do not lower `requests.memory` below the observed idle
+baseline or the scheduler will place the pod on nodes without sufficient
+real capacity.
+
+To observe live memory usage:
+```bash
+# Docker Compose
+docker stats --no-stream
+
+# Kubernetes
+kubectl top pod -n php-demo --containers
+```
+
 ### Liveness / readiness probes return HTTP 500 after enabling APMIA
 
 **Symptom:** Pod restarts or stays in `0/1 Running`; probe logs show HTTP 500.

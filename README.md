@@ -402,6 +402,8 @@ Chart: `helm/php-demo` — version **0.2.0**
 | `dxo2.logLevel` | `INFO` | APMENV_LOG4J_LOGGER_INTROSCOPEAGENT level |
 | `dxo2.dbMonitor.enabled` | `true` | Enable APMIA DB Monitor for MariaDB |
 | `dxo2.browserSnippet` | `''` | Browser agent snippet — use YAML single quotes (snippet contains HTML double-quotes); empty = disabled |
+| `dxo2.resources.requests.memory` | `792Mi` | Scheduler reservation — sized to observed IA+BTL idle baseline (~757 MiB) |
+| `dxo2.resources.limits.memory` | `4Gi` | Hard ceiling — APMIA JVM grows under APM load; 512 Mi causes OOMKilled |
 
 ### Kubernetes probes
 
