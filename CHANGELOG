@@ -5,6 +5,37 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 13:00 - [Fix – BTListener log not visible on ?page=dxo2]:
+  Root cause: /opt/btlistener/logs/ is local to the dx-o2-agent container.
+  The apache-php container mounts only /opt/apmia (the shared emptyDir /
+  named volume) and cannot access any path outside it.  The BTL log file
+  therefore did not exist from PHP's perspective, causing tail_file() to
+  return an empty string and the "No log files found" notice to appear.
+
+  Fix: in src/dx-o2-agents/entrypoint.sh, before starting BTL, replace
+  /opt/btlistener/logs/ with a symlink to /opt/apmia/logs/:
+    rm -rf "${BTL_HOME}/logs"
+    ln -sf "${APMIA_HOME}/logs" "${BTL_HOME}/logs"
+  BTL continues to write BTListener.log to its expected path; the symlink
+  transparently redirects writes into the shared volume, making the file
+  readable from the apache-php container as /opt/apmia/logs/BTListener.log.
+
+  app/src/pages/dxo2.php:
+  - BTL_LOG_PATH updated from /opt/btlistener/logs/BTListener.log to
+    /opt/apmia/logs/BTListener.log (new location via symlink redirect).
+  - APMIA logs glob now skips BTListener.log (continue if basename matches)
+    to prevent it appearing twice — once in the APMIA logs card and once in
+    the dedicated BTListener log card.
+
+  CLAUDE.md: documented the symlink redirect in the DX O2 sidecar section
+  and updated the ?page=dxo2 log tails description.
+
+  Files changed:
+  - src/dx-o2-agents/entrypoint.sh
+  - app/src/pages/dxo2.php
+  - CLAUDE.md
+
+------------------------------------------------------------------------------
 2026-06-19 @ 12:00 - [Feat – PHP probe logging to /var/log/php-probe; shown on ?page=dxo2]:
   Enables structured log output for the DX O2 PHP probe and surfaces the logs
   in the DX O2 Status admin page.
