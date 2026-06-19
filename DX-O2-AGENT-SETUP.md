@@ -324,7 +324,7 @@ Secret — they are never in plain-text values files.
 ### 7.5 Browser agent auto-injection
 
 Set `APMIA_BROWSER_SNIPPET` in `.config` to the `<script>` tag from your DX O2
-tenant (Experience View → Browser Agent → Snippet).  Enclose it in single quotes
+tenant (DX O2 Settings → Manage Mobile/Browser Web Monitoring → App to Monitor → Web App).  Enclose it in single quotes
 because the value contains double-quotes:
 
 ```bash

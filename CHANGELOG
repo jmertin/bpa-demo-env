@@ -5,6 +5,19 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 10:00 - [Docs – correct browser agent snippet navigation path in all files]:
+  The browser agent snippet was previously documented as being found under
+  "Experience View → Browser Agent → Snippet".  The correct location in the
+  DX O2 interface is:
+    DX O2 Settings → Manage Mobile/Browser Web Monitoring → App to Monitor → Web App
+
+  Updated in all four locations that referenced the old path:
+  - .config.example: comment above APMIA_BROWSER_SNIPPET.
+  - DX-O2-AGENT-SETUP.md: section 7.5 "Browser agent auto-injection".
+  - src/apache-php/entrypoint.sh: inline comment above APMIA_BROWSER_SNIPPET.
+  - helm/php-demo/values.yaml: comment above browserSnippet value.
+
+------------------------------------------------------------------------------
 2026-06-19 @ 09:00 - [Docs – require single quotes for APMIA_BROWSER_SNIPPET in .config.example]:
   Changed APMIA_BROWSER_SNIPPET="" to APMIA_BROWSER_SNIPPET='' and expanded
   the comment to explain why single quotes are mandatory: the snippet value is
