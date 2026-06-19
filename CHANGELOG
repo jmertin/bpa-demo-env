@@ -5,6 +5,23 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 18:00 - [Feat – limit PHP probe log display to 2 files per naming group on ?page=dxo2]:
+  The wily_php_agent probe generates two log file patterns:
+    Group A: wily_php_agent_<pid>.log            (active per-process log)
+    Group B: wily_php_agent_<pid>-<ts>_N.log     (rolled log with sequence suffix)
+  Previously all matching files were shown, which could flood the page.
+  Now only the 2 most recent files per group are collected and displayed.
+
+  app/src/pages/dxo2.php:
+  - Replaced the flat glob loop in section 6 with a two-group regex split:
+    Group A matched by absence of hyphen-timestamp-sequence pattern;
+    Group B matched by /wily_php_agent_\d+-\d+_\d+\.log$/.
+    Each group is sorted ascending and sliced to the last 2 entries.
+  - Updated PHP Probe Logs card subtitle to reflect the 2-per-group limit.
+
+  Files changed: app/src/pages/dxo2.php, CHANGELOG
+
+------------------------------------------------------------------------------
 2026-06-19 @ 17:00 - [Docs – update README, DX-O2-AGENT-SETUP.md for BPA and X-Page-ID changes]:
   Documentation pass to align all guides with the two fixes made earlier today:
   (1) BPA bpa.conf now uses TcpClientHostAndPort instead of SetEnv log vars.
