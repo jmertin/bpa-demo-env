@@ -85,4 +85,12 @@ MYSQL_MONITOR="true"
 # Typically a <script> tag referencing the tenant-specific JavaScript URL.
 # When set, the PHP probe injects the snippet into every HTML response automatically
 # (wily_php_agent.browseragent.autoInjection).  Leave empty to disable.
-APMIA_BROWSER_SNIPPET=""
+#
+# MUST use single quotes: the snippet value contains double-quotes (HTML attributes
+# in the <script> tag).  Double-quoting the variable would cause the shell to
+# interpret those inner double-quotes as string terminators, corrupting the value.
+# Single quotes preserve the content exactly as-is, including all double-quotes.
+#
+# Example:
+#   APMIA_BROWSER_SNIPPET='<script src="https://example.apm.broadcom.com/snippet.js"></script>'
+APMIA_BROWSER_SNIPPET=''

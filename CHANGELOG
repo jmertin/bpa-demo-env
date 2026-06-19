@@ -5,6 +5,17 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 09:00 - [Docs – require single quotes for APMIA_BROWSER_SNIPPET in .config.example]:
+  Changed APMIA_BROWSER_SNIPPET="" to APMIA_BROWSER_SNIPPET='' and expanded
+  the comment to explain why single quotes are mandatory: the snippet value is
+  a <script> tag that contains double-quotes for HTML attributes.  Using double
+  quotes around the variable causes the shell to treat those inner double-quotes
+  as string terminators, silently corrupting the value.  Single quotes preserve
+  the content verbatim.  An illustrative example line is included.
+
+  File changed: .config.example
+
+------------------------------------------------------------------------------
 2026-06-18 @ 23:00 - [Docs – normalize CLAUDE.md to Claude Code init format]:
   Rewrote CLAUDE.md from scratch using the normalized Claude Code init format.
   The new file starts with the required "This file provides guidance to Claude
