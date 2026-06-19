@@ -5,6 +5,32 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 20:00 - [Fix – build counter incremented only by package-app.sh; build.sh and compose.sh never bump]:
+  build.sh was computing and committing its own build tag, and compose.sh
+  was calling package-app.sh without --no-bump.  This caused the counter to
+  advance multiple times per workflow (e.g. dxo2 tagged b7 from one call,
+  apache-php tagged b8 from the next).
+
+  build.sh:
+  - Removed BUILD_FILE constant, compute_build_tag(), and commit_build_tag().
+  - Removed compute_build_tag / commit_build_tag calls from main sequence.
+  - Uses IMAGE_TAG from .config as-is for all image references.
+  - Updated header comment to document the new ownership model.
+  - Step numbering and build summary updated accordingly.
+
+  build-scripts/compose.sh:
+  - Both package-app.sh call sites (build_images() and the explicit 'build'
+    subcommand block) now pass --no-bump.
+  - Added comment explaining why --no-bump is used.
+
+  CLAUDE.md:
+  - Rewrote Build versioning section: counter ownership is now clearly
+    attributed to package-app.sh; build.sh/compose.sh role is documented.
+
+  Files changed: build-scripts/build.sh, build-scripts/compose.sh,
+  CLAUDE.md, CHANGELOG
+
+------------------------------------------------------------------------------
 2026-06-19 @ 19:00 - [Feat – package-app.sh bumps build counter when called standalone]:
   Running package-app.sh directly now increments .build_number and updates
   IMAGE_TAG in .config (same b<N> tag mechanism used by build.sh).  This

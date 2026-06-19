@@ -140,13 +140,13 @@ No box-drawing (`─`), en/em dashes (`–`, `—`), or arrows (`→`). Verify: 
 
 ## Build versioning
 
-`build.sh` separates compute from commit so a failed build never wastes a build number:
+The build counter is owned **exclusively by `package-app.sh`**. Running it standalone increments `.build_number` and updates `IMAGE_TAG` in `.config` to the new `b<N>` tag:
 
-1. **`compute_build_tag()`** — increments counter **in memory**, sets globals `FULL_TAG` (e.g. `1.0.0b7`) and `BUILD_NUM`. No file is written.
-2. All `docker build` calls use `${FULL_TAG}`.
-3. **`commit_build_tag()`** — called **only after every build succeeds**. Writes `BUILD_NUM` to `.build_number` and updates `IMAGE_TAG` in `.config` via `sed -i`.
+1. **`compute_build_tag()`** — increments counter in memory, sets globals `FULL_TAG` (e.g. `1.0.0b7`) and `BUILD_NUM`. No file is written.
+2. Archive is created.
+3. **`commit_build_tag()`** — writes `BUILD_NUM` to `.build_number` and updates `IMAGE_TAG` in `.config` via `sed -i`.
 
-`package-app.sh` also owns a copy of `compute_build_tag()` / `commit_build_tag()` and runs them when invoked **standalone** (no `--no-bump` flag). This lets the build counter track new app packages created outside a full `build.sh` run (e.g. for local Compose testing). `build.sh` calls `package-app.sh --no-bump` internally so the counter is only incremented once per `build.sh` execution.
+`build.sh` and `compose.sh` always pass `--no-bump` when calling `package-app.sh` internally and read `IMAGE_TAG` from `.config` as-is. This ensures the counter advances exactly once per new app package, regardless of how many docker builds follow.
 
 Never manually set `IMAGE_TAG` to include `b<N>` — set the base version only (e.g. `IMAGE_TAG="1.0.0"`).
 

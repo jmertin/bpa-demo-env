@@ -102,9 +102,11 @@ images_present() {
 }
 
 ## Package and build images locally (calls the build-scripts chain).
+# --no-bump is passed to package-app.sh because compose.sh never owns the
+# build counter; only standalone package-app.sh invocations bump the number.
 build_images() {
     info "Packaging application source..."
-    "${SCRIPT_DIR}/package-app.sh"
+    "${SCRIPT_DIR}/package-app.sh" --no-bump
     echo ""
 
     info "Building images locally..."
@@ -137,7 +139,7 @@ esac
 # Explicit build request – let docker compose handle it (forwards extra flags).
 if [[ "${SUBCMD}" == "build" ]]; then
     info "Packaging application source before build..."
-    "${SCRIPT_DIR}/package-app.sh"
+    "${SCRIPT_DIR}/package-app.sh" --no-bump
     echo ""
     cd "${ROOT_DIR}"
     exec docker compose "$@"
