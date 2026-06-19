@@ -5,6 +5,23 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 23:30 - [Docs – Update README, DX-O2-AGENT-SETUP, and CLAUDE.md for /health probe fix]:
+  README.md:
+  - Added app/src/health to project structure listing.
+  - Added "Kubernetes probes" row to design decisions table.
+  - Added "Kubernetes probes" subsection to Helm chart reference with
+    probe type, path, timing, and log suppression details.
+  - Updated dxo2.browserSnippet default from "" to '' with YAML
+    single-quote note.
+  - Added `curl /health` check to the Kubernetes Verify section.
+  DX-O2-AGENT-SETUP.md:
+  - Section 6.4: annotated apache-php pod startup diagram with probe
+    path and static-file bypass explanation.
+  - Section 9: added new troubleshooting entry "Liveness / readiness
+    probes return HTTP 500 after enabling APMIA" with root cause and fix.
+  CLAUDE.md: already updated in prior commit (Helm chart section).
+
+------------------------------------------------------------------------------
 2026-06-19 @ 23:15 - [Fix – Kubernetes liveness/readiness probes return HTTP 500 with APMIA enabled]:
   Root cause: probes hit GET / → index.php → APMIA PHP probe extension
   tries TCP connect to 127.0.0.1:5005 (IA collector) → sidecar not ready
