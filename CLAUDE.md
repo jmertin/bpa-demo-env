@@ -171,7 +171,7 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 ### BPA Apache module injection
 
 - Finds `mod_*.so` in `extensions/WebServerPlugin/`. Derives module name: `mod_<name>.so → <name>_module`.
-- Writes `LoadModule` + `SetEnv APMIA_WEB_AGENT_NAME` to `/etc/apache2/conf-enabled/bpa.conf`.
+- Writes `LoadModule`, `SetEnv APMIA_WEB_AGENT_NAME`, `SetEnv APMIA_WEB_AGENT_LOG_FILE /var/log/bpa-plugin/bpa.log`, and `SetEnv APMIA_WEB_AGENT_LOG_LEVEL` to `/etc/apache2/conf-enabled/bpa.conf`. The log directory is created in the Dockerfile and owned by `www-data`.
 - Validates with `apache2ctl configtest`; disables on rejection.
 - The module always registers internally as **`caplugin_module`**, detected via `apache2ctl -t -D DUMP_MODULES`.
 
@@ -264,7 +264,7 @@ Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section
 - **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.
 - **Connectivity:** `fsockopen()` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT` and `APMIA_BTL_HOST:PORT`.
 - **Env vars:** all `APMIA_*` / `APMENV_*` in a table; credential-bearing keys redacted.
-- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/` (BTListener.log excluded from this glob — shown in its own card), all `*.log` in `/var/log/php-probe/`, and `BTListener.log` read from `/opt/apmia/logs/BTListener.log` (redirected there by the sidecar entrypoint — see BTL log redirect below).
+- **Log tails (four cards):** APMIA IA logs from `/opt/apmia/logs/*.log` (BTListener.log excluded); PHP probe logs from `/var/log/php-probe/*.log`; BPA plugin logs from `/var/log/bpa-plugin/*.log`; BTListener log from `/opt/apmia/logs/BTListener.log` (redirected there by the sidecar — see BTL log redirect below).
 
 When `/opt/apmia` is absent (`dxo2.enabled=false`) only the summary badges and a "not deployed" notice are shown — all detail cards are hidden. Deployment is detected via `is_dir('/opt/apmia')`.
 
@@ -310,6 +310,7 @@ APMIA_PROCESS_NAME       # → APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME
 APMIA_PHP_AGENT_NAME     # → wily_php_agent.agentName in PHP INI
 APMIA_PHP_LOG_LEVEL      # default INFO → wily_php_agent.logLevel (probe log verbosity)
 APMIA_WEB_AGENT_NAME     # → APMIA_WEB_AGENT_NAME env for BPA Apache module
+APMIA_BPA_LOG_LEVEL      # default INFO → APMIA_WEB_AGENT_LOG_LEVEL in bpa.conf
 APMIA_LOG_LEVEL          # default INFO → APMENV_LOG4J_LOGGER_INTROSCOPEAGENT
 
 # DX O2 – IPC (defaults: same-pod 127.0.0.1; Compose overrides to dxo2 service name)

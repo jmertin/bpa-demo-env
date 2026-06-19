@@ -20,6 +20,8 @@ APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
 APMIA_PHP_LOG_LEVEL="${APMIA_PHP_LOG_LEVEL:-INFO}"
 # Web plugin identity - available to the BPA Apache module via process environment.
 APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
+# BPA WebServer Plugin log level. Common values: INFO, DEBUG.
+APMIA_BPA_LOG_LEVEL="${APMIA_BPA_LOG_LEVEL:-INFO}"
 # Browser agent snippet string from the DX O2 tenant (DX O2 Settings -> Manage Mobile/Browser Web Monitoring -> App to Monitor -> Web App).
 # When non-empty, the PHP probe automatically injects the snippet into every HTML
 # response (wily_php_agent.browseragent.autoInjection).  Leave empty to disable.
@@ -129,11 +131,18 @@ LoadModule ${MODULE_NAME} ${BPA_APACHE_SO}
 # Expose web plugin identity to the BPA module via the Apache request env.
 # The BPA Apache module reads APMIA_WEB_AGENT_NAME when building its metric path.
 SetEnv APMIA_WEB_AGENT_NAME ${APMIA_WEB_AGENT_NAME}
+
+# BPA WebServer Plugin logging.
+# Log directory is /var/log/bpa-plugin, created in the Dockerfile and owned
+# by www-data so the Apache child processes can write without privilege.
+SetEnv APMIA_WEB_AGENT_LOG_FILE /var/log/bpa-plugin/bpa.log
+SetEnv APMIA_WEB_AGENT_LOG_LEVEL ${APMIA_BPA_LOG_LEVEL}
 EOF
     ln -sf /etc/apache2/conf-available/bpa.conf /etc/apache2/conf-enabled/bpa.conf
 
     if apache2ctl configtest 2>/dev/null; then
         echo "[entrypoint] BPA WebServer Plugin active - BPA instrumentation enabled."
+        echo "[entrypoint]   BPA logging: enabled (level=${APMIA_BPA_LOG_LEVEL}, dir=/var/log/bpa-plugin)"
     else
         echo "[entrypoint] WARNING: Apache rejected BPA module (${MODULE_BASENAME})." >&2
         echo "[entrypoint]   Disabling BPA - starting Apache without BPA instrumentation." >&2
