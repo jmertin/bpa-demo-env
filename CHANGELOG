@@ -5,6 +5,35 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 19:00 - [Feat – package-app.sh bumps build counter when called standalone]:
+  Running package-app.sh directly now increments .build_number and updates
+  IMAGE_TAG in .config (same b<N> tag mechanism used by build.sh).  This
+  lets developers track app-only repackages (e.g. Compose testing) without
+  running a full Docker image build.
+
+  build.sh passes --no-bump to package-app.sh when calling it internally so
+  the counter is incremented exactly once per build.sh execution, preserving
+  the existing "compute in memory, commit only on success" safety guarantee.
+
+  build-scripts/package-app.sh:
+  - Added BUILD_FILE constant (mirrors build.sh).
+  - Added compute_build_tag() and commit_build_tag() functions (mirrors build.sh).
+  - Added --no-bump flag to argument parser; skips bump when set.
+  - Added IMAGE_TAG validation to load_config().
+  - Updated header comment to document --no-bump and the standalone behaviour.
+
+  build-scripts/build.sh:
+  - package_app() now passes --no-bump to package-app.sh.
+  - Added comment explaining why --no-bump is used.
+
+  CLAUDE.md:
+  - Extended Build versioning section to document package-app.sh standalone
+    bump and the --no-bump contract with build.sh.
+
+  Files changed: build-scripts/package-app.sh, build-scripts/build.sh,
+  CLAUDE.md, CHANGELOG
+
+------------------------------------------------------------------------------
 2026-06-19 @ 18:00 - [Feat – limit PHP probe log display to 2 files per naming group on ?page=dxo2]:
   The wily_php_agent probe generates two log file patterns:
     Group A: wily_php_agent_<pid>.log            (active per-process log)

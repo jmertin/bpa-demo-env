@@ -146,6 +146,8 @@ No box-drawing (`─`), en/em dashes (`–`, `—`), or arrows (`→`). Verify: 
 2. All `docker build` calls use `${FULL_TAG}`.
 3. **`commit_build_tag()`** — called **only after every build succeeds**. Writes `BUILD_NUM` to `.build_number` and updates `IMAGE_TAG` in `.config` via `sed -i`.
 
+`package-app.sh` also owns a copy of `compute_build_tag()` / `commit_build_tag()` and runs them when invoked **standalone** (no `--no-bump` flag). This lets the build counter track new app packages created outside a full `build.sh` run (e.g. for local Compose testing). `build.sh` calls `package-app.sh --no-bump` internally so the counter is only incremented once per `build.sh` execution.
+
 Never manually set `IMAGE_TAG` to include `b<N>` — set the base version only (e.g. `IMAGE_TAG="1.0.0"`).
 
 ---
