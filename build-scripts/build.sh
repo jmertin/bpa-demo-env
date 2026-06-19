@@ -127,9 +127,13 @@ build_image() {
 }
 
 ## Package the PHP application archive (calls package-app.sh).
+# --no-bump is passed because build.sh owns the counter lifecycle:
+# compute_build_tag() runs before the builds; commit_build_tag() runs only
+# after every image succeeds.  package-app.sh handles its own bump only
+# when invoked standalone (without --no-bump).
 package_app() {
     info "Packaging application source archive..."
-    "${SCRIPT_DIR}/package-app.sh"
+    "${SCRIPT_DIR}/package-app.sh" --no-bump
     echo ""
 }
 

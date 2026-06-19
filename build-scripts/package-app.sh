@@ -5,10 +5,17 @@
 # the build context by the Apache + mod_php Docker multi-stage build (Stage 1).
 # This script must be run before build.sh (build.sh calls it automatically).
 #
+# When called standalone (without --no-bump) the build counter in
+# .build_number is incremented and IMAGE_TAG in .config is updated to the new
+# b<N> tag so that compose.sh and deploy.sh pick up the new version immediately.
+# build.sh passes --no-bump when it calls this script internally because it
+# manages the counter lifecycle itself (compute then commit only on success).
+#
 # Usage:
-#   build-scripts/package-app.sh [-h|--help]
+#   build-scripts/package-app.sh [--no-bump] [-h|--help]
 #
 # Options:
+#   --no-bump   Skip build-counter increment (used by build.sh internally).
 #   -h, --help  Print this help message and exit.
 #
 # Prerequisites:
@@ -21,6 +28,7 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+readonly BUILD_FILE="${ROOT_DIR}/.build_number"
 
 # ── Functions ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +65,27 @@ load_config() {
         fatal ".config not found in project root. Copy .config.example to .config."
     # shellcheck source=../.config
     source "${config_file}"
+    : "${IMAGE_TAG:?IMAGE_TAG must be set in .config}"
+}
+
+## Compute the next build tag in memory; sets globals FULL_TAG and BUILD_NUM.
+# Mirrors the same function in build.sh.  No file is written here.
+compute_build_tag() {
+    local build_num
+    build_num=$(( $(cat "${BUILD_FILE}" 2>/dev/null || echo 0) + 1 ))
+    local base_tag="${IMAGE_TAG%%b*}"
+    FULL_TAG="${base_tag}b${build_num}"
+    BUILD_NUM="${build_num}"
+}
+
+## Persist the build counter and updated IMAGE_TAG to disk.
+# Mirrors the same function in build.sh.
+commit_build_tag() {
+    printf '%s\n' "${BUILD_NUM}" > "${BUILD_FILE}"
+    sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=\"${FULL_TAG}\"|" "${ROOT_DIR}/.config"
+    # shellcheck source=../.config
+    source "${ROOT_DIR}/.config"
+    info "Build tag committed: ${FULL_TAG} (build #${BUILD_NUM})"
 }
 
 ## Create the application archive.
@@ -78,8 +107,10 @@ create_archive() {
 }
 
 # ── Argument parsing ───────────────────────────────────────────────────────────
+OPT_NO_BUMP=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --no-bump)  OPT_NO_BUMP=true ;;
         -h|--help)  usage; exit 0 ;;
         *)          fatal "Unknown option: $1. Use --help for usage." ;;
     esac
@@ -90,3 +121,8 @@ done
 check_prerequisites
 load_config
 create_archive
+
+if [[ "${OPT_NO_BUMP}" == "false" ]]; then
+    compute_build_tag
+    commit_build_tag
+fi
