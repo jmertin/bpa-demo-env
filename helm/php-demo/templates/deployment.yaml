@@ -182,6 +182,14 @@ spec:
             - name: btl
               containerPort: {{ .Values.dxo2.btlPort }}
               protocol: TCP
+          volumeMounts:
+            # Mount the shared emptyDir at /opt/apmia so the IA and BTL write
+            # their log files to the same volume that apache-php reads (read-only).
+            # Without this mount the dx-o2-agent writes to its own private overlay
+            # filesystem and the logs are invisible to the dxo2 status page.
+            # This mirrors Docker Compose, where both services share apmia_data.
+            - name: apmia-share
+              mountPath: /opt/apmia
           {{- with .Values.dxo2.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

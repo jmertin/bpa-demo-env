@@ -5,6 +5,22 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-20 @ 01:00 - [Fix – APMIA and BTListener logs empty in dxo2 status page (Kubernetes)]:
+  Root cause: dx-o2-agent had no volumeMounts in the Helm deployment
+  template.  The IA wrote IntroscopeAgent.log and BTListener.log to the
+  container's private overlay filesystem.  apache-php mounts apmia-share
+  (seeded once by dxo2-init) and reads /opt/apmia/logs/ from there –
+  a static copy with no live log files, so all log cards were empty.
+  In Docker Compose both services mount apmia_data read-write/read-only
+  at /opt/apmia; the same volume makes logs visible.  Kubernetes lacked
+  this shared mount on the dx-o2-agent side.
+  Fix: added volumeMount for apmia-share at /opt/apmia in the dx-o2-agent
+  container spec (deployment.yaml).  The IA now writes to apmia-share,
+  which apache-php reads via its existing read-only mount – identical to
+  the Compose behaviour.  Docker Compose is unchanged.
+  File: helm/php-demo/templates/deployment.yaml
+
+------------------------------------------------------------------------------
 2026-06-20 @ 00:30 - [Fix – dx-o2-agent logs not visible in kubectl logs / docker compose logs]:
   The IA (IntroscopeAgent.log) and BTL (BTListener.log) write to files
   rather than stdout.  kubectl logs and docker compose logs only capture
