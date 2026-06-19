@@ -5,6 +5,14 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-20 @ 00:00 - [Fix – Tune dx-o2-agent memory request to observed idle baseline]:
+  Docker stats show dxo2 idle usage at 757.7 MiB (IA JVM + BTL threads).
+  Previous request of 512Mi was below actual idle usage, causing the K8s
+  scheduler to place the pod on nodes without sufficient real capacity.
+  Request raised to 792Mi (observed idle + small buffer); limit stays 4Gi.
+  File: helm/php-demo/values.yaml (dxo2.resources.requests.memory)
+
+------------------------------------------------------------------------------
 2026-06-19 @ 23:45 - [Fix – OOMKilled (exit 137) on dx-o2-agent sidecar]:
   APMIA Infrastructure Agent (Java) + BTL exceed the previous 512Mi limit.
   Raised dxo2 container memory limit from 512Mi to 4Gi; request bumped
