@@ -118,6 +118,16 @@ _start_btl() {
 if [[ ! -x "${BTL_SCRIPT}" ]]; then
     echo "[entrypoint] WARNING: BTL script not found at ${BTL_SCRIPT} - BTL not started."
 else
+    # == Redirect BTL logs to the shared APMIA volume ==========================
+    # /opt/btlistener/logs/ is local to this container; the apache-php container
+    # mounts only /opt/apmia (the shared emptyDir/named volume) and cannot read
+    # paths outside it.  Replace the BTL log directory with a symlink into the
+    # shared volume so BTListener.log is visible to the dxo2 status page.
+    mkdir -p "${APMIA_HOME}/logs"
+    rm -rf "${BTL_HOME}/logs"
+    ln -sf "${APMIA_HOME}/logs" "${BTL_HOME}/logs"
+    echo "[entrypoint] BTL logs redirected -> ${APMIA_HOME}/logs/ (shared volume)"
+
     _start_btl
 
     # == BTL watchdog =========================================================

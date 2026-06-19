@@ -154,7 +154,7 @@ Never manually set `IMAGE_TAG` to include `b<N>` — set the base version only (
 The APMIA agent is never baked into application images. At pod startup:
 
 1. **`dxo2-init` initContainer** copies `/opt/apmia/` from the `dx-o2-agents` image into an `emptyDir` volume (`apmia-share`).
-2. **`dx-o2-agent` sidecar** starts the IA (`APMIAgent.sh console`) and BTL (`BTListener.sh start` — `start` is required; omitting it prints usage and exits). A `_btl_watchdog` background loop polls via `pgrep -f 'BTListener'` every 30 s and restarts if dead. Shutdown order: kill watchdog → kill IA → `pkill -f BTListener`.
+2. **`dx-o2-agent` sidecar** starts the IA (`APMIAgent.sh console`) and BTL (`BTListener.sh start` — `start` is required; omitting it prints usage and exits). Before starting BTL the entrypoint replaces `/opt/btlistener/logs/` with a symlink to `/opt/apmia/logs/` so BTL writes `BTListener.log` into the shared volume where the `apache-php` container can read it. A `_btl_watchdog` background loop polls via `pgrep -f 'BTListener'` every 30 s and restarts if dead. Shutdown order: kill watchdog → kill IA → `pkill -f BTListener`.
 3. **`apache-php` container** mounts `apmia-share` read-only at `/opt/apmia`. Its entrypoint performs opportunistic injection and starts cleanly when the volume is absent.
 
 All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is activated when `APMIA_EM_HOST` is non-empty in `.config`.
@@ -264,7 +264,7 @@ Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section
 - **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.
 - **Connectivity:** `fsockopen()` TCP probe of `APMIA_PHP_COLLECTOR_HOST:PORT` and `APMIA_BTL_HOST:PORT`.
 - **Env vars:** all `APMIA_*` / `APMENV_*` in a table; credential-bearing keys redacted.
-- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/`, all `*.log` in `/var/log/php-probe/`, and `/opt/btlistener/logs/BTListener.log`, each in its own scrollable card.
+- **Log tails:** last 40 lines of each `*.log` in `/opt/apmia/logs/` (BTListener.log excluded from this glob — shown in its own card), all `*.log` in `/var/log/php-probe/`, and `BTListener.log` read from `/opt/apmia/logs/BTListener.log` (redirected there by the sidecar entrypoint — see BTL log redirect below).
 
 When `/opt/apmia` is absent (`dxo2.enabled=false`) only the summary badges and a "not deployed" notice are shown — all detail cards are hidden. Deployment is detected via `is_dir('/opt/apmia')`.
 

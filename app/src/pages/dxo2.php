@@ -94,7 +94,7 @@ function parse_ini_flat(string $path): array {
 define('BPA_CONF_PATH',       '/etc/apache2/conf-enabled/bpa.conf');
 define('APMIA_HOME',          '/opt/apmia');
 define('APMIA_LOGS_DIR',      '/opt/apmia/logs');
-define('BTL_LOG_PATH',        '/opt/btlistener/logs/BTListener.log');
+define('BTL_LOG_PATH',        '/opt/apmia/logs/BTListener.log');
 define('PHP_PROBE_LOGS_DIR',  '/var/log/php-probe');
 
 // The /opt/apmia directory is populated by the dxo2-init initContainer.
@@ -179,6 +179,9 @@ if (is_dir(APMIA_LOGS_DIR)) {
   $found = glob(APMIA_LOGS_DIR . '/*.log') ?: [];
   sort($found);
   foreach ($found as $logPath) {
+    if (basename($logPath) === 'BTListener.log') {
+      continue; // shown in the dedicated BTListener log card below
+    }
     $logFiles[basename($logPath)] = tail_file($logPath, 40);
   }
 }
