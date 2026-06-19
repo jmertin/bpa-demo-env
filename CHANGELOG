@@ -5,6 +5,25 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-19 @ 23:15 - [Fix – Kubernetes liveness/readiness probes return HTTP 500 with APMIA enabled]:
+  Root cause: probes hit GET / → index.php → APMIA PHP probe extension
+  tries TCP connect to 127.0.0.1:5005 (IA collector) → sidecar not ready
+  yet → 500.  Fix: add a static health file (app/src/health) served by
+  Apache without invoking PHP, so probes never trigger the extension.
+  Changes:
+  - app/src/health: new static file ("OK"), no PHP extension so mod_php
+    is not invoked; Apache serves it via the default file handler.
+  - src/apache-php/config/vhost.conf: added SetEnvIf to suppress access
+    log entries for /health probe requests; updated CustomLog with
+    env=!dontlog to exclude flagged requests from log output.
+  - helm/php-demo/values.yaml: changed probe paths from / to /health for
+    livenessProbe and readinessProbe; added startupProbe (30 × 5 s =
+    150 s startup window) so liveness does not fire during slow starts.
+  - helm/php-demo/templates/deployment.yaml: added {{- with startupProbe }}
+    block so the new startupProbe key from values.yaml is rendered.
+  - CLAUDE.md: documented static health endpoint in Helm chart section.
+
+------------------------------------------------------------------------------
 2026-06-19 @ 22:00 - [Fix – APMIA_BROWSER_SNIPPET breaks Helm YAML when wrapped in double quotes]:
   The browser snippet value contains double-quotes (HTML src="..." attrs).
   deploy.sh was writing browserSnippet: "${apmia_browser_snippet}" into the

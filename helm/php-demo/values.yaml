@@ -83,18 +83,29 @@ resources:
 podSecurityContext:
   fsGroup: 33          # www-data GID
 
-# Liveness / readiness probes
+# Liveness / readiness / startup probes.
+# All apache-php probes target /health – a static file served by Apache
+# without invoking PHP.  This keeps probes independent of APMIA state:
+# the PHP probe extension is not triggered, so the dx-o2-agent sidecar
+# (PHP collector at 127.0.0.1:5005) does not need to be ready first.
 probes:
   apachephp:
+    startupProbe:
+      httpGet:
+        path: /health
+        port: 8080
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 30    # 30 × 5 s = 150 s maximum startup window
     livenessProbe:
       httpGet:
-        path: /
+        path: /health
         port: 8080
       initialDelaySeconds: 15
       periodSeconds: 20
     readinessProbe:
       httpGet:
-        path: /
+        path: /health
         port: 8080
       initialDelaySeconds: 5
       periodSeconds: 10
