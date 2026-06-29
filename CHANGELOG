@@ -5,6 +5,13 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-29 @ 10:00 - [Docs – Add QUICKSTART.md quick deployment guide]:
+  New concise reference covering: prerequisites, .config setup, build /
+  push / deploy steps, Docker Compose dev workflow, default accounts,
+  and tear-down commands.  Links to README.md and DX-O2-AGENT-SETUP.md
+  for full detail.
+
+------------------------------------------------------------------------------
 2026-06-20 @ 01:00 - [Fix – APMIA and BTListener logs empty in dxo2 status page (Kubernetes)]:
   Root cause: dx-o2-agent had no volumeMounts in the Helm deployment
   template.  The IA wrote IntroscopeAgent.log and BTListener.log to the
