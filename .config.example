@@ -9,7 +9,7 @@ REGISTRY_USER="admin"
 REGISTRY_PASSWORD="changeme"
 
 # ── Image settings ────────────────────────────────────────────────────────────
-IMAGE_PREFIX="php-demo"
+IMAGE_PREFIX="dxo2-bpa-demo"
 # Base version only – build.sh appends b<N> automatically (e.g. 1.0.0 → 1.0.0b4).
 # The counter is stored in .build_number and updated on every build.sh run.
 IMAGE_TAG="1.0.0"
@@ -22,13 +22,13 @@ MARIADB_USER="phpuser"
 MARIADB_PASSWORD="changeme_user"
 
 # ── Kubernetes / Helm deployment ──────────────────────────────────────────────
-APP_NAMESPACE="php-demo"
-APP_HOSTNAME="php-demo.example.com"
+APP_NAMESPACE="dxo2-bpa-demo"
+APP_HOSTNAME="dxo2-bpa-demo.example.com"
 TLS_CLUSTER_ISSUER="letsencrypt-prod"
 INGRESS_CLASS_NAME="nginx"          # e.g. nginx, traefik, haproxy, alb
 KUBECONFIG="${HOME}/.kube/config"
 
-# Path to the Helm chart directory.  Defaults to helm/php-demo relative to the
+# Path to the Helm chart directory.  Defaults to helm/dxo2-bpa-demo relative to the
 # project root when this variable is absent or empty.
 HELM_CHART_PATH=""
 
