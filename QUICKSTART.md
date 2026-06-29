@@ -46,13 +46,20 @@ build-scripts/package-app.sh
 
 # Build all Docker images
 build-scripts/build.sh
+```
 
-# Push images to the registry
+**Kubernetes only** — push images to the registry:
+
+```bash
 build-scripts/push.sh
 ```
 
 > If the DX O2 agent packages are absent from `src/dx-o2-agents/installers/`,
 > the `dx-o2-agents` image is skipped. Use `push.sh --skip-dxo2` in that case.
+
+> **Local Docker Compose:** skip `push.sh` entirely. `compose.sh` builds images
+> directly into the local Docker store and runs them from there — no registry
+> needed.
 
 ---
 

@@ -5,6 +5,13 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-29 @ 10:15 - [Docs – Clarify registry push is not needed for local Docker Compose]:
+  QUICKSTART.md section 2: split push.sh into a Kubernetes-only block and
+  added a note that Docker Compose users can skip push.sh entirely because
+  compose.sh builds images into the local Docker store and runs them from
+  there without a registry.
+
+------------------------------------------------------------------------------
 2026-06-29 @ 10:00 - [Docs – Add QUICKSTART.md quick deployment guide]:
   New concise reference covering: prerequisites, .config setup, build /
   push / deploy steps, Docker Compose dev workflow, default accounts,
