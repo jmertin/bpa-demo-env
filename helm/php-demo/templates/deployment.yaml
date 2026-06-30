@@ -132,6 +132,11 @@ spec:
             # Log level: log4j logger spec – level and appender name.
             - name: APMENV_LOG4J_LOGGER_INTROSCOPEAGENT
               value: "{{ .Values.dxo2.logLevel }}, logfile"
+            # URL group clamp: limits the number of distinct frontend URL groups the
+            # agent tracks. 50 prevents metric explosion when the shop URL query string
+            # produces many unique paths while still covering all demo page routes.
+            - name: APMENV_INTROSCOPE_AGENT_URLGROUP_FRONTEND_URL_CLAMP
+              value: "50"
             {{- if .Values.dxo2.dbMonitor.enabled }}
             # ── MariaDB monitoring (APMIA DB Monitor extension) ─────────────────
             # Hostname is 127.0.0.1 (same pod).  Credentials come from the

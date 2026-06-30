@@ -34,6 +34,9 @@ services:
       APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME: ${APMIA_PROCESS_NAME:-bpa-demo}
       # Log level: log4j logger spec – level and appender name.
       APMENV_LOG4J_LOGGER_INTROSCOPEAGENT: "${APMIA_LOG_LEVEL:-INFO}, logfile"
+      # URL group clamp: limits distinct frontend URL groups tracked by the agent.
+      # 50 prevents metric explosion from query-string variations across demo pages.
+      APMENV_INTROSCOPE_AGENT_URLGROUP_FRONTEND_URL_CLAMP: "50"
       # ── MariaDB monitoring (APMIA DB Monitor extension) ───────────────────────
       # MYSQL_MONITOR=true activates DB monitoring.  Credentials come from the
       # MARIADB_* vars in .config (git-ignored, never committed).
