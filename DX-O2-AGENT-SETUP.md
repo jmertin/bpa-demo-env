@@ -205,6 +205,7 @@ Check: /opt/apmia/extensions/PHPAgent/wily_php_agent.ini exists?
       remove wily_php_agent.browseragent.autoInjection.snippetString
     Always:
       remove wily_php_agent.browseragent.autoInjection.enabled (legacy property)
+      wily_php_agent.enable.browseragent.snippet.maxSearchingLength = 32768
     → PHP probe active.
   NO →
     Log "DX O2 agent volume not mounted" and continue without probe.
@@ -345,11 +346,22 @@ The `apache-php` entrypoint writes to `wily_php_agent.ini`:
 ```ini
 wily_php_agent.enable.browseragent.snippet.autoInjection=1
 wily_php_agent.browseragent.autoInjection.snippetString='<script ...>'
+wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768
 ```
 
 Leave `APMIA_BROWSER_SNIPPET` empty to disable.  The entrypoint always sets
 `autoInjection=0` and removes any pre-configured snippet when the variable is
 empty, so the installer's defaults cannot override your `.config` setting.
+
+**`maxSearchingLength` — why 32768:**
+The probe scans the beginning of each HTTP response looking for a `<head>` or
+`<body>` tag to inject the browser-agent `<script>` after.  All application CSS
+is served as a separate static file (`/css/app.css`) so the `<head>` block
+contains only meta tags — `</head>` appears at byte **239** and `<body>` at
+byte **247** in every response.  32 768 bytes (32 KB) gives ~135× headroom over
+the actual scan requirement and future-proofs the setting against layout growth.
+Without this explicit value the probe falls back to the installer's INI default,
+which varies by APMIA version and may be as low as 16 KB.
 
 ---
 
@@ -429,6 +441,8 @@ kubectl exec -n php-demo <pod> -c apache-php -- \
 Verify:
 - `wily_php_agent.collectorHost` and `collectorPort` are correct.
 - `wily_php_agent.agentName` matches `APMIA_PHP_AGENT_NAME`.
+- `wily_php_agent.hostname` matches `APMIA_PHP_AGENT_NAME`.
+- `wily_php_agent.enable.browseragent.snippet.maxSearchingLength` is `32768`.
 - `wily_php_agent.enable.browseragent.snippet.autoInjection` is `1` or `0`
   as configured.
 
