@@ -5,6 +5,17 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 11:00 - [Refactor – Move all CSS from inline <style> block to static file]:
+  app/src/css/app.css: new file containing all application styles (extracted
+  from templates/layout.php).  Apache serves it at /css/app.css as a static
+  file — no PHP involvement, browser-cacheable.
+  app/src/templates/layout.php: replaced 13.8 KB <style> block with a single
+  <link rel="stylesheet" href="/css/app.css"> tag.  layout.php shrank from
+  16 964 bytes to 3 350 bytes.  The </head> tag now appears at byte 239
+  (down from 13 853), and <body> at byte 247 (down from 13 861) — the PHP
+  probe browser agent injection point is now trivially within any scan limit.
+
+------------------------------------------------------------------------------
 2026-06-30 @ 10:00 - [Feat – Set browser agent maxSearchingLength for reliable script injection]:
   src/apache-php/entrypoint.sh: always patch
   wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768 in the
