@@ -5,6 +5,18 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 12:00 - [Docs – Update DX-O2-AGENT-SETUP.md and CLAUDE.md for CSS/browser-agent changes]:
+  DX-O2-AGENT-SETUP.md section 6.2: added maxSearchingLength=32768 to the
+  "Always:" block of the INI patch table.
+  DX-O2-AGENT-SETUP.md section 7.5: added maxSearchingLength explanation block
+  documenting the 32 KB value and its rationale (</head> at byte 239, <body> at
+  byte 247, 135x headroom, guards against installer INI variation).
+  DX-O2-AGENT-SETUP.md section 8.4: added wily_php_agent.hostname and
+  maxSearchingLength to the runtime verification checklist.
+  CLAUDE.md key file paths: split "Layout template" row and added new
+  "Application stylesheet" row for app/src/css/app.css.
+
+------------------------------------------------------------------------------
 2026-06-30 @ 11:00 - [Refactor – Move all CSS from inline <style> block to static file]:
   app/src/css/app.css: new file containing all application styles (extracted
   from templates/layout.php).  Apache serves it at /css/app.css as a static
