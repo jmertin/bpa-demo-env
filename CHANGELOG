@@ -5,6 +5,18 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 10:00 - [Feat – Set browser agent maxSearchingLength for reliable script injection]:
+  src/apache-php/entrypoint.sh: always patch
+  wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768 in the
+  PHP probe INI.  The <head> tag appears at byte 33 in every response, but the
+  inline CSS block inside <head> is 13.8 KB, placing </head>/<body> at byte
+  ~13 861.  32 768 (32 KB) gives 2x headroom over the fallback injection point
+  and future-proofs the setting against CSS growth.  Without this, the probe
+  relies on the installer INI default (typically 16 KB), which is only ~2 KB
+  above the current requirement.
+  CLAUDE.md: updated PHP probe injection section to document the setting.
+
+------------------------------------------------------------------------------
 2026-06-30 @ 09:00 - [Feat – Set wily_php_agent.hostname for PHP probe identity]:
   src/apache-php/entrypoint.sh: added hostname patch block that sets
   wily_php_agent.hostname to APMIA_PHP_AGENT_NAME (default bpa-demo-php-probe)

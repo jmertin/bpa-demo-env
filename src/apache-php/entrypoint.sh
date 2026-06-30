@@ -92,6 +92,18 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     # The DX O2 installer may ship the INI with pre-configured values; .config is
     # always the authoritative source.  The legacy property
     # wily_php_agent.browseragent.autoInjection.enabled is removed in both branches.
+    #
+    # maxSearchingLength: how many bytes of output the probe scans to find <head> or
+    # <body> for injection.  layout.php emits <head> at byte 33 (trivially found),
+    # but the <head> block contains 13.8 KB of inline CSS before </head>/<body> at
+    # byte ~13 861.  32768 (32 KB) gives 2x headroom over that fallback and
+    # future-proofs against CSS growth.
+    if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.maxSearchingLength=" "${INI_PATH}"; then
+        sed -i "s|^wily_php_agent\.enable\.browseragent\.snippet\.maxSearchingLength=.*|wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768|" "${INI_PATH}"
+    else
+        printf '\nwily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768\n' >> "${INI_PATH}"
+    fi
+    echo "[entrypoint]   Browser agent scan length: 32768 bytes"
     if [[ -n "${APMIA_BROWSER_SNIPPET}" ]]; then
         if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=" "${INI_PATH}"; then
             sed -i "s|^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=.*|wily_php_agent.enable.browseragent.snippet.autoInjection=1|" "${INI_PATH}"
