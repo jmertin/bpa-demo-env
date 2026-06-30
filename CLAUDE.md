@@ -169,7 +169,7 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 - Copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/`; symlinks as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`.
 - Patches `collectorHost`, `collectorPort`, `application.name`, `agentName`, `hostname` via `sed -i`. `agentName` and `hostname` are both set to `APMIA_PHP_AGENT_NAME` (default `bpa-demo-php-probe`) — `hostname` overrides OS `gethostname()` so the PHP probe appears with a recognisable name in the metric path instead of an auto-generated pod ID.
 - Sets `logdir="/var/log/php-probe"`, `disableLogging=0`, `logLevel="${APMIA_PHP_LOG_LEVEL}"`. The directory is created in the Dockerfile and owned by `www-data` so the Apache process can write logs without privilege escalation.
-- Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes). Also sets `wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768` unconditionally — the `<head>` tag is at byte 33 in every response, but the inline CSS block inside `<head>` is ~13.8 KB, putting `</head>`/`<body>` at byte ~13 861; 32 KB gives 2× headroom over that fallback.
+- Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes). Also sets `wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768` unconditionally — `<head>` is at byte 33 and `</head>`/`<body>` at byte ~239/247 (CSS is a separate static file), so 32 KB is a large safety margin against future growth.
 
 ### BPA Apache module injection
 
@@ -357,7 +357,8 @@ Update on every commit. Format: `YYYY-MM-DD @ HH:MM - [Type – Description]`. P
 | Front controller + routing | `app/src/index.php` |
 | Session bootstrap + CSRF | `app/src/config/app.php` |
 | PDO singleton | `app/src/config/database.php` |
-| Layout template (full CSS inline) | `app/src/templates/layout.php` |
+| Layout template | `app/src/templates/layout.php` |
+| Application stylesheet | `app/src/css/app.css` |
 | Apache+PHP entrypoint (probe + BPA injection) | `src/apache-php/entrypoint.sh` |
 | DX O2 entrypoint (IA + BTL + watchdog) | `src/dx-o2-agents/entrypoint.sh` |
 | Admin page — DX O2 status | `app/src/pages/dxo2.php` |
