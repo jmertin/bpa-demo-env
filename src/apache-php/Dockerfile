@@ -61,6 +61,12 @@ RUN apt-get update && \
 RUN a2enmod rewrite headers php8.1 && \
     a2dissite 000-default
 
+# Disable PHP OPcache so every request compiles PHP source fresh.
+# php8.1-opcache may be pulled in as a transitive dependency; this ini
+# drop-in disables it regardless of whether the package is present.
+RUN printf '[opcache]\nopcache.enable=0\nopcache.enable_cli=0\n' \
+    > /etc/php/8.1/apache2/conf.d/99-disable-opcache.ini
+
 # Suppress "Could not reliably determine the server's FQDN" at every startup.
 RUN echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf && \
     a2enconf servername
