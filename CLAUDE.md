@@ -68,6 +68,18 @@ Files in `app/src/usecases/` each define one function: `usecase_<name>(PDO $db, 
 
 Session is regenerated on login/logout. CSRF token is one-per-session, generated in `config/app.php`, verified in `csrf_verify()` on every POST.
 
+### Caching policy (intentionally disabled)
+
+All caching is disabled at every layer so APM tooling sees genuine request latency and every page load hits PHP and the database fresh:
+
+| Layer | Mechanism | Configuration |
+|---|---|---|
+| PHP OPcache | Disabled | `/etc/php/8.1/apache2/conf.d/99-disable-opcache.ini` (`opcache.enable=0`) — written by Dockerfile |
+| Web-server cache | Not enabled | `mod_cache`/`mod_cache_disk` are never loaded; no caching directives in `vhost.conf` |
+| Browser cache | No-cache headers | `vhost.conf`: `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`; `Pragma: no-cache`; `Expires: Thu, 01 Jan 1970 00:00:00 GMT`; ETags and `Last-Modified` stripped |
+
+The headers are applied via `Header always set` in `vhost.conf` (requires `mod_headers`, enabled in the Dockerfile) and cover **all** responses: PHP pages, the static CSS file, and `/health`.
+
 ---
 
 ## PHP coding standards (mandatory — Backdrop CMS)
@@ -359,6 +371,7 @@ Update on every commit. Format: `YYYY-MM-DD @ HH:MM - [Type – Description]`. P
 | PDO singleton | `app/src/config/database.php` |
 | Layout template | `app/src/templates/layout.php` |
 | Application stylesheet | `app/src/css/app.css` |
+| Apache vhost config | `src/apache-php/config/vhost.conf` |
 | Apache+PHP entrypoint (probe + BPA injection) | `src/apache-php/entrypoint.sh` |
 | DX O2 entrypoint (IA + BTL + watchdog) | `src/dx-o2-agents/entrypoint.sh` |
 | Admin page — DX O2 status | `app/src/pages/dxo2.php` |

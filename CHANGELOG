@@ -5,6 +5,20 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 14:00 - [Feat – Disable all caching (PHP OPcache, web-server cache, browser cache)]:
+  src/apache-php/Dockerfile: added RUN that writes
+  /etc/php/8.1/apache2/conf.d/99-disable-opcache.ini with opcache.enable=0
+  and opcache.enable_cli=0 to disable PHP OPcache at image build time.
+  src/apache-php/config/vhost.conf: added Header always set directives for
+  Cache-Control (no-store, no-cache, must-revalidate, max-age=0), Pragma
+  (no-cache), and Expires (epoch) to prevent browser and proxy caching on
+  all responses; added Header unset ETag, Header unset Last-Modified, and
+  FileETag None to eliminate conditional-GET caching. Directives apply to
+  all responses: PHP pages, /css/app.css, and /health.
+  CLAUDE.md: added "Caching policy" section under PHP application architecture
+  documenting all three layers. Updated design decisions table in README.md.
+
+------------------------------------------------------------------------------
 2026-06-30 @ 13:00 - [Docs – Sync README.md and COMPATIBILITY.md with all recent changes]:
   README.md project structure: added app/src/css/ entry; updated templates/
   comment from "layout.php (full CSS)" to "layout.php (links app.css)".
