@@ -5,6 +5,16 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 17:30 - [Docs – Sync all documentation with browser-agent fix]:
+  README.md: updated Browser agent design-decision row (response.decoration,
+  correct property name, value 30000); updated dxo2 page description to list
+  response.decoration and maxSearchingLength in checked properties.
+  app/src/pages/dxo2.php: added response.decoration (master switch) row to the
+  Browser Agent card and to $probeIniDisplay; badge now requires both
+  $baDecoration and $baEnabled to show green; $baDecoration variable introduced.
+  COMPATIBILITY.md, CLAUDE.md, DX-O2-AGENT-SETUP.md: already updated in prior
+  commit; no further changes needed.
+------------------------------------------------------------------------------
 2026-06-30 @ 17:00 - [Fix – PHP probe browser-agent snippet auto-injection not working]:
   src/apache-php/entrypoint.sh: three fixes discovered by comparing with the
   official PHP_apmia installer.sh:

@@ -146,7 +146,7 @@ Services run in separate containers and communicate via the Compose network.
 | APMENV_* identity | Agent identity set via native APMIA Docker env var mechanism; `IntroscopeAgent.profile` (tenant JWT + EM URL) is never modified |
 | Container hostname in metric path | `spec.hostname` on the pod template sets the OS hostname used by the IA and BPA Apache module. The PHP probe additionally has `wily_php_agent.hostname` patched to `APMIA_PHP_AGENT_NAME` by the entrypoint, so it always reports a fixed name regardless of pod hostname |
 | DB Monitor | APMIA DB Monitor extension enabled via APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_* vars; credentials from Kubernetes Secret |
-| Browser agent | PHP probe injects the DX O2 browser snippet via `wily_php_agent.enable.browseragent.snippet.autoInjection=1` when `APMIA_BROWSER_SNIPPET` is set; `maxSearchingLength` is always set to 32768 bytes so the probe reliably finds the injection point |
+| Browser agent | PHP probe injects the DX O2 browser snippet when `APMIA_BROWSER_SNIPPET` is set. Three INI properties are written: `response.decoration=1` (master switch — activates the browser agent module), `snippet.autoInjection=1`, and `snippetString`. `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000` (probe-documented max; valid range 100–30000) is always set; `</head>` appears at byte ~239 with CSS in a static file |
 | Stylesheet delivery | All CSS is served as a separate static file (`/css/app.css`); no inline `<style>` block in HTML — keeps HTML responses small and ensures `</head>` appears at byte ~239 |
 | Caching disabled | All caching is intentionally off: PHP OPcache disabled via Dockerfile ini drop-in; `mod_cache` never loaded; `vhost.conf` sends `Cache-Control: no-store` + `Pragma: no-cache` + epoch `Expires` on every response, strips ETags and `Last-Modified` — every page load hits PHP and the DB fresh for accurate APM telemetry |
 | Kubernetes probes | All three probes (`startupProbe`, `livenessProbe`, `readinessProbe`) target `GET /health` — a static file served without PHP, so the APMIA PHP probe extension is never triggered; probes succeed independently of the `dx-o2-agent` sidecar startup timing |
@@ -502,7 +502,7 @@ Comprehensive health check for the DX O2 monitoring stack.  Checks:
 
 - **PHP probe** — whether `wily_php_agent` extension is loaded, the INI
   file path, and key properties: `agentName`, `hostname`, `collectorHost/Port`,
-  `logdir`, `maxSearchingLength`, browser-agent auto-injection flag and snippet presence.
+  `logdir`, `response.decoration`, `snippet.autoInjection`, `maxSearchingLength`, and snippet presence.
 - **BPA Apache module** — whether `/etc/apache2/conf-enabled/bpa.conf`
   exists, the parsed `LoadModule` directive, and whether the module is
   present in `apache_get_modules()`.  The raw conf is shown verbatim.

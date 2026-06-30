@@ -124,8 +124,10 @@ $probeIniDisplay = [
   'wily_php_agent.logdir'                                      => 'Log directory',
   'wily_php_agent.disableLogging'                              => 'Logging disabled flag',
   'wily_php_agent.logLevel'                                    => 'Log level',
-  'wily_php_agent.enable.browseragent.snippet.autoInjection'   => 'Browser-agent auto-injection',
-  'wily_php_agent.browseragent.autoInjection.snippetString'    => 'Browser snippet configured',
+  'wily_php_agent.enable.browseragent.response.decoration'                    => 'Browser-agent module (master switch)',
+  'wily_php_agent.enable.browseragent.snippet.autoInjection'                  => 'Browser-agent auto-injection',
+  'wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength' => 'Browser-agent scan length',
+  'wily_php_agent.browseragent.autoInjection.snippetString'                   => 'Browser snippet configured',
 ];
 
 // ── 2. BPA Apache module ───────────────────────────────────────────────────────
@@ -163,8 +165,9 @@ if (empty($dumpList) && function_exists('apache_get_modules')) {
 $bpaModuleLoaded = in_array('caplugin_module', $dumpList, true);
 
 // ── 3. Browser agent ───────────────────────────────────────────────────────────
-$baEnabled = ($iniValues['wily_php_agent.enable.browseragent.snippet.autoInjection'] ?? '0') === '1';
-$baSnippet = $iniValues['wily_php_agent.browseragent.autoInjection.snippetString'] ?? '';
+$baDecoration = ($iniValues['wily_php_agent.enable.browseragent.response.decoration'] ?? '0') === '1';
+$baEnabled    = ($iniValues['wily_php_agent.enable.browseragent.snippet.autoInjection'] ?? '0') === '1';
+$baSnippet    = $iniValues['wily_php_agent.browseragent.autoInjection.snippetString'] ?? '';
 
 // ── 4. APMIA connectivity ──────────────────────────────────────────────────────
 $phpCollectorHost = getenv('APMIA_PHP_COLLECTOR_HOST') ?: '127.0.0.1';
@@ -245,7 +248,7 @@ require __DIR__ . '/../templates/layout.php';
 $badges = [
   ['PHP probe',      $probeLoaded,     $probeLoaded     ? 'loaded'     : 'not loaded'],
   ['BPA module',     $bpaModuleLoaded, $bpaModuleLoaded ? 'loaded'     : 'not loaded'],
-  ['Browser agent',  $baEnabled,       $baEnabled       ? 'enabled'    : 'disabled'],
+  ['Browser agent',  $baDecoration && $baEnabled, ($baDecoration && $baEnabled) ? 'enabled' : 'disabled'],
   ['PHP collector',  $phpReachable,    $phpReachable    ? 'reachable'  : 'unreachable'],
   ['BTL',            $btlReachable,    $btlReachable    ? 'reachable'  : 'unreachable'],
 ];
@@ -393,6 +396,16 @@ foreach ($badges as [$label, $ok, $state]):
       <tr><th>Check</th><th>Status / Value</th></tr>
     </thead>
     <tbody>
+      <tr>
+        <td>Module active (master switch)<br>
+            <span style="font-size:.75rem;color:#90a4ae">wily_php_agent.enable.browseragent.response.decoration</span></td>
+        <td><?php if ($baDecoration): ?>
+          <span style="color:#2e7d32;font-weight:700">&#10003; active (1)</span>
+        <?php else: ?>
+          <span style="color:#607d8b">inactive (0 or not set)</span>
+          <span style="font-size:.8rem;color:#90a4ae"> — required before snippet injection works</span>
+        <?php endif ?></td>
+      </tr>
       <tr>
         <td>Auto-injection enabled<br>
             <span style="font-size:.75rem;color:#90a4ae">wily_php_agent.enable.browseragent.snippet.autoInjection</span></td>
