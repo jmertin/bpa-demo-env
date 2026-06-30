@@ -118,6 +118,7 @@ $iniValues      = $iniRealPath ? parse_ini_flat($iniRealPath) : [];
 
 $probeIniDisplay = [
   'wily_php_agent.agentName'                                   => 'Agent name',
+  'wily_php_agent.hostname'                                    => 'Hostname',
   'wily_php_agent.collectorHost'                               => 'Collector host',
   'wily_php_agent.collectorPort'                               => 'Collector port',
   'wily_php_agent.logdir'                                      => 'Log directory',

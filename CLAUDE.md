@@ -167,7 +167,7 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 `apache-php/entrypoint.sh`:
 - Copies `wily_php_agent.so` into PHP's `extension_dir`.
 - Copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/`; symlinks as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`.
-- Patches `collectorHost`, `collectorPort`, `application.name`, `agentName` via `sed -i`.
+- Patches `collectorHost`, `collectorPort`, `application.name`, `agentName`, `hostname` via `sed -i`. `agentName` and `hostname` are both set to `APMIA_PHP_AGENT_NAME` (default `bpa-demo-php-probe`) — `hostname` overrides OS `gethostname()` so the PHP probe appears with a recognisable name in the metric path instead of an auto-generated pod ID.
 - Sets `logdir="/var/log/php-probe"`, `disableLogging=0`, `logLevel="${APMIA_PHP_LOG_LEVEL}"`. The directory is created in the Dockerfile and owned by `www-data` so the Apache process can write logs without privilege escalation.
 - Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes).
 
@@ -193,9 +193,10 @@ Agent identity is configured via `APMENV_*` environment variables — the native
 
 ### Container hostname (metric path)
 
-`APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA (Java). The PHP probe and BPA module read the OS `gethostname()`. To prevent auto-generated IDs in the metric path:
-- **Kubernetes:** `spec.hostname: {{ .Values.dxo2.hostName }}` in the pod template.
-- **Compose:** `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` on the `apachephp` service.
+`APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA (Java). The BPA module reads the OS `gethostname()`. The PHP probe uses `wily_php_agent.hostname` (set to `APMIA_PHP_AGENT_NAME` by the entrypoint). To prevent auto-generated IDs in the metric path:
+- **Kubernetes:** `spec.hostname: {{ .Values.dxo2.hostName }}` in the pod template (covers IA + BPA).
+- **Compose:** `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` on the `apachephp` service (covers IA + BPA).
+- **PHP probe:** `wily_php_agent.hostname` is always patched to `APMIA_PHP_AGENT_NAME` regardless of deployment mode.
 
 ### APMIA_DEPLOY flag
 
