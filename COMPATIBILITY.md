@@ -72,10 +72,14 @@ by the Dockerfile and available in `extensions/WebServerPlugin/` for reference, 
 |---|---|---|
 | `wily_php_agent.collectorHost` | PHP probe → IA IPC address | 127.0.0.1 (K8s), dxo2 (Compose) |
 | `wily_php_agent.collectorPort` | PHP probe → IA IPC port | default 5005 |
-| `wily_php_agent.application.name` | App name in metric tree | from APMIA_APP_NAME |
-| `wily_php_agent.logdir` | Probe log directory | set to /tmp at runtime |
-| `wily_php_agent.agentName` | Probe identity in metric tree | from APMIA_PHP_AGENT_NAME |
+| `wily_php_agent.application.name` | App name in metric tree | from `APMIA_APP_NAME` |
+| `wily_php_agent.logdir` | Probe log directory | set to `/var/log/php-probe` at runtime |
+| `wily_php_agent.disableLogging` | Probe logging on/off | always `0` (enabled) |
+| `wily_php_agent.logLevel` | Probe log verbosity | from `APMIA_PHP_LOG_LEVEL` (default `INFO`) |
+| `wily_php_agent.agentName` | Probe identity in metric tree | from `APMIA_PHP_AGENT_NAME` (default `bpa-demo-php-probe`) |
+| `wily_php_agent.hostname` | Probe hostname in metric path | set to `APMIA_PHP_AGENT_NAME` — overrides OS `gethostname()` |
 | `wily_php_agent.enable.browseragent.snippet.autoInjection` | Enable browser agent | `1` = on, `0` = off |
+| `wily_php_agent.enable.browseragent.snippet.maxSearchingLength` | Browser-agent scan window | always `32768`; `</head>` is at byte ~239 with external CSS |
 | `wily_php_agent.browseragent.autoInjection.snippetString` | Browser snippet value | single-quoted `'<script ...>'` |
 | `wily_php_agent.browseragent.autoInjection.enabled` | **Legacy — not used** | removed by entrypoint |
 

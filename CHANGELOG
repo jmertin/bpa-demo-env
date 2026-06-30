@@ -5,6 +5,21 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 13:00 - [Docs – Sync README.md and COMPATIBILITY.md with all recent changes]:
+  README.md project structure: added app/src/css/ entry; updated templates/
+  comment from "layout.php (full CSS)" to "layout.php (links app.css)".
+  README.md architecture: clarified hostname split — spec.hostname covers IA +
+  BPA; wily_php_agent.hostname (patched to APMIA_PHP_AGENT_NAME) covers PHP probe.
+  README.md design decisions: updated "Container hostname" and "Browser agent"
+  rows; added "Stylesheet delivery" row documenting the static CSS approach.
+  README.md dxo2 status page description: added hostname and maxSearchingLength
+  to listed INI properties.
+  README.md examples: replaced hardcoded -n php-demo with -n <APP_NAMESPACE>;
+  updated default namespace note from "php-demo" to "dxo2-bpa-demo".
+  COMPATIBILITY.md section 5: corrected logdir from /tmp to /var/log/php-probe;
+  added disableLogging, logLevel, hostname, and maxSearchingLength rows.
+
+------------------------------------------------------------------------------
 2026-06-30 @ 12:00 - [Docs – Update DX-O2-AGENT-SETUP.md and CLAUDE.md for CSS/browser-agent changes]:
   DX-O2-AGENT-SETUP.md section 6.2: added maxSearchingLength=32768 to the
   "Always:" block of the INI patch table.
