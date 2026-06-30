@@ -194,8 +194,9 @@ Check: /opt/apmia/extensions/PHPAgent/wily_php_agent.ini exists?
       wily_php_agent.collectorHost    = ${APMIA_PHP_COLLECTOR_HOST}  (default: 127.0.0.1)
       wily_php_agent.collectorPort    = ${APMIA_PHP_COLLECTOR_PORT}  (default: 5005)
       wily_php_agent.application.name = ${APMIA_APP_NAME}
-      wily_php_agent.logdir           = "/tmp"
-      wily_php_agent.agentName        = ${APMIA_PHP_AGENT_NAME}
+      wily_php_agent.logdir           = /var/log/php-probe
+      wily_php_agent.agentName        = ${APMIA_PHP_AGENT_NAME}  (default: bpa-demo-php-probe)
+      wily_php_agent.hostname         = ${APMIA_PHP_AGENT_NAME}  (overrides OS gethostname())
     Browser agent (if APMIA_BROWSER_SNIPPET is set):
       wily_php_agent.enable.browseragent.snippet.autoInjection = 1
       wily_php_agent.browseragent.autoInjection.snippetString  = '<value>'
@@ -385,6 +386,7 @@ Expected `apache-php` log output:
 [entrypoint]   Probe INI installed at /etc/php/8.1/apache2/conf.d/99-wily_php_agent.ini
 [entrypoint]   PHP probe IPC: 127.0.0.1:5005
 [entrypoint]   PHP probe agent : bpa-demo-php-probe
+[entrypoint]   PHP probe host  : bpa-demo-php-probe
 [entrypoint]   Browser agent : disabled (APMIA_BROWSER_SNIPPET not set)
 [entrypoint] DX O2 PHP probe active – APM instrumentation enabled.
 [entrypoint] Injecting BPA WebServer Plugin (Apache): mod_<name>.so
@@ -553,12 +555,23 @@ Check for firewall or proxy restrictions on outbound WSS (port 443).
 ### Container hostname still shows in metric path
 
 **Symptom:** DX O2 metric path shows a random container ID instead of the
-configured `APMIA_HOST_NAME`.
+configured agent name or hostname.
 
-**Cause:** The pod-level `spec.hostname` is not being applied, or the
-`apache-php` container started before the hostname was set.
+There are two separate mechanisms — one for the PHP probe, one for the IA and BPA module.
 
-**Fix:** Confirm the pod spec has the hostname field:
+**PHP probe (`wily_php_agent.hostname`):**
+The entrypoint always sets `wily_php_agent.hostname` to `APMIA_PHP_AGENT_NAME`
+(default `bpa-demo-php-probe`). If the PHP probe still shows a random ID, verify
+the patched INI:
+```bash
+kubectl exec -n php-demo <pod> -c apache-php -- \
+  grep hostname /etc/php/8.1/mods-available/wily_php_agent.ini
+# expected: wily_php_agent.hostname="bpa-demo-php-probe"
+```
+
+**IA + BPA module (`spec.hostname` / OS hostname):**
+`APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA.  The BPA module reads
+the OS `gethostname()`.  Confirm the pod-level hostname is set:
 ```bash
 kubectl get pod -n php-demo <pod> -o jsonpath='{.spec.hostname}'
 # expected: bpa-demo-host (or your configured value)

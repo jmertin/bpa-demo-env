@@ -76,6 +76,16 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     fi
     echo "[entrypoint]   PHP probe agent : ${APMIA_PHP_AGENT_NAME}"
 
+    # Set PHP probe hostname (wily_php_agent.hostname overrides OS gethostname()
+    # so the probe appears with a recognisable name in the DX O2 metric path
+    # instead of the auto-generated pod or container ID).
+    if grep -qE "^wily_php_agent\.hostname=" "${INI_PATH}"; then
+        sed -i "s|^wily_php_agent\.hostname=.*|wily_php_agent.hostname=\"${APMIA_PHP_AGENT_NAME}\"|" "${INI_PATH}"
+    else
+        printf '\nwily_php_agent.hostname="%s"\n' "${APMIA_PHP_AGENT_NAME}" >> "${INI_PATH}"
+    fi
+    echo "[entrypoint]   PHP probe host  : ${APMIA_PHP_AGENT_NAME}"
+
     # == Browser agent auto-injection ==========================================
     # The PHP probe is enabled via wily_php_agent.enable.browseragent.snippet.autoInjection=1
     # and the snippet is supplied via wily_php_agent.browseragent.autoInjection.snippetString.

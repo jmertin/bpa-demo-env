@@ -5,6 +5,19 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 09:00 - [Feat – Set wily_php_agent.hostname for PHP probe identity]:
+  src/apache-php/entrypoint.sh: added hostname patch block that sets
+  wily_php_agent.hostname to APMIA_PHP_AGENT_NAME (default bpa-demo-php-probe)
+  so the PHP probe appears with a recognisable name in the DX O2 metric path
+  instead of an auto-generated pod/container ID.
+  app/src/pages/dxo2.php: added wily_php_agent.hostname to the probeIniDisplay
+  array so the value is visible on the DX O2 admin status page.
+  CLAUDE.md: updated PHP probe injection and Container hostname sections.
+  DX-O2-AGENT-SETUP.md: updated section 6.2 INI patch table and expected startup
+  log output; expanded Container hostname troubleshooting to cover both the PHP
+  probe (wily_php_agent.hostname) and the IA/BPA module (spec.hostname) cases.
+
+------------------------------------------------------------------------------
 2026-06-29 @ 10:30 - [Chore – Rename php-demo to dxo2-bpa-demo in .config.example]:
   Updated IMAGE_PREFIX, APP_NAMESPACE, and APP_HOSTNAME default values in
   .config.example from "php-demo" to "dxo2-bpa-demo".
