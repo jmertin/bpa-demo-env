@@ -5,6 +5,18 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 15:00 - [Docs – Sync all documentation with cache-disable and CSS-extraction changes]:
+  README.md: updated Dockerfile and vhost.conf project tree comments to
+  reflect OPcache disable and no-cache headers.
+  COMPATIBILITY.md: added section 7 "Runtime Cache Configuration" covering
+  PHP OPcache (7.1), web-server cache (7.2), and browser cache HTTP headers
+  (7.3) with verification commands for each layer.
+  CLAUDE.md: enriched vhost.conf key file path description.
+  DX-O2-AGENT-SETUP.md: replaced all 22 hardcoded -n php-demo namespace
+  references with -n <APP_NAMESPACE>; added section 8.5 "Verify no-cache
+  HTTP headers" (curl check + OPcache verify); renumbered old 8.5 to 8.6.
+
+------------------------------------------------------------------------------
 2026-06-30 @ 14:00 - [Feat – Disable all caching (PHP OPcache, web-server cache, browser cache)]:
   src/apache-php/Dockerfile: added RUN that writes
   /etc/php/8.1/apache2/conf.d/99-disable-opcache.ini with opcache.enable=0

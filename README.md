@@ -35,10 +35,10 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 │
 ├── src/
 │   ├── apache-php/               # Apache 2.4 + mod_php container (ubuntu:22.04, multi-stage)
-│   │   ├── Dockerfile            # Stage 1: extract archive; Stage 2: Apache + PHP runtime
+│   │   ├── Dockerfile            # Stage 1: extract archive; Stage 2: runtime + OPcache disabled
 │   │   ├── entrypoint.sh         # PHP probe + BPA Apache module injection, cron, Apache
 │   │   └── config/
-│   │       └── vhost.conf        # VirtualHost listen 8080; baked in + overridden by ConfigMap
+│   │       └── vhost.conf        # VirtualHost :8080; no-cache headers; baked in + ConfigMap override
 │   │
 │   └── dx-o2-agents/             # Broadcom DX O2 monitoring container (ubuntu:22.04)
 │       ├── Dockerfile            # extracts APMIA + BTL + BPA plugin to /opt/apmia, /opt/btlistener

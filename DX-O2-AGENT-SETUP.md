@@ -375,19 +375,19 @@ The `dx-o2-agent` entrypoint tails `IntroscopeAgent.log` and
 
 ```bash
 # dx-o2-agent sidecar — entrypoint startup, IA log, and BTL log
-kubectl logs -n php-demo <pod> -c dx-o2-agent
+kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent
 
 # Filter to entrypoint messages only (excludes IA / BTL log content)
-kubectl logs -n php-demo <pod> -c dx-o2-agent | grep '^\[entrypoint\]'
+kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep '^\[entrypoint\]'
 
 # Follow live (streams IA + BTL log lines as they are written)
-kubectl logs -n php-demo <pod> -c dx-o2-agent -f
+kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent -f
 
 # Docker Compose equivalent
 docker compose logs -f dxo2
 
 # apache-php — verify PHP probe and BPA Apache module injection
-kubectl logs -n php-demo <pod> -c apache-php | grep -E "\[entrypoint\]"
+kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep -E "\[entrypoint\]"
 ```
 
 Expected `apache-php` log output:
@@ -410,11 +410,11 @@ Expected `apache-php` log output:
 ### 8.2 Check the PHP extension is loaded
 
 ```bash
-kubectl exec -n php-demo <pod> -c apache-php -- \
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
   php8.1 -r 'var_dump(extension_loaded("wily_php_agent"));'
 # expected: bool(true)
 
-kubectl exec -n php-demo <pod> -c apache-php -- \
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
   php8.1 -m | grep wily
 # expected: wily_php_agent
 ```
@@ -422,11 +422,11 @@ kubectl exec -n php-demo <pod> -c apache-php -- \
 ### 8.3 Check the Apache BPA module is loaded
 
 ```bash
-kubectl exec -n php-demo <pod> -c apache-php -- \
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
   cat /etc/apache2/conf-enabled/bpa.conf
 # expected: LoadModule <name>_module /opt/apmia/extensions/WebServerPlugin/mod_<name>.so
 
-kubectl exec -n php-demo <pod> -c apache-php -- \
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
   apache2ctl -M 2>/dev/null | grep -i ca_
 # expected: <name>_module (shared)
 ```
@@ -434,7 +434,7 @@ kubectl exec -n php-demo <pod> -c apache-php -- \
 ### 8.4 Inspect the wily_php_agent.ini at runtime
 
 ```bash
-kubectl exec -n php-demo <pod> -c apache-php -- \
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
   cat /etc/php/8.1/mods-available/wily_php_agent.ini
 ```
 
@@ -446,10 +446,33 @@ Verify:
 - `wily_php_agent.enable.browseragent.snippet.autoInjection` is `1` or `0`
   as configured.
 
-### 8.5 Confirm agent connects to DX O2
+### 8.5 Verify no-cache HTTP headers
+
+All responses must carry `Cache-Control: no-store` so APM sees genuine latency
+on every request:
 
 ```bash
-kubectl exec -n php-demo <pod> -c dx-o2-agent -- \
+# From inside the cluster (port-forward or via the Ingress URL)
+curl -sI http://localhost:8080/ | grep -iE "cache-control|pragma|expires|etag|last-modified"
+# expected:
+#   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+#   Pragma: no-cache
+#   Expires: Thu, 01 Jan 1970 00:00:00 GMT
+# ETag and Last-Modified must be absent.
+```
+
+Verify OPcache is disabled (PHP serves from source, not bytecode cache):
+
+```bash
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
+  php8.1 -r 'echo ini_get("opcache.enable"), "\n";'
+# expected: 0
+```
+
+### 8.6 Confirm agent connects to DX O2
+
+```bash
+kubectl exec -n <APP_NAMESPACE> <pod> -c dx-o2-agent -- \
   tail -30 /opt/apmia/logs/IntroscopeAgent.log
 ```
 
@@ -480,8 +503,8 @@ the archive is from the support portal — it will not work.
 
 **Fix:**
 ```bash
-kubectl describe pod -n php-demo <pod> | grep -A5 "dxo2-init"
-kubectl logs -n php-demo <pod> -c dxo2-init
+kubectl describe pod -n <APP_NAMESPACE> <pod> | grep -A5 "dxo2-init"
+kubectl logs -n <APP_NAMESPACE> <pod> -c dxo2-init
 # should end with: "Done – N entries in /apmia-share"
 ```
 
@@ -499,7 +522,7 @@ kubectl logs -n php-demo <pod> -c dxo2-init
 ```
 Then validate manually:
 ```bash
-kubectl exec -n php-demo <pod> -c apache-php -- apache2ctl configtest
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- apache2ctl configtest
 ```
 
 ### dx-o2-agent OOMKilled (exit code 137)
@@ -533,7 +556,7 @@ To observe live memory usage:
 docker stats --no-stream
 
 # Kubernetes
-kubectl top pod -n php-demo --containers
+kubectl top pod -n <APP_NAMESPACE> --containers
 ```
 
 ### Liveness / readiness probes return HTTP 500 after enabling APMIA
@@ -551,7 +574,7 @@ checks, so probes succeed regardless of sidecar state.
 
 Verify the health endpoint is reachable and returns `OK`:
 ```bash
-kubectl port-forward -n php-demo svc/php-demo-php-demo 8080:8080 &
+kubectl port-forward -n <APP_NAMESPACE> svc/php-demo-php-demo 8080:8080 &
 curl -s http://localhost:8080/health    # expected: OK
 ```
 
@@ -561,7 +584,7 @@ curl -s http://localhost:8080/health    # expected: OK
 
 **Fix:**
 ```bash
-kubectl logs -n php-demo <pod> -c dx-o2-agent | grep -i "error\|refused\|exception"
+kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep -i "error\|refused\|exception"
 ```
 Ensure the cluster can reach the WSS endpoint in the pre-configured profile.
 Check for firewall or proxy restrictions on outbound WSS (port 443).
@@ -578,7 +601,7 @@ The entrypoint always sets `wily_php_agent.hostname` to `APMIA_PHP_AGENT_NAME`
 (default `bpa-demo-php-probe`). If the PHP probe still shows a random ID, verify
 the patched INI:
 ```bash
-kubectl exec -n php-demo <pod> -c apache-php -- \
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
   grep hostname /etc/php/8.1/mods-available/wily_php_agent.ini
 # expected: wily_php_agent.hostname="bpa-demo-php-probe"
 ```
@@ -587,7 +610,7 @@ kubectl exec -n php-demo <pod> -c apache-php -- \
 `APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA.  The BPA module reads
 the OS `gethostname()`.  Confirm the pod-level hostname is set:
 ```bash
-kubectl get pod -n php-demo <pod> -o jsonpath='{.spec.hostname}'
+kubectl get pod -n <APP_NAMESPACE> <pod> -o jsonpath='{.spec.hostname}'
 # expected: bpa-demo-host (or your configured value)
 ```
 If empty, verify `dxo2.hostName` is set in `values.yaml` and that
@@ -623,13 +646,13 @@ it is empty, overriding any pre-configured INI values.
 [ ] 11. Run: build-scripts/push.sh
 [ ] 12. Run: build-scripts/deploy.sh
         deploy.sh sets dxo2.enabled: true automatically when APMIA_EM_HOST is set
-[ ] 13. Verify: kubectl get pods -n php-demo -w
+[ ] 13. Verify: kubectl get pods -n <APP_NAMESPACE> -w
         Wait for 3/3 containers Running (or 4/4 with dxo2 enabled)
-[ ] 14. Check: kubectl logs -n php-demo <pod> -c apache-php | grep "probe active"
+[ ] 14. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep "probe active"
         expected: "DX O2 PHP probe active – APM instrumentation enabled."
-[ ] 15. Check: kubectl logs -n php-demo <pod> -c apache-php | grep "BPA WebServer"
+[ ] 15. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep "BPA WebServer"
         expected: "BPA WebServer Plugin active – BPA instrumentation enabled."
-[ ] 16. Check: kubectl logs -n php-demo <pod> -c dx-o2-agent | grep "Infrastructure Agent"
+[ ] 16. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep "Infrastructure Agent"
         expected: "Infrastructure Agent started (PID ...)"
 [ ] 17. Verify in DX O2 console: agent tree shows configured agent name under configured app
 ```
