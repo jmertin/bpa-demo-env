@@ -5,6 +5,17 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 16:00 - [Feat – Set introscope.agent.urlgroup.frontend.url.clamp=50 via APMENV_*]:
+  helm/php-demo/templates/deployment.yaml: added
+  APMENV_INTROSCOPE_AGENT_URLGROUP_FRONTEND_URL_CLAMP="50" to the dx-o2-agent
+  container env block (after APMENV_LOG4J_LOGGER_INTROSCOPEAGENT).
+  docker-compose.yml: same variable added to the dxo2 service env block.
+  CLAUDE.md: added row to the APMENV_* identity mechanism table.
+  COMPATIBILITY.md: added row to the APMENV_* environment variables table.
+  Value is hardcoded (not in .config / values.yaml) as it is a fixed agent
+  tuning setting, not a per-deployment identity value.
+
+------------------------------------------------------------------------------
 2026-06-30 @ 15:00 - [Docs – Sync all documentation with cache-disable and CSS-extraction changes]:
   README.md: updated Dockerfile and vhost.conf project tree comments to
   reflect OPcache disable and no-cache headers.

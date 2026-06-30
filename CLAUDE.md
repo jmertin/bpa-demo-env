@@ -201,6 +201,7 @@ Agent identity is configured via `APMENV_*` environment variables — the native
 | `APMENV_INTROSCOPE_AGENT_HOSTNAME` | `introscope.agent.hostName` |
 | `APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME` | `introscope.agent.customProcessName` |
 | `APMENV_LOG4J_LOGGER_INTROSCOPEAGENT` | log4j logger spec, e.g. `"INFO, logfile"` |
+| `APMENV_INTROSCOPE_AGENT_URLGROUP_FRONTEND_URL_CLAMP` | `introscope.agent.urlgroup.frontend.url.clamp` — hardcoded `50` |
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_*` | DB Monitor MySQL properties |
 
 ### Container hostname (metric path)

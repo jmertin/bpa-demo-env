@@ -97,6 +97,7 @@ The APMIA agent reads `APMENV_*` vars at startup and overrides the corresponding
 | `APMENV_INTROSCOPE_AGENT_HOSTNAME` | `introscope.agent.hostName` |
 | `APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME` | `introscope.agent.customProcessName` |
 | `APMENV_LOG4J_LOGGER_INTROSCOPEAGENT` | log4j logger spec, e.g. `"INFO, logfile"` |
+| `APMENV_INTROSCOPE_AGENT_URLGROUP_FRONTEND_URL_CLAMP` | `introscope.agent.urlgroup.frontend.url.clamp` (fixed: `50`) |
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES` | DB Monitor profile list |
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_HOSTNAME` | DB hostname |
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_PORT` | DB port |
