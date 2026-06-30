@@ -5,6 +5,21 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 17:00 - [Fix – PHP probe browser-agent snippet auto-injection not working]:
+  src/apache-php/entrypoint.sh: three fixes discovered by comparing with the
+  official PHP_apmia installer.sh:
+  (1) Add wily_php_agent.enable.browseragent.response.decoration=1 when
+      APMIA_BROWSER_SNIPPET is set.  This is the master switch that activates
+      the browser agent module inside the PHP probe; without it the probe
+      silently ignores snippet.autoInjection=1.  Set to 0 when snippet disabled.
+  (2) Fix property name for scan-window: was
+      wily_php_agent.enable.browseragent.snippet.maxSearchingLength (typo),
+      now wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength
+      (correct name from wily_php_agent.ini in the installer archive).
+  (3) Fix value from 32768 to 30000 (probe-documented max; valid range 100-30000).
+  COMPATIBILITY.md, CLAUDE.md, DX-O2-AGENT-SETUP.md: updated browser agent
+  property table/sections to reflect all three fixes.
+------------------------------------------------------------------------------
 2026-06-30 @ 16:00 - [Feat – Set introscope.agent.urlgroup.frontend.url.clamp=50 via APMENV_*]:
   helm/php-demo/templates/deployment.yaml: added
   APMENV_INTROSCOPE_AGENT_URLGROUP_FRONTEND_URL_CLAMP="50" to the dx-o2-agent

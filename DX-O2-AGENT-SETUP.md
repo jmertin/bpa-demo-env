@@ -198,14 +198,16 @@ Check: /opt/apmia/extensions/PHPAgent/wily_php_agent.ini exists?
       wily_php_agent.agentName        = ${APMIA_PHP_AGENT_NAME}  (default: bpa-demo-php-probe)
       wily_php_agent.hostname         = ${APMIA_PHP_AGENT_NAME}  (overrides OS gethostname())
     Browser agent (if APMIA_BROWSER_SNIPPET is set):
-      wily_php_agent.enable.browseragent.snippet.autoInjection = 1
-      wily_php_agent.browseragent.autoInjection.snippetString  = '<value>'
+      wily_php_agent.enable.browseragent.response.decoration      = 1   ← master switch
+      wily_php_agent.enable.browseragent.snippet.autoInjection    = 1
+      wily_php_agent.browseragent.autoInjection.snippetString     = '<value>'
     Browser agent (if APMIA_BROWSER_SNIPPET is empty):
-      wily_php_agent.enable.browseragent.snippet.autoInjection = 0
+      wily_php_agent.enable.browseragent.response.decoration      = 0
+      wily_php_agent.enable.browseragent.snippet.autoInjection    = 0
       remove wily_php_agent.browseragent.autoInjection.snippetString
     Always:
       remove wily_php_agent.browseragent.autoInjection.enabled (legacy property)
-      wily_php_agent.enable.browseragent.snippet.maxSearchingLength = 32768
+      wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength = 30000
     → PHP probe active.
   NO →
     Log "DX O2 agent volume not mounted" and continue without probe.
@@ -344,24 +346,31 @@ APMIA_BROWSER_SNIPPET='<script type="text/javascript" id="ca_eum_ba" src="..."><
 The `apache-php` entrypoint writes to `wily_php_agent.ini`:
 
 ```ini
+wily_php_agent.enable.browseragent.response.decoration=1
 wily_php_agent.enable.browseragent.snippet.autoInjection=1
 wily_php_agent.browseragent.autoInjection.snippetString='<script ...>'
-wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768
+wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000
 ```
 
-Leave `APMIA_BROWSER_SNIPPET` empty to disable.  The entrypoint always sets
-`autoInjection=0` and removes any pre-configured snippet when the variable is
-empty, so the installer's defaults cannot override your `.config` setting.
+`response.decoration=1` is the master switch that activates the browser agent
+module inside the PHP probe.  It mirrors `-enableBrowserAgentSupport` in the
+official installer.  Without it, `snippet.autoInjection=1` is silently ignored
+by the probe even if the snippet string is correctly configured.
 
-**`maxSearchingLength` — why 32768:**
+Leave `APMIA_BROWSER_SNIPPET` empty to disable.  The entrypoint sets
+`response.decoration=0`, `autoInjection=0`, and removes any pre-configured
+snippet so installer defaults cannot override your `.config` setting.
+
+**`maxSearchingLength` — why 30000:**
 The probe scans the beginning of each HTTP response looking for a `<head>` or
 `<body>` tag to inject the browser-agent `<script>` after.  All application CSS
 is served as a separate static file (`/css/app.css`) so the `<head>` block
 contains only meta tags — `</head>` appears at byte **239** and `<body>` at
-byte **247** in every response.  32 768 bytes (32 KB) gives ~135× headroom over
-the actual scan requirement and future-proofs the setting against layout growth.
-Without this explicit value the probe falls back to the installer's INI default,
-which varies by APMIA version and may be as low as 16 KB.
+byte **247** in every response.  30 000 bytes is the probe's documented maximum
+(valid range 100–30 000) and gives ~125× headroom over the actual scan
+requirement.  The property name is
+`wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength`
+(note `.autoInjection.` between `.browseragent.` and `.snippet.`).
 
 ---
 
@@ -442,9 +451,10 @@ Verify:
 - `wily_php_agent.collectorHost` and `collectorPort` are correct.
 - `wily_php_agent.agentName` matches `APMIA_PHP_AGENT_NAME`.
 - `wily_php_agent.hostname` matches `APMIA_PHP_AGENT_NAME`.
-- `wily_php_agent.enable.browseragent.snippet.maxSearchingLength` is `32768`.
+- `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength` is `30000`.
+- `wily_php_agent.enable.browseragent.response.decoration` is `1` or `0` as configured.
 - `wily_php_agent.enable.browseragent.snippet.autoInjection` is `1` or `0`
-  as configured.
+  as configured (must match `response.decoration`).
 
 ### 8.5 Verify no-cache HTTP headers
 
