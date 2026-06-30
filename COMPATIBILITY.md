@@ -103,3 +103,56 @@ The APMIA agent reads `APMENV_*` vars at startup and overrides the corresponding
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_USERNAME` | DB username |
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_PASSWORD` | DB password |
 | `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_INSTANCENAME` | DB instance display name |
+
+---
+
+## 7. Runtime Cache Configuration
+
+All caching is intentionally disabled so every request exercises the full stack (PHP parse → DB query → response) and APM telemetry reflects real latency.
+
+### 7.1 PHP OPcache
+
+Disabled at image build time via a PHP ini drop-in written by the Dockerfile:
+
+| File | Property | Value |
+|---|---|---|
+| `/etc/php/8.1/apache2/conf.d/99-disable-opcache.ini` | `opcache.enable` | `0` |
+| `/etc/php/8.1/apache2/conf.d/99-disable-opcache.ini` | `opcache.enable_cli` | `0` |
+
+The drop-in is written unconditionally — if `php8.1-opcache` is not installed the file is harmless; if it is installed, the extension is loaded but immediately disabled.
+
+Verify at runtime:
+
+```bash
+kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
+  php8.1 -r 'echo ini_get("opcache.enable"), "\n";'
+# expected: 0
+```
+
+### 7.2 Web-server cache
+
+`mod_cache` and `mod_cache_disk` are not loaded (`a2enmod` in the Dockerfile only enables `rewrite`, `headers`, and `php8.1`). No server-side caching is active.
+
+### 7.3 Browser cache (HTTP headers)
+
+`vhost.conf` sends the following headers on **every** response — PHP pages, `/css/app.css`, and `/health` — via `mod_headers` (`Header always set`):
+
+| Header | Value | Purpose |
+|---|---|---|
+| `Cache-Control` | `no-store, no-cache, must-revalidate, max-age=0` | Prevent storage and require fresh fetch |
+| `Pragma` | `no-cache` | HTTP/1.0 backward compatibility |
+| `Expires` | `Thu, 01 Jan 1970 00:00:00 GMT` | Mark response as immediately expired |
+| `ETag` | *(removed)* | `Header unset ETag` — prevents conditional GET revalidation |
+| `Last-Modified` | *(removed)* | `Header unset Last-Modified` — same reason |
+
+`FileETag None` also instructs Apache not to generate ETags for static files at the filesystem level.
+
+Verify on a live response:
+
+```bash
+curl -sI http://localhost:8080/ | grep -iE "cache-control|pragma|expires|etag|last-modified"
+# expected: Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+#           Pragma: no-cache
+#           Expires: Thu, 01 Jan 1970 00:00:00 GMT
+# (ETag and Last-Modified should be absent)
+```

@@ -371,7 +371,7 @@ Update on every commit. Format: `YYYY-MM-DD @ HH:MM - [Type – Description]`. P
 | PDO singleton | `app/src/config/database.php` |
 | Layout template | `app/src/templates/layout.php` |
 | Application stylesheet | `app/src/css/app.css` |
-| Apache vhost config | `src/apache-php/config/vhost.conf` |
+| Apache vhost config (no-cache headers, probe suppression) | `src/apache-php/config/vhost.conf` |
 | Apache+PHP entrypoint (probe + BPA injection) | `src/apache-php/entrypoint.sh` |
 | DX O2 entrypoint (IA + BTL + watchdog) | `src/dx-o2-agents/entrypoint.sh` |
 | Admin page — DX O2 status | `app/src/pages/dxo2.php` |
