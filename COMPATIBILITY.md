@@ -78,8 +78,9 @@ by the Dockerfile and available in `extensions/WebServerPlugin/` for reference, 
 | `wily_php_agent.logLevel` | Probe log verbosity | from `APMIA_PHP_LOG_LEVEL` (default `INFO`) |
 | `wily_php_agent.agentName` | Probe identity in metric tree | from `APMIA_PHP_AGENT_NAME` (default `bpa-demo-php-probe`) |
 | `wily_php_agent.hostname` | Probe hostname in metric path | set to `APMIA_PHP_AGENT_NAME` — overrides OS `gethostname()` |
-| `wily_php_agent.enable.browseragent.snippet.autoInjection` | Enable browser agent | `1` = on, `0` = off |
-| `wily_php_agent.enable.browseragent.snippet.maxSearchingLength` | Browser-agent scan window | always `32768`; `</head>` is at byte ~239 with external CSS |
+| `wily_php_agent.enable.browseragent.response.decoration` | Browser agent master switch | `1` = module active, `0` = off; **required** before snippet injection works |
+| `wily_php_agent.enable.browseragent.snippet.autoInjection` | Enable JS snippet injection | `1` = on, `0` = off; requires `response.decoration=1` |
+| `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength` | Browser-agent scan window | `30000` (probe-documented max); `</head>` is at byte ~239 with external CSS |
 | `wily_php_agent.browseragent.autoInjection.snippetString` | Browser snippet value | single-quoted `'<script ...>'` |
 | `wily_php_agent.browseragent.autoInjection.enabled` | **Legacy — not used** | removed by entrypoint |
 

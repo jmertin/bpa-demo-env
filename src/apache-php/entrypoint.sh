@@ -87,24 +87,32 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     echo "[entrypoint]   PHP probe host  : ${APMIA_PHP_AGENT_NAME}"
 
     # == Browser agent auto-injection ==========================================
-    # The PHP probe is enabled via wily_php_agent.enable.browseragent.snippet.autoInjection=1
-    # and the snippet is supplied via wily_php_agent.browseragent.autoInjection.snippetString.
-    # The DX O2 installer may ship the INI with pre-configured values; .config is
-    # always the authoritative source.  The legacy property
-    # wily_php_agent.browseragent.autoInjection.enabled is removed in both branches.
+    # Three INI properties control snippet injection:
+    #   1. wily_php_agent.enable.browseragent.response.decoration=1
+    #      Master switch for the browser agent module (same as -enableBrowserAgentSupport
+    #      in the official installer).  Without this the module is inactive and
+    #      snippet.autoInjection is silently ignored.
+    #   2. wily_php_agent.enable.browseragent.snippet.autoInjection=1
+    #      Activates automatic JavaScript snippet insertion into HTML responses.
+    #   3. wily_php_agent.browseragent.autoInjection.snippetString='<script ...>'
+    #      The snippet value from DX O2 (single-quoted; value from APMIA_BROWSER_SNIPPET).
     #
-    # maxSearchingLength: how many bytes of output the probe scans to find <head> or
-    # <body> for injection.  layout.php emits <head> at byte 33 (trivially found),
-    # but the <head> block contains 13.8 KB of inline CSS before </head>/<body> at
-    # byte ~13 861.  32768 (32 KB) gives 2x headroom over that fallback and
-    # future-proofs against CSS growth.
-    if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.maxSearchingLength=" "${INI_PATH}"; then
-        sed -i "s|^wily_php_agent\.enable\.browseragent\.snippet\.maxSearchingLength=.*|wily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768|" "${INI_PATH}"
+    # maxSearchingLength: bytes the probe scans to find <head>/<body> for injection.
+    # CSS is now in app/src/css/app.css (external); layout.php emits </head> at byte 239.
+    # Valid range is 100-30000 (probe clamps outside values).  30000 gives 125x headroom.
+    if grep -qE "^wily_php_agent\.enable\.browseragent\.autoInjection\.snippet\.maxSearchingLength=" "${INI_PATH}"; then
+        sed -i "s|^wily_php_agent\.enable\.browseragent\.autoInjection\.snippet\.maxSearchingLength=.*|wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000|" "${INI_PATH}"
     else
-        printf '\nwily_php_agent.enable.browseragent.snippet.maxSearchingLength=32768\n' >> "${INI_PATH}"
+        printf '\nwily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000\n' >> "${INI_PATH}"
     fi
-    echo "[entrypoint]   Browser agent scan length: 32768 bytes"
+    echo "[entrypoint]   Browser agent scan length: 30000 bytes"
     if [[ -n "${APMIA_BROWSER_SNIPPET}" ]]; then
+        # Enable the browser agent module (master switch required by the PHP probe).
+        if grep -qE "^wily_php_agent\.enable\.browseragent\.response\.decoration=" "${INI_PATH}"; then
+            sed -i "s|^wily_php_agent\.enable\.browseragent\.response\.decoration=.*|wily_php_agent.enable.browseragent.response.decoration=1|" "${INI_PATH}"
+        else
+            printf '\nwily_php_agent.enable.browseragent.response.decoration=1\n' >> "${INI_PATH}"
+        fi
         if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=" "${INI_PATH}"; then
             sed -i "s|^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=.*|wily_php_agent.enable.browseragent.snippet.autoInjection=1|" "${INI_PATH}"
         else
@@ -114,6 +122,9 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
         printf "wily_php_agent.browseragent.autoInjection.snippetString='%s'\n" "${APMIA_BROWSER_SNIPPET}" >> "${INI_PATH}"
         echo "[entrypoint]   Browser agent : auto-injection enabled"
     else
+        if grep -qE "^wily_php_agent\.enable\.browseragent\.response\.decoration=" "${INI_PATH}"; then
+            sed -i "s|^wily_php_agent\.enable\.browseragent\.response\.decoration=.*|wily_php_agent.enable.browseragent.response.decoration=0|" "${INI_PATH}"
+        fi
         if grep -qE "^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=" "${INI_PATH}"; then
             sed -i "s|^wily_php_agent\.enable\.browseragent\.snippet\.autoInjection=.*|wily_php_agent.enable.browseragent.snippet.autoInjection=0|" "${INI_PATH}"
         fi
