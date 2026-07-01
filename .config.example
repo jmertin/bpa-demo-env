@@ -61,7 +61,10 @@ HELM_CHART_PATH=""
 # Override host/port only when running the DX O2 agent in a separate pod.
 #
 # MYSQL_MONITOR:  true (default) = enable APMIA DB Monitor for MariaDB.
-#   The DB Monitor uses MARIADB_USER / MARIADB_PASSWORD (above) to connect.
+#   Requires the mysql extension to be installed in the dx-o2-agents image.
+#   Place Infrastructure_Agent_apmia_*.tar in src/dx-o2-agents/installers/ and
+#   rebuild -- the Dockerfile extracts the mysql-*.tar.gz from that archive.
+#   Credentials come from MARIADB_USER / MARIADB_PASSWORD (above).
 #   In Docker Compose the database is reached by service name "mariadb".
 #   In Kubernetes all containers share 127.0.0.1.
 #

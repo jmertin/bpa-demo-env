@@ -190,6 +190,17 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 - Validates with `apache2ctl configtest`; disables on rejection.
 - The module always registers internally as **`caplugin_module`**, detected via `apache2ctl -t -D DUMP_MODULES`.
 
+### MySQL/MariaDB Monitor Extension
+
+The APMIA DB Monitor extension for MySQL/MariaDB is installed from a separate archive:
+
+- **Source archive:** `src/dx-o2-agents/installers/Infrastructure_Agent_apmia_*.tar` (download from DX O2 → Agents → Infrastructure Agent → Linux; distinct from the `PHP_apmia_*.tar` used for the main agent).
+- **Dockerfile step:** extracts `apmia/extensions/deploy/mysql-*.tar.gz` from the Infrastructure archive and places it at `/opt/apmia/extensions/deploy/`. Optional/non-fatal: if the archive is absent, the container starts without DB monitoring.
+- **APMIA auto-deploy:** on startup the APMIA extracts any `.tar.gz` in `extensions/deploy/` into `extensions/<bundle-name>/` and registers it in `Extensions.profile`. The mysql extension appears as `extensions/mysql-*/`.
+- **`_db_monitor_setup()` in `dx-o2-agents/entrypoint.sh`:** runs before the IA starts. If `MYSQL_MONITOR=true` (default): extracts the mysql `.tar.gz`, patches `bundle.properties` with connection details from `APMENV_*` vars, and repacks. Also patches the already-deployed directory if it exists (for Docker named-volume persistence across container restarts). If `MYSQL_MONITOR=false`: removes the `.tar.gz` and any deployed directory so the APMIA never loads the extension.
+- **`bundle.properties` configuration:** profile name, hostname, port, username, password, instanceName, and version are all read from `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_*` variables. The sed patching uses `@` as delimiter — passwords containing `@` are not supported.
+- **JDBC driver:** `mariadb-java-client.jar` ships in the `PHP_apmia_*.tar` archive and is already at `/opt/apmia/lib/`. The mysql extension bundles its own `lib/mysql.jar` (MySQL Connector/J) used for the extension's internal queries.
+
 ### APMENV_* identity mechanism
 
 Agent identity is configured via `APMENV_*` environment variables — the native APMIA Docker mechanism. These override `introscope.*` profile properties at startup without touching the profile file. **Never patch or overwrite `core/config/IntroscopeAgent.profile`** — it contains the tenant JWT and WSS EM URL from the DX O2 installer.
