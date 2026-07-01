@@ -5,13 +5,38 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-01 @ 16:30 - [Fix – Browser agent still not injected: SCRIPT_NAME + Frontend start]:
+  Root cause (full): the PHP probe has two independent injection gates.
+  Gate 1: the very first PHP opcode of the entry script must be a non-include
+  opcode; if it is an include (op 61/62/136), the probe enters include-tracking
+  mode and never emits "Frontend start" — BA injection is skipped entirely.
+  Gate 2: SCRIPT_NAME (not REQUEST_URI) must not be index.php or bare / — the
+  probe treats those as null segments.  A plain mod_rewrite → index.php mapping
+  fails Gate 1 (first opcode is require_once) and Gate 2 (SCRIPT_NAME=index.php).
+  Fix: per-page wrapper files (app/src/shop.php, basket.php, product.php,
+  checkout.php, order.php, login.php, logout.php, admin.php, info.php, db.php,
+  dxo2.php — 11 new files).  Each wrapper runs:
+    $_GET['page'] ??= basename(__FILE__, '.php');  // non-include opcode
+    require __DIR__ . '/index.php';
+  The null-coalescing assignment compiles to non-include opcodes and runs before
+  the require, triggering "Frontend start: /shop.php".  SCRIPT_NAME=/shop.php
+  passes Gate 2; REQUEST_URI=/shop is used for the cookie name
+  (x-apm-brtm-response-bt-page-shop).
+  src/apache-php/config/vhost.conf: rewrite target changed from
+  /index.php?page=$1 to /$1.php?page=$1 so Apache passes requests to the
+  wrapper files (SCRIPT_NAME=/shop.php) instead of the front controller directly.
+  bug_php_probe.md: updated with complete diagnosis and final fix.
+  CLAUDE.md: updated front-controller description and browser-agent section.
+  COMPATIBILITY.md: updated browser-agent section with SCRIPT_NAME note.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 15:00 - [Fix – Browser agent not injected in front-controller app]:
   src/apache-php/config/vhost.conf: added RewriteEngine On + two RewriteRules
   inside the <Directory> block.  Bare / redirects to /shop (302).  Clean URL
   pattern ^([a-z][a-z0-9_-]*)$ rewrites /shop, /basket, /product, /login, etc.
   to index.php?page=<slug> via an internal rewrite [L,QSA].
-  Root cause: the PHP probe extracts the last URL path segment to name its
-  browser-agent cookie.  It treats bare / and the filename index.php as null
+  Root cause (partial): the PHP probe extracts the last URL path segment to name
+  its browser-agent cookie.  It treats bare / and the filename index.php as null
   segments and skips BA injection silently.  Clean URLs give the probe a
   meaningful segment (shop, basket, product, …) on every page request.
   app/src/templates/layout.php: all href="?page=…" → href="/…" (absolute clean

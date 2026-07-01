@@ -72,23 +72,87 @@ Request end
 
 No `Frontend start:` line appears for `index.php`. The probe logs `last seg of url : (null)` and exits without injection.
 
-### Step 3 — Root cause
+### Step 3 — First attempted fix (REQUEST_URI — insufficient)
 
-The probe uses two mechanisms to decide whether to inject:
+Added mod_rewrite rules to `vhost.conf` to route `/shop` → `index.php?page=shop`.
+The probe's `last seg of url` check reads `REQUEST_URI = /shop` → segment `shop` — but injection still did not occur.
 
-1. **Frontend start detection:** hooks PHP opcodes `ZEND_INCLUDE_OR_EVAL` (op codes 61, 62, 136) to identify "frontend pages". For a single-file request like `info.php` (no includes), this path is skipped and the probe falls back to URL-based detection → emits `Frontend start: /info.php`. For `index.php`, the probe sees multiple `require_once` calls (ops 61/62/136) and tracks includes instead of emitting a `Frontend start`.
+The probe also requires a `Frontend start` event to be established. Because `index.php` opens with `require_once` calls (PHP opcodes 61/62/136 — include-type), the probe never emits `Frontend start` for `index.php`. Without `Frontend start`, the probe does not proceed to BA injection regardless of `REQUEST_URI`.
 
-2. **BA Correlation URL segment check:** regardless of how `Frontend start` was determined, the probe extracts the **last path segment of `REQUEST_URI`** to name its browser-agent response cookie (`x-apm-brtm-response-bt-page-<segment>`). It **explicitly treats both `/` and `index.php` as null segments** and skips BA injection when the result is null.
+### Step 4 — Root cause (SCRIPT_NAME + Frontend start)
 
-This means:
-- `/info.php` → last segment = `info.php` → injection proceeds ✓
-- `/` → last segment = `(null)` → injection skipped ✗
-- `/index.php` → last segment = `(null)` (probe treats `index.php` same as bare `/`) → injection skipped ✗
-- `/?page=shop` → path is `/`, last segment = `(null)` → injection skipped ✗
+The probe has two independent gates that must both be satisfied for BA injection:
 
-The probe was designed for traditional PHP apps where each page is a separate `.php` file. A front-controller pattern (all requests through `index.php`) is fundamentally incompatible with its URL-segment detection, because:
-- The probe specifically ignores `index.php` as a meaningless segment.
-- All `?page=` query-string variants route through the same null-segment path.
+**Gate 1 — Frontend start detection:**
+The probe hooks PHP's opcode executor. When the very first opcode of a script is a non-include opcode, the probe establishes `Frontend start: <SCRIPT_NAME>`. When the very first opcode is an include (op 61/62/136), the probe enters include-tracking mode and never emits `Frontend start`. Without `Frontend start`, BA injection is skipped entirely.
+
+`index.php` opens with multiple `require_once` calls → the probe sees op=61,62,62,62,136... as the first opcodes → no `Frontend start` → BA skip.
+
+`info.php` has only `<?php phpinfo(); ?>` → `DO_ICALL` is the first opcode (non-include) → `Frontend start: /info.php` → BA proceeds.
+
+**Gate 2 — BA Correlation URL segment check:**
+Once `Frontend start` is established, the probe reads `SCRIPT_NAME` to determine the cookie name.
+It explicitly treats `index.php` and bare `/` as **null segments** and skips BA injection for those URLs.
+
+With mod_rewrite mapping `/shop` → `index.php?page=shop`:
+- `SCRIPT_NAME = /index.php` → last segment = `index.php` → **null** → BA skip regardless of REQUEST_URI
+
+Both gates must pass. The previous fix addressed REQUEST_URI but not SCRIPT_NAME, and did not address the Frontend start detection at all.
+
+---
+
+## Fix — Per-Page Wrapper Files
+
+The correct fix requires per-page wrapper PHP files at the document root so that:
+
+1. `SCRIPT_NAME = /shop.php` → last segment `shop` (not `index.php`) → passes Gate 2
+2. A non-include opcode runs as the very first opcode → probe emits `Frontend start: /shop.php` → passes Gate 1
+
+**Wrapper pattern** (`app/src/shop.php`, `basket.php`, etc.):
+```php
+<?php
+$_GET['page'] ??= basename(__FILE__, '.php'); // non-include opcode: forces PHP probe Frontend start
+require __DIR__ . '/index.php';
+```
+
+The `$_GET['page'] ??= ...` line compiles to FETCH_IS + QM_ASSIGN opcodes (non-include). These execute before the `require`, triggering `Frontend start: /shop.php`. A bare `require` as the very first line would compile to op=61 (include) and defeat Gate 1.
+
+The `??= basename(__FILE__, '.php')` also provides a defensive fallback: if someone accesses `/shop.php` directly (bypassing the rewrite), `$_GET['page']` is set from the filename.
+
+**Updated vhost.conf rewrite** routes to wrapper files instead of `index.php`:
+```apache
+RewriteRule ^([a-z][a-z0-9_-]*)$ /$1.php?page=$1 [L,QSA]
+```
+
+With this:
+- `SCRIPT_NAME = /shop.php` → last segment `shop` ✓
+- `REQUEST_URI = /shop` (stays as the original clean URL) → probe uses this for the BA cookie name → `x-apm-brtm-response-bt-page-shop`
+
+**Confirmed working — probe log after fix:**
+```
+Frontend start: /shop.php
+Frontend URI: /shop
+BA Correlation  cookie x-apm-brtm-response-bt-page-shop set successfully
+BA Correlation  Search length is 4142
+BA Correlation  head : pointer is 33
+BA Correlation  Response written length is 4683 and total length parsed 4142
+```
+
+HTTP response body confirmed to contain `<script type="text/javascript" id="ca_eum_ba" src="...">`.
+
+**Files created/modified:**
+- `src/apache-php/config/vhost.conf` — rewrite target `/$1.php?page=$1` (was `/index.php?page=$1`)
+- `app/src/shop.php` — new wrapper
+- `app/src/basket.php` — new wrapper
+- `app/src/product.php` — new wrapper
+- `app/src/checkout.php` — new wrapper
+- `app/src/order.php` — new wrapper
+- `app/src/login.php` — new wrapper
+- `app/src/logout.php` — new wrapper
+- `app/src/admin.php` — new wrapper
+- `app/src/info.php` — new wrapper
+- `app/src/db.php` — new wrapper
+- `app/src/dxo2.php` — new wrapper
 
 ---
 
@@ -130,60 +194,19 @@ Even with the wrong name, the value was `32768`, which exceeds the documented va
 
 ---
 
-## Fix for Main Bug — Clean URLs via mod_rewrite
-
-To give the probe a meaningful URL segment on every page request, Apache mod_rewrite was added to `vhost.conf` to route clean URLs through the front controller:
-
-```apache
-RewriteEngine On
-# Redirect the bare root to /shop so the probe sees a meaningful URL segment.
-RewriteRule ^$ /shop [R=302,L]
-# Route clean page URLs through the front controller.
-# REQUEST_URI stays as /shop, /basket, /product, etc. — the PHP probe reads
-# this and extracts a meaningful last segment for browser-agent cookie naming
-# (avoids the null-segment skip triggered by index.php and bare / URLs).
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^([a-z][a-z0-9_-]*)$ /index.php?page=$1 [L,QSA]
-```
-
-**How it works:**
-- Apache rewrites `/shop` to `index.php?page=shop` **internally** — `REQUEST_URI` stays as `/shop` from the client's perspective (and what the probe reads).
-- `$_GET['page']` is set to `shop` by the rewrite rule — front-controller routing is unchanged.
-- `[QSA]` (Query String Append) preserves filter parameters: `/shop?brand=aeroqube` → QUERY_STRING `page=shop&brand=aeroqube`.
-- The probe reads `REQUEST_URI = /shop` → last segment = `shop` → names cookie `x-apm-brtm-response-bt-page-shop` → injection proceeds.
-
-All `href="?page=xxx"` links and `header('Location: ?page=xxx')` redirects across 12 PHP files were updated to absolute clean URLs (`/shop`, `/basket`, `/product`, `/login`, etc.).
-
-**Files changed:**
-- `src/apache-php/config/vhost.conf` — RewriteEngine rules
-- `app/src/templates/layout.php` — all navigation links
-- `app/src/pages/shop.php` — filter form action, product links, pagination, basket form
-- `app/src/pages/product.php` — breadcrumb, form action, redirect
-- `app/src/pages/basket.php` — PRG redirect, shop/product/checkout links
-- `app/src/pages/checkout.php` — redirects, basket link
-- `app/src/pages/order.php` — redirect, shop/order-detail links
-- `app/src/pages/login.php` — post-login redirects
-- `app/src/pages/logout.php` — redirect
-- `app/src/pages/admin.php` — PRG redirect
-- `app/src/lib/auth.php` — `auth_require_login()` redirect
-- `app/src/usecases/locked.php` — eviction redirect
-
----
-
 ## Expected Behaviour After Fix
 
-| URL | `REQUEST_URI` last segment | BA cookie name | Injection |
-|---|---|---|---|
-| `/shop` | `shop` | `x-apm-brtm-response-bt-page-shop` | ✓ |
-| `/shop?brand=aeroqube` | `shop` | `x-apm-brtm-response-bt-page-shop` | ✓ |
-| `/product?slug=shelly-plug-s` | `product` | `x-apm-brtm-response-bt-page-product` | ✓ |
-| `/basket` | `basket` | `x-apm-brtm-response-bt-page-basket` | ✓ |
-| `/checkout` | `checkout` | `x-apm-brtm-response-bt-page-checkout` | ✓ |
-| `/order` | `order` | `x-apm-brtm-response-bt-page-order` | ✓ |
-| `/login` | `login` | `x-apm-brtm-response-bt-page-login` | ✓ |
-| `/admin` | `admin` | `x-apm-brtm-response-bt-page-admin` | ✓ |
-| `/dxo2` | `dxo2` | `x-apm-brtm-response-bt-page-dxo2` | ✓ |
+| URL | `SCRIPT_NAME` | `REQUEST_URI` last seg | BA cookie name | Injection |
+|---|---|---|---|---|
+| `/shop` | `/shop.php` | `shop` | `x-apm-brtm-response-bt-page-shop` | ✓ |
+| `/shop?brand=aeroqube` | `/shop.php` | `shop` | `x-apm-brtm-response-bt-page-shop` | ✓ |
+| `/product?slug=shelly-plug-s` | `/product.php` | `product` | `x-apm-brtm-response-bt-page-product` | ✓ |
+| `/basket` | `/basket.php` | `basket` | `x-apm-brtm-response-bt-page-basket` | ✓ |
+| `/checkout` | `/checkout.php` | `checkout` | `x-apm-brtm-response-bt-page-checkout` | ✓ |
+| `/order` | `/order.php` | `order` | `x-apm-brtm-response-bt-page-order` | ✓ |
+| `/login` | `/login.php` | `login` | `x-apm-brtm-response-bt-page-login` | ✓ |
+| `/admin` | `/admin.php` | `admin` | `x-apm-brtm-response-bt-page-admin` | ✓ |
+| `/dxo2` | `/dxo2.php` | `dxo2` | `x-apm-brtm-response-bt-page-dxo2` | ✓ |
 
 ---
 
@@ -195,7 +218,8 @@ After rebuild (`build-scripts/build.sh && build-scripts/compose.sh up -d`):
 2. Visit `http://bpa-demo.local:8080/shop`.
 3. Check probe log in `/var/log/php-probe/wily_php_agent_<pid>.log`:
    ```
-   Frontend start: /shop
+   Frontend start: /shop.php
+   Frontend URI: /shop
    BA Correlation  cookie x-apm-brtm-response-bt-page-shop set successfully
    BA Correlation  head : pointer is <N>
    ```
