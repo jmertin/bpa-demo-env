@@ -5,6 +5,19 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-01 @ 18:00 - [Docs – Vendor recommendation section in bug_php_probe.md]:
+  bug_php_probe.md: added "Recommended Probe Changes (Vendor)" section with two
+  vendor-facing fix requests:
+  Fix 1 (Gate 1): probe should establish Frontend start unconditionally for HTTP
+  SAPI entry scripts instead of keying on first-opcode type; includes a config
+  escape-hatch suggestion (wily_php_agent.frontend.entryScript).
+  Fix 2 (Gate 2): probe should use REQUEST_URI (not SCRIPT_NAME) for page
+  identification and cookie naming; SCRIPT_NAME is a filesystem detail, not a
+  logical page identifier.  Minimal alternative: fall back to REQUEST_URI when
+  SCRIPT_NAME yields null rather than silently skipping injection.  Also: nulling
+  index.php is too aggressive — bare / is the only justifiable exclusion.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:
   README.md: file tree updated to show wrapper files (shop.php, basket.php, etc.)
   alongside index.php; Browser agent row expanded with both probe gates (Frontend

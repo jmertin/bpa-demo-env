@@ -225,3 +225,46 @@ After rebuild (`build-scripts/build.sh && build-scripts/compose.sh up -d`):
    ```
 4. Inspect the HTTP response body — the `<script>` snippet should appear inside `<head>`.
 5. Restore `APMIA_PHP_LOG_LEVEL=INFO`.
+
+---
+
+## Recommended Probe Changes (Vendor)
+
+The two workarounds above (wrapper files + altered rewrite target) are entirely caused by probe-side design decisions. The following changes to `wily_php_agent` would make front-controller applications work without any application-level adaptation.
+
+### Fix 1 — Gate 1: establish Frontend start unconditionally for HTTP SAPI entry scripts
+
+**Current behaviour:** the probe inspects the first opcode of the executing script. If it is an include-type opcode (61/62/136), the probe enters include-tracking mode and never emits `Frontend start`. BA injection is then skipped entirely.
+
+**Problem:** In the Apache mod_php / FastCGI SAPI, the script identified by `SCRIPT_FILENAME` is always the HTTP entry point — it was dispatched by the web server, not included by another PHP file. Applying include-detection logic to it conflates "is the first thing this script does an include?" with "is this script itself an include?", which are different questions. The answer to the first is meaningless for determining whether BA injection should occur.
+
+**Requested change:** in the HTTP SAPI (`php_sapi_name() === 'apache2handler'` or equivalent), establish `Frontend start` unconditionally for the script identified by `SCRIPT_FILENAME`, regardless of its first opcode. The include-tracking heuristic is only meaningful for CLI or for files genuinely included by another front-end script; it should not suppress BA injection at the request level.
+
+A configuration escape hatch would also be acceptable:
+```ini
+; Treat the named script as a frontend entry point regardless of first opcode.
+wily_php_agent.frontend.entryScript = index.php
+```
+
+---
+
+### Fix 2 — Gate 2: use REQUEST_URI (not SCRIPT_NAME) for page identification; do not null-skip index.php
+
+**Current behaviour:** the probe reads `SCRIPT_NAME` to extract the page-name segment for BA cookie naming. It explicitly treats `index.php` and bare `/` as null segments and skips BA injection when either is encountered.
+
+**Problem 1 — wrong variable:** `SCRIPT_NAME` is a filesystem implementation detail (which `.php` file Apache is executing). `REQUEST_URI` is what the user actually requested and what identifies the logical page in any front-controller application. Naming the cookie after `REQUEST_URI` is correct; naming it after `SCRIPT_NAME` couples the probe to a particular directory layout.
+
+**Problem 2 — null-skipping index.php is too aggressive:** `index.php` is the single most common PHP entry point name. Treating it as a null segment causes silent BA skip for the majority of PHP applications that follow standard naming conventions. If the probe must exclude degenerate cases, bare `/` is the only justifiable one; `index.php` should either be a valid segment or, if skipped, should fall back to `REQUEST_URI` rather than abandoning injection entirely.
+
+**Requested change — preferred:** read `REQUEST_URI` (not `SCRIPT_NAME`) for page identification and cookie naming. Strip the query string, extract the last path segment, and proceed. With this change, `/shop`, `/basket`, etc. all yield meaningful segments naturally, with no application adaptation required.
+
+**Requested change — minimal:** keep `SCRIPT_NAME` as primary, but when it yields a null/excluded segment (`index.php` or `/`), fall back to the last segment of `REQUEST_URI` before skipping. This is a one-line fallback that makes front-controller applications work without any probe architecture change.
+
+---
+
+### Summary table
+
+| Gate | Current probe behaviour | Impact | Requested fix |
+|---|---|---|---|
+| Frontend start (Gate 1) | Skips BA if first opcode is include-type | Front-controllers that open with `require` never get BA | Establish Frontend start unconditionally for HTTP SAPI entry scripts |
+| Page identification (Gate 2) | Reads `SCRIPT_NAME`; nulls `index.php` and `/` | All requests through `index.php` silently skipped | Use `REQUEST_URI` for page naming; or fall back to `REQUEST_URI` when `SCRIPT_NAME` segment is null |
