@@ -373,6 +373,41 @@ requirement.  The property name is
 `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength`
 (note `.autoInjection.` between `.browseragent.` and `.snippet.`).
 
+**Why BA injection requires per-page wrapper files (not a plain front-controller):**
+The PHP probe has two independent gates that must both pass before it injects:
+
+*Gate 1 — Frontend start detection:* the probe hooks PHP's opcode executor.
+When the very first opcode of the entry script is a non-include opcode, it
+emits `Frontend start: /shop.php` and proceeds to injection.  When the first
+opcode is an include (op 61/62/136 — `require`/`include`), the probe enters
+include-tracking mode and never establishes `Frontend start` — BA injection is
+silently skipped for that entire request.  A bare `require __DIR__ . '/index.php'`
+at the top of a PHP file triggers this skip.
+
+*Gate 2 — SCRIPT_NAME segment:* the probe reads `SCRIPT_NAME` (not
+`REQUEST_URI`) and treats `index.php` and bare `/` as null segments, skipping
+injection.  Changing `REQUEST_URI` via mod_rewrite is not sufficient; `SCRIPT_NAME`
+must also change.
+
+BPA-Demo resolves both by routing Apache requests to per-page wrapper files
+(`app/src/shop.php`, `basket.php`, etc.) rather than directly to `index.php`.
+Each wrapper opens with:
+
+```php
+<?php
+$_GET['page'] ??= basename(__FILE__, '.php'); // non-include opcode: triggers Frontend start
+require __DIR__ . '/index.php';
+```
+
+The null-coalescing assignment compiles to non-include opcodes that execute
+before the `require`, satisfying Gate 1.  `vhost.conf` routes `/shop` →
+`shop.php?page=shop` so `SCRIPT_NAME=/shop.php` satisfies Gate 2.
+`REQUEST_URI` stays `/shop` — the probe uses it for the BA cookie name
+(`x-apm-brtm-response-bt-page-shop`).
+
+Any port of BPA-Demo to a different framework or app must preserve this
+pattern, or the browser agent will inject on zero pages without error messages.
+
 ---
 
 ## 8. Verifying agent activity
@@ -626,6 +661,51 @@ kubectl get pod -n <APP_NAMESPACE> <pod> -o jsonpath='{.spec.hostname}'
 ```
 If empty, verify `dxo2.hostName` is set in `values.yaml` and that
 `deploy.sh` was run after updating `.config`.
+
+### Browser agent configured correctly but snippet never appears in responses
+
+**Symptom:** `response.decoration=1`, `autoInjection=1`, and `snippetString`
+are all set in the INI, probe log shows no error, but no `<script id="ca_eum_ba">`
+appears in any page response.  Debug log shows:
+```
+Looking for include operation, current op = 61
+...
+BA Correlation  last seg of url : (null) and request_info.no_headers : 0
+```
+
+**Cause:** The PHP probe has two independent injection gates, both silently skipped
+by a front-controller pattern (all requests through `index.php`):
+
+- *Gate 1 — Frontend start:* The very first opcode of the entry script must be
+  non-include.  `index.php` opens with `require_once` (opcode 61), so the probe
+  enters include-tracking mode and never emits `Frontend start`.  No `Frontend
+  start` = no BA injection, regardless of INI configuration.
+
+- *Gate 2 — SCRIPT_NAME segment:* The probe reads `SCRIPT_NAME` (not `REQUEST_URI`)
+  and treats `index.php` and bare `/` as null segments, skipping injection.
+  mod_rewrite that maps `/shop` → `index.php?page=shop` changes `REQUEST_URI`
+  but leaves `SCRIPT_NAME=/index.php` — Gate 2 still fails.
+
+**Fix:** BPA-Demo uses per-page wrapper files at the document root.  Each wrapper
+(`shop.php`, `basket.php`, etc.) runs one non-include statement before
+`require __DIR__ . '/index.php'`:
+
+```php
+<?php
+$_GET['page'] ??= basename(__FILE__, '.php'); // triggers Frontend start
+require __DIR__ . '/index.php';
+```
+
+`vhost.conf` maps `/shop` → `shop.php?page=shop` (not `index.php?page=shop`) so
+`SCRIPT_NAME=/shop.php`.  Both gates pass; the probe emits:
+```
+Frontend start: /shop.php
+Frontend URI: /shop
+BA Correlation  cookie x-apm-brtm-response-bt-page-shop set successfully
+```
+
+Enable DEBUG logging (`APMIA_PHP_LOG_LEVEL=DEBUG` in `.config`, rebuild) to
+see per-request gate decisions in `/var/log/php-probe/wily_php_agent_<pid>.log`.
 
 ### Browser agent snippet appears in INI when not configured
 
