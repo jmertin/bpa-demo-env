@@ -84,7 +84,7 @@ by the Dockerfile and available in `extensions/WebServerPlugin/` for reference, 
 | `wily_php_agent.browseragent.autoInjection.snippetString` | Browser snippet value | single-quoted `'<script ...>'` |
 | `wily_php_agent.browseragent.autoInjection.enabled` | **Legacy — not used** | removed by entrypoint |
 
-> **Browser-agent URL requirement:** the probe names its cookie after the last path segment of `REQUEST_URI`. It treats bare `/` and the filename `index.php` as null segments and silently skips injection for those URLs. All BPA-Demo pages use clean URLs (`/shop`, `/basket`, `/product`, etc.) routed through Apache mod_rewrite (`vhost.conf`) so the probe always receives a meaningful segment.
+> **Browser-agent Frontend start + SCRIPT_NAME requirement:** the PHP probe has two gates for BA injection. (1) The very first PHP opcode in the entry script must be a non-include opcode; otherwise the probe enters include-tracking mode and skips BA entirely. (2) `SCRIPT_NAME` (not `REQUEST_URI`) must not be `index.php` or bare `/` — the probe treats those as null segments. BPA-Demo uses per-page wrapper files (`shop.php`, `basket.php`, etc.) at the document root; each runs `$_GET['page'] ??= basename(__FILE__, '.php')` (a non-include opcode) before `require __DIR__ . '/index.php'`. `vhost.conf` routes `/shop` → `shop.php?page=shop` so `SCRIPT_NAME=/shop.php` and `REQUEST_URI=/shop` — the probe names its cookie `x-apm-brtm-response-bt-page-shop` from `REQUEST_URI`.
 
 ---
 
