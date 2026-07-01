@@ -5,6 +5,12 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-06-30 @ 18:00 - [UX – Show full browser snippet in DX O2 status page]:
+  app/src/pages/dxo2.php: in the Browser Agent Auto-Injection card and in the
+  PHP probe INI table, replaced "(N chars)" with the actual snippet value
+  rendered as <code> with word-break:break-all so the full <script> tag is
+  visible and inspectable without shell access.
+------------------------------------------------------------------------------
 2026-06-30 @ 17:30 - [Docs – Sync all documentation with browser-agent fix]:
   README.md: updated Browser agent design-decision row (response.decoration,
   correct property name, value 30000); updated dxo2 page description to list

@@ -311,7 +311,9 @@ foreach ($badges as [$label, $ok, $state]):
       <?php
         $val = $iniValues[$iniKey] ?? null;
         if ($iniKey === 'wily_php_agent.browseragent.autoInjection.snippetString') {
-          $display = $val !== null ? '&#10003; set (' . mb_strlen(trim($val, "'")) . ' chars)' : '<span style="color:#607d8b">not set</span>';
+          $display = $val !== null
+            ? '<code style="font-size:.78rem;word-break:break-all">' . htmlspecialchars(trim($val, "'")) . '</code>'
+            : '<span style="color:#607d8b">not set</span>';
         }
         else {
           $display = $val !== null ? '<code style="font-size:.82rem">' . htmlspecialchars($val) . '</code>' : '<span style="color:#607d8b">not set</span>';
@@ -420,8 +422,8 @@ foreach ($badges as [$label, $ok, $state]):
         <td>Snippet configured<br>
             <span style="font-size:.75rem;color:#90a4ae">wily_php_agent.browseragent.autoInjection.snippetString</span></td>
         <td><?php if ($baSnippet !== ''): ?>
-          <span style="color:#2e7d32;font-weight:700">&#10003; set</span>
-          <span style="color:#607d8b;font-size:.8rem"> (<?= mb_strlen(trim($baSnippet, "'")) ?> chars)</span>
+          <span style="color:#2e7d32;font-weight:700">&#10003; set</span><br>
+          <code style="font-size:.78rem;word-break:break-all"><?= htmlspecialchars(trim($baSnippet, "'")) ?></code>
         <?php else: ?>
           <span style="color:#607d8b">not set</span>
         <?php endif ?></td>
