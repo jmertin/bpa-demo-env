@@ -5,6 +5,19 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:
+  README.md: file tree updated to show wrapper files (shop.php, basket.php, etc.)
+  alongside index.php; Browser agent row expanded with both probe gates (Frontend
+  start detection + SCRIPT_NAME segment check) and wrapper file pattern.
+  DX-O2-AGENT-SETUP.md: added "Why BA injection requires per-page wrapper files"
+  section explaining Gate 1 (Frontend start opcode detection) and Gate 2
+  (SCRIPT_NAME null segment) with code example; added new troubleshooting entry
+  "Browser agent configured correctly but snippet never appears in responses" with
+  debug log samples and step-by-step fix.
+  CLAUDE.md: front-controller section and PHP probe browser-agent section already
+  updated in prior commit — confirmed current.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 16:30 - [Fix – Browser agent still not injected: SCRIPT_NAME + Frontend start]:
   Root cause (full): the PHP probe has two independent injection gates.
   Gate 1: the very first PHP opcode of the entry script must be a non-include

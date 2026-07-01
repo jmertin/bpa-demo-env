@@ -24,7 +24,10 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 ├── app/
 │   └── src/                      # PHP application source
 │       ├── health                # static file – K8s liveness/readiness/startup probe target (no PHP)
-│       ├── index.php             # front-controller (mod_rewrite maps /shop, /basket, etc. → ?page=)
+│       ├── index.php             # front-controller (all routing; never called directly by Apache)
+│       ├── shop.php              # per-page wrapper → index.php (non-include anchor for PHP probe Frontend start)
+│       ├── basket.php            # (same pattern – all 11 wrapper files are identical in structure)
+│       ├── product.php checkout.php order.php login.php logout.php admin.php info.php db.php dxo2.php
 │       ├── config/               # session bootstrap, PDO singleton
 │       ├── lib/                  # auth, product, basket, order, usecase, validate, headers
 │       ├── pages/                # shop, product, basket, checkout, order, login, admin
@@ -146,7 +149,7 @@ Services run in separate containers and communicate via the Compose network.
 | APMENV_* identity | Agent identity set via native APMIA Docker env var mechanism; `IntroscopeAgent.profile` (tenant JWT + EM URL) is never modified |
 | Container hostname in metric path | `spec.hostname` on the pod template sets the OS hostname used by the IA and BPA Apache module. The PHP probe additionally has `wily_php_agent.hostname` patched to `APMIA_PHP_AGENT_NAME` by the entrypoint, so it always reports a fixed name regardless of pod hostname |
 | DB Monitor | APMIA DB Monitor extension enabled via APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_* vars; credentials from Kubernetes Secret |
-| Browser agent | PHP probe injects the DX O2 browser snippet when `APMIA_BROWSER_SNIPPET` is set. Three INI properties are written: `response.decoration=1` (master switch — activates the browser agent module), `snippet.autoInjection=1`, and `snippetString`. `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000` (probe-documented max; valid range 100–30000) is always set; `</head>` appears at byte ~239 with CSS in a static file. The probe names its cookie after the last URL path segment; it treats bare `/` and `index.php` as null and skips injection — all pages therefore use clean URLs (`/shop`, `/basket`, etc.) via mod_rewrite |
+| Browser agent | PHP probe injects the DX O2 browser snippet when `APMIA_BROWSER_SNIPPET` is set. Three INI properties are written: `response.decoration=1` (master switch), `snippet.autoInjection=1`, and `snippetString`. `maxSearchingLength=30000` always set. **Two probe gates must both pass:** (1) the very first PHP opcode of the entry script must be non-include; (2) `SCRIPT_NAME` must not be `index.php` or bare `/`. A front-controller pattern (all requests through `index.php`) silently fails both. Fix: per-page wrapper files (`shop.php`, `basket.php`, etc.) each run `$_GET['page'] ??= basename(__FILE__, '.php')` (non-include opcode) before `require __DIR__ . '/index.php'` — this triggers `Frontend start: /shop.php`; `vhost.conf` routes `/shop` → `shop.php?page=shop` so `SCRIPT_NAME=/shop.php` passes Gate 2 and `REQUEST_URI=/shop` names the cookie |
 | Stylesheet delivery | All CSS is served as a separate static file (`/css/app.css`); no inline `<style>` block in HTML — keeps HTML responses small and ensures `</head>` appears at byte ~239 |
 | Caching disabled | All caching is intentionally off: PHP OPcache disabled via Dockerfile ini drop-in; `mod_cache` never loaded; `vhost.conf` sends `Cache-Control: no-store` + `Pragma: no-cache` + epoch `Expires` on every response, strips ETags and `Last-Modified` — every page load hits PHP and the DB fresh for accurate APM telemetry |
 | Kubernetes probes | All three probes (`startupProbe`, `livenessProbe`, `readinessProbe`) target `GET /health` — a static file served without PHP, so the APMIA PHP probe extension is never triggered; probes succeed independently of the `dx-o2-agent` sidecar startup timing |
