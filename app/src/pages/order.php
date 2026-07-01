@@ -67,7 +67,7 @@ if ($orderId > 0) {
   </div>
 
   <div style="text-align:center;margin-top:1.5rem">
-    <a href="?page=shop" class="btn btn-primary">Continue shopping</a>
+    <a href="/shop" class="btn btn-primary">Continue shopping</a>
   </div>
 
   <?php
@@ -75,7 +75,7 @@ if ($orderId > 0) {
 else {
   // List user's orders.
   if (!$user) {
-    header('Location: ?page=login');
+    header('Location: /login');
     exit;
   }
 
@@ -96,7 +96,7 @@ else {
   <div class="section-title" style="margin-bottom:1.2rem">📦 My Orders</div>
 
   <?php if (empty($orders)): ?>
-    <div class="alert alert-info">You haven't placed any orders yet. <a href="?page=shop">Start shopping →</a></div>
+    <div class="alert alert-info">You haven't placed any orders yet. <a href="/shop">Start shopping →</a></div>
   <?php else: ?>
   <table class="admin-table">
     <thead>
@@ -111,7 +111,7 @@ else {
         <td><?= htmlspecialchars($o['created_at']) ?></td>
         <td><?= htmlspecialchars($o['status']) ?></td>
         <td>€<?= number_format((float) $o['total'], 2) ?></td>
-        <td><a href="?page=order&id=<?= (int) $o['id'] ?>" class="btn btn-secondary btn-sm">View</a></td>
+        <td><a href="/order?id=<?= (int) $o['id'] ?>" class="btn btn-secondary btn-sm">View</a></td>
       </tr>
       <?php endforeach ?>
     </tbody>

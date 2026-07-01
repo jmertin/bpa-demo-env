@@ -87,8 +87,7 @@ require __DIR__ . '/../templates/layout.php';
 </div>
 
 <!-- Filter bar -->
-<form method="get" class="filter-bar">
-  <input type="hidden" name="page" value="shop">
+<form method="get" action="/shop" class="filter-bar">
   <?php if ($brandSlug): ?><input type="hidden" name="brand" value="<?= htmlspecialchars($brandSlug) ?>"><?php endif ?>
   <?php if ($capSlug): ?><input type="hidden" name="cap"   value="<?= htmlspecialchars($capSlug) ?>"><?php endif ?>
   <div class="filter-group" style="flex:2;min-width:180px">
@@ -104,7 +103,7 @@ require __DIR__ . '/../templates/layout.php';
     <input type="text" name="max_price" value="<?= $maxPrice !== null ? htmlspecialchars((string) $maxPrice) : '' ?>" placeholder="999">
   </div>
   <button type="submit" class="btn btn-primary">Filter</button>
-  <a href="?page=shop" class="btn btn-secondary">Reset</a>
+  <a href="/shop" class="btn btn-secondary">Reset</a>
 </form>
 
 <!-- Product grid -->
@@ -131,7 +130,7 @@ require __DIR__ . '/../templates/layout.php';
         <?= htmlspecialchars($p['brand_name']) ?>
       </div>
       <div class="product-name">
-        <a href="?page=product&slug=<?= htmlspecialchars($p['slug']) ?>">
+        <a href="/product?slug=<?= htmlspecialchars($p['slug']) ?>">
           <?= htmlspecialchars($p['name']) ?>
         </a>
       </div>
@@ -145,8 +144,8 @@ require __DIR__ . '/../templates/layout.php';
       <div class="product-stock">Stock: <?= (int) $p['stock'] ?></div>
     </div>
     <div class="product-card-footer">
-      <a href="?page=product&slug=<?= htmlspecialchars($p['slug']) ?>" class="btn btn-secondary btn-sm" style="flex:1;text-align:center">Details</a>
-      <form method="post" action="?page=basket" style="flex:1">
+      <a href="/product?slug=<?= htmlspecialchars($p['slug']) ?>" class="btn btn-secondary btn-sm" style="flex:1;text-align:center">Details</a>
+      <form method="post" action="/basket" style="flex:1">
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action"     value="add">
         <input type="hidden" name="product_id" value="<?= (int) $p['id'] ?>">
@@ -163,7 +162,6 @@ require __DIR__ . '/../templates/layout.php';
   <?php for ($i = 1; $i <= $result['pages']; $i++): ?>
     <?php
     $params = array_filter([
-      'page'      => 'shop',
       'brand'     => $brandSlug,
       'cap'       => $capSlug,
       'q'         => $search,
@@ -172,7 +170,7 @@ require __DIR__ . '/../templates/layout.php';
       'p'         => $i,
     ], fn($v) => $v !== '' && $v !== null);
     ?>
-    <a href="?<?= http_build_query($params) ?>"
+    <a href="/shop?<?= http_build_query($params) ?>"
        class="page-link <?= $i === $pageNum ? 'active' : '' ?>"><?= $i ?></a>
   <?php endfor ?>
 </div>

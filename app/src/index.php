@@ -1,6 +1,7 @@
 <?php
 // BPA-Demo front controller.
-// All requests are routed here by nginx (SCRIPT_FILENAME hardcoded).
+// Apache mod_rewrite maps clean URLs (/shop, /basket, /product, etc.) to this
+// file with ?page=<slug>.  The bare / redirects to /shop externally (302).
 
 require_once __DIR__ . '/config/app.php';
 require_once __DIR__ . '/config/database.php';
