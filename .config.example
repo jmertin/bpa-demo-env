@@ -75,8 +75,9 @@ APMIA_AGENT_NAME="bpa-demo-agent"
 APMIA_APP_NAME="BPA-Demo"
 APMIA_LOG_LEVEL="INFO"
 # PHP probe log level (wily_php_agent.logLevel).  Controls verbosity of the
-# PHP probe log written to /var/log/php-probe/.  Values: INFO, DEBUG, WARN, ERROR.
-# DEBUG produces detailed per-request trace output; use INFO in normal operation.
+# PHP probe log written to /var/log/php-probe/.
+# Accepts names or numeric values: 0=TRACE, 1=DEBUG, 2=INFO (default), 3=WARNING, 4=ERROR, 5=FATAL
+# The entrypoint maps names to the numeric value the INI requires.  Use INFO for normal operation.
 APMIA_PHP_LOG_LEVEL="INFO"
 APMIA_PHP_COLLECTOR_HOST="127.0.0.1"
 APMIA_PHP_COLLECTOR_PORT="5005"

@@ -5,6 +5,19 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-01 @ 09:00 - [Fix – PHP probe logLevel written as string instead of number]:
+  src/apache-php/entrypoint.sh: added name-to-number mapping (case statement)
+  before writing wily_php_agent.logLevel.  The INI only accepts numeric values
+  (0=trace,1=debug,2=info,3=warning,4=error,5=fatal); the entrypoint was writing
+  the raw APMIA_PHP_LOG_LEVEL string (e.g. "INFO") which the probe ignores,
+  leaving the INI default.  Now maps TRACE/DEBUG/INFO/WARN*/WARNING/ERROR/FATAL
+  and their numeric equivalents; falls back to 2 (INFO) for unknown values.
+  Also removed quotes around the numeric value in the INI (the probe expects an
+  unquoted integer).  Log output now shows level=INFO/2.
+  .config.example: updated comment to document the 0-5 scale.
+  CLAUDE.md, COMPATIBILITY.md, DX-O2-AGENT-SETUP.md: updated to reflect that
+  logLevel is numeric and that name-to-number mapping is performed at startup.
+------------------------------------------------------------------------------
 2026-06-30 @ 18:00 - [UX – Show full browser snippet in DX O2 status page]:
   app/src/pages/dxo2.php: in the Browser Agent Auto-Injection card and in the
   PHP probe INI table, replaced "(N chars)" with the actual snippet value

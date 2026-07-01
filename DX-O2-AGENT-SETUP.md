@@ -195,6 +195,7 @@ Check: /opt/apmia/extensions/PHPAgent/wily_php_agent.ini exists?
       wily_php_agent.collectorPort    = ${APMIA_PHP_COLLECTOR_PORT}  (default: 5005)
       wily_php_agent.application.name = ${APMIA_APP_NAME}
       wily_php_agent.logdir           = /var/log/php-probe
+      wily_php_agent.logLevel         = <0-5>  (mapped from APMIA_PHP_LOG_LEVEL; default INFO→2)
       wily_php_agent.agentName        = ${APMIA_PHP_AGENT_NAME}  (default: bpa-demo-php-probe)
       wily_php_agent.hostname         = ${APMIA_PHP_AGENT_NAME}  (overrides OS gethostname())
     Browser agent (if APMIA_BROWSER_SNIPPET is set):

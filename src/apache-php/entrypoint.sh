@@ -16,7 +16,9 @@ APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
 APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"
 # PHP probe identity in the APM metric tree (wily_php_agent.agentName).
 APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
-# PHP probe log level (wily_php_agent.logLevel). Common values: INFO, DEBUG.
+# PHP probe log level. Accepts names (TRACE/DEBUG/INFO/WARN/WARNING/ERROR/FATAL)
+# or numeric values (0-5). The entrypoint maps names to numbers; the INI requires
+# a numeric value: 0=trace,1=debug,2=info,3=warning,4=error,5=fatal.
 APMIA_PHP_LOG_LEVEL="${APMIA_PHP_LOG_LEVEL:-INFO}"
 # Web plugin identity - available to the BPA Apache module via process environment.
 APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
@@ -60,12 +62,22 @@ if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     else
         printf '\nwily_php_agent.disableLogging=0\n' >> "${INI_PATH}"
     fi
+    # Map string names to numeric values (INI requires 0-5, not string names).
+    case "${APMIA_PHP_LOG_LEVEL}" in
+        [Tt][Rr][Aa][Cc][Ee]|0)       _php_log_num=0 ;;
+        [Dd][Ee][Bb][Uu][Gg]|1)       _php_log_num=1 ;;
+        [Ii][Nn][Ff][Oo]|2)           _php_log_num=2 ;;
+        [Ww][Aa][Rr][Nn]*|3)          _php_log_num=3 ;;
+        [Ee][Rr][Rr][Oo][Rr]|4)       _php_log_num=4 ;;
+        [Ff][Aa][Tt][Aa][Ll]|5)       _php_log_num=5 ;;
+        *)                             _php_log_num=2 ; APMIA_PHP_LOG_LEVEL='INFO' ;;
+    esac
     if grep -qE "^wily_php_agent\.logLevel=" "${INI_PATH}"; then
-        sed -i "s|^wily_php_agent\.logLevel=.*|wily_php_agent.logLevel=\"${APMIA_PHP_LOG_LEVEL}\"|" "${INI_PATH}"
+        sed -i "s|^wily_php_agent\.logLevel=.*|wily_php_agent.logLevel=${_php_log_num}|" "${INI_PATH}"
     else
-        printf '\nwily_php_agent.logLevel="%s"\n' "${APMIA_PHP_LOG_LEVEL}" >> "${INI_PATH}"
+        printf '\nwily_php_agent.logLevel=%s\n' "${_php_log_num}" >> "${INI_PATH}"
     fi
-    echo "[entrypoint]   PHP probe logging: enabled (level=${APMIA_PHP_LOG_LEVEL}, dir=/var/log/php-probe)"
+    echo "[entrypoint]   PHP probe logging: enabled (level=${APMIA_PHP_LOG_LEVEL}/${_php_log_num}, dir=/var/log/php-probe)"
 
     # Set PHP probe agent name (wily_php_agent.agentName controls the probe's
     # identity in the DX O2 metric tree; add the property if absent in the INI).
