@@ -75,7 +75,7 @@ by the Dockerfile and available in `extensions/WebServerPlugin/` for reference, 
 | `wily_php_agent.application.name` | App name in metric tree | from `APMIA_APP_NAME` |
 | `wily_php_agent.logdir` | Probe log directory | set to `/var/log/php-probe` at runtime |
 | `wily_php_agent.disableLogging` | Probe logging on/off | always `0` (enabled) |
-| `wily_php_agent.logLevel` | Probe log verbosity | from `APMIA_PHP_LOG_LEVEL` (default `INFO`) |
+| `wily_php_agent.logLevel` | Probe log verbosity | **numeric only**: 0=trace,1=debug,2=info,3=warning,4=error,5=fatal. `APMIA_PHP_LOG_LEVEL` accepts names or numbers; entrypoint maps to numeric before writing INI. Default: `INFO`→`2` |
 | `wily_php_agent.agentName` | Probe identity in metric tree | from `APMIA_PHP_AGENT_NAME` (default `bpa-demo-php-probe`) |
 | `wily_php_agent.hostname` | Probe hostname in metric path | set to `APMIA_PHP_AGENT_NAME` — overrides OS `gethostname()` |
 | `wily_php_agent.enable.browseragent.response.decoration` | Browser agent master switch | `1` = module active, `0` = off; **required** before snippet injection works |
