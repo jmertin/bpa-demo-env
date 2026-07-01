@@ -76,6 +76,113 @@ if [[ ! -x "${AGENT_SCRIPT}" ]]; then
     exit 1
 fi
 
+# == DB Monitor (MySQL/MariaDB) ================================================
+# The mysql extension .tar.gz is staged in extensions/deploy/ by the Dockerfile.
+# At startup the APMIA auto-deploys any .tar.gz in that directory.  This section
+# patches bundle.properties inside the archive (and any already-deployed copy on
+# persistent volumes) so the extension connects with the correct credentials.
+#
+# Connection details come from APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_* vars
+# (set via docker-compose.yml or Helm Secret).  MYSQL_MONITOR=false removes the
+# extension from deploy/ so the APMIA never loads it.
+MYSQL_MONITOR="${MYSQL_MONITOR:-true}"
+
+_db_monitor_setup() {
+    local mysql_tar
+    mysql_tar=$(find "${APMIA_HOME}/extensions/deploy" -maxdepth 1 \
+                     -name 'mysql-*.tar.gz' 2>/dev/null | head -1 || true)
+
+    if [[ -z "${mysql_tar}" ]]; then
+        echo "[entrypoint] DB Monitor: mysql extension not staged -- skipping DB monitoring."
+        return 0
+    fi
+
+    if [[ "${MYSQL_MONITOR}" != "true" ]]; then
+        echo "[entrypoint] DB Monitor: MYSQL_MONITOR=${MYSQL_MONITOR} -- removing extension."
+        rm -f "${mysql_tar}"
+        local ext_dir="${APMIA_HOME}/extensions/$(basename "${mysql_tar}" .tar.gz)"
+        rm -rf "${ext_dir}" 2>/dev/null || true
+        return 0
+    fi
+
+    # Resolve connection details from APMENV_* environment variables.
+    local -r _prof="${APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES:-bpadb}"
+    local -r _pu="${_prof^^}"
+    local _v _db_host _db_port _db_user _db_pass _db_inst _db_ver
+    _v="APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_${_pu}_HOSTNAME"
+    _db_host="${!_v:-mariadb}"
+    _v="APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_${_pu}_PORT"
+    _db_port="${!_v:-3306}"
+    _v="APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_${_pu}_USERNAME"
+    _db_user="${!_v:-}"
+    _v="APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_${_pu}_PASSWORD"
+    _db_pass="${!_v:-}"
+    _v="APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_${_pu}_INSTANCENAME"
+    _db_inst="${!_v:-phpapp}"
+    _v="APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_${_pu}_VERSION"
+    _db_ver="${!_v:-}"
+
+    if [[ -z "${_db_user}" ]]; then
+        echo "[entrypoint] WARNING: DB Monitor: no username set (${_pu}_USERNAME unset)" >&2
+    fi
+
+    # Patch a bundle.properties file in-place.
+    # Renames the original profile entry to _prof and updates all connection properties.
+    # Uses @ as sed delimiter -- passwords containing @ are not supported.
+    _patch_bundle_props() {
+        local -r _bp="$1"
+        [[ -f "${_bp}" ]] || return 0
+
+        local _orig
+        _orig=$(sed -n 's/^introscope\.agent\.dbmonitor\.mysql\.profiles=//p' "${_bp}" \
+                | tr -d '[:space:]' | cut -d, -f1 || true)
+
+        if [[ -n "${_orig}" && "${_orig}" != "${_prof}" ]]; then
+            sed -i \
+                "s@^introscope\.agent\.dbmonitor\.mysql\.profiles=.*@introscope.agent.dbmonitor.mysql.profiles=${_prof}@" \
+                "${_bp}"
+            sed -i \
+                "s@^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_orig}\.@introscope.agent.dbmonitor.mysql.profiles.${_prof}.@g" \
+                "${_bp}"
+        fi
+
+        sed -i "s@^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.hostName=.*@introscope.agent.dbmonitor.mysql.profiles.${_prof}.hostName=${_db_host}@" "${_bp}"
+        sed -i "s@^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.port=.*@introscope.agent.dbmonitor.mysql.profiles.${_prof}.port=${_db_port}@" "${_bp}"
+        sed -i "s@^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.userName=.*@introscope.agent.dbmonitor.mysql.profiles.${_prof}.userName=${_db_user}@" "${_bp}"
+        sed -i "s@^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.password=.*@introscope.agent.dbmonitor.mysql.profiles.${_prof}.password=${_db_pass}@" "${_bp}"
+        sed -i "s@^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.instanceName=.*@introscope.agent.dbmonitor.mysql.profiles.${_prof}.instanceName=${_db_inst}@" "${_bp}"
+
+        if [[ -n "${_db_ver}" ]]; then
+            if grep -q "^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.version=" "${_bp}" 2>/dev/null; then
+                sed -i "s@^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.version=.*@introscope.agent.dbmonitor.mysql.profiles.${_prof}.version=${_db_ver}@" "${_bp}"
+            else
+                printf 'introscope.agent.dbmonitor.mysql.profiles.%s.version=%s\n' "${_prof}" "${_db_ver}" >> "${_bp}"
+            fi
+        else
+            sed -i "/^introscope\.agent\.dbmonitor\.mysql\.profiles\.${_prof}\.version=/d" "${_bp}"
+        fi
+    }
+
+    # 1. Patch the staged .tar.gz so the APMIA gets correct credentials on first deploy.
+    local _tmpdir
+    _tmpdir=$(mktemp -d)
+    tar -xzf "${mysql_tar}" -C "${_tmpdir}"
+    _patch_bundle_props "${_tmpdir}/bundle.properties"
+    tar -czf "${mysql_tar}" -C "${_tmpdir}" .
+    rm -rf "${_tmpdir}"
+
+    # 2. Patch the already-deployed extension directory (survives volume persistence).
+    local -r _ext_dir="${APMIA_HOME}/extensions/$(basename "${mysql_tar}" .tar.gz)"
+    if [[ -d "${_ext_dir}" ]]; then
+        _patch_bundle_props "${_ext_dir}/bundle.properties"
+        echo "[entrypoint] DB Monitor: patched deployed extension at $(basename "${_ext_dir}")/"
+    fi
+
+    echo "[entrypoint] DB Monitor: enabled (profile=${_prof}, host=${_db_host}:${_db_port}, instance=${_db_inst}, user=${_db_user:-<unset>})"
+}
+
+_db_monitor_setup
+
 # == Signal handler for graceful shutdown =====================================
 AGENT_PID=""
 WATCHDOG_PID=""

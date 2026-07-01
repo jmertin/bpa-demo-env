@@ -328,11 +328,64 @@ In Docker Compose the hosts are hardcoded to the `dxo2` service name in
 
 ### 7.4 DB Monitor (MariaDB)
 
-The APMIA DB Monitor extension monitors MariaDB via `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_*`
-env vars.  Set `MYSQL_MONITOR=true` (default) in `.config` to enable it.
+The APMIA DB Monitor extension for MySQL/MariaDB ships in a **separate archive**
+(`Infrastructure_Agent_apmia_*.tar`) that must be downloaded and placed alongside
+the other installer archives before building.
+
+**Step 1 — Download the Infrastructure archive:**
+
+```
+DX O2 interface -> Agents -> Infrastructure Agent -> Linux
+File: Infrastructure_Agent_apmia_<date>_v<n>.tar
+Place in: src/dx-o2-agents/installers/
+```
+
+This is distinct from `PHP_apmia_*.tar`.  Both archives must be present.
+
+**Step 2 — Rebuild the `dx-o2-agents` image:**
+
+```bash
+build-scripts/build.sh
+```
+
+The Dockerfile extracts `apmia/extensions/deploy/mysql-*.tar.gz` from the
+Infrastructure archive and stages it in `/opt/apmia/extensions/deploy/`.  The
+APMIA auto-deploys this extension (extracts it into `extensions/mysql-*/`) at
+container startup.
+
+**Step 3 — Configure credentials in `.config`:**
+
+```bash
+MYSQL_MONITOR="true"          # true (default) = enable; false = disable
+MARIADB_USER="phpuser"        # used for DB Monitor connection
+MARIADB_PASSWORD="..."        # used for DB Monitor connection
+```
+
+`docker-compose.yml` passes these as
+`APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_USERNAME/PASSWORD`.
+The `dx-o2-agents` entrypoint (`_db_monitor_setup`) patches `bundle.properties`
+inside the staged extension archive at container startup, so the APMIA always
+connects with the current `.config` credentials.
 
 In Kubernetes, credentials are injected via `secretKeyRef` from the mariadb
 Secret — they are never in plain-text values files.
+
+**Verify DB Monitor is active:**
+
+```bash
+# Look for the extension in the deployed extensions directory
+docker exec <dxo2-container> ls /opt/apmia/extensions/ | grep mysql
+
+# Check entrypoint log for the DB Monitor line
+docker compose logs dxo2 | grep 'DB Monitor'
+# expected: [entrypoint] DB Monitor: enabled (profile=bpadb, host=mariadb:3306, ...)
+
+# After a few minutes, metrics should appear in DX O2 under:
+# MySQL Databases | mariadb | phpapp | ...
+```
+
+If `MYSQL_MONITOR=false`, the entrypoint removes the extension from `deploy/`
+and deletes the deployed directory so the APMIA never loads it.
 
 ### 7.5 Browser agent auto-injection
 
@@ -722,28 +775,34 @@ it is empty, overriding any pre-configured INI values.
 
 ```
 [ ] 1. Log in to DX O2 interface (e.g. https://dx.dxi-eu1.saas.broadcom.com/)
-[ ] 2. Download PHP_apmia_*.tar        (Agents → Infrastructure Agent → Linux)
-[ ] 3. Download Business_Transaction_Listener.zip
-[ ] 4. Download Business_Payload_Analyzer_WebServer_Plugins.zip
-[ ] 5. Place all three archives in src/dx-o2-agents/installers/
-[ ] 6. Verify archive layout:
+[ ] 2. Download PHP_apmia_*.tar             (Agents -> Infrastructure Agent -> Linux)
+[ ] 3. Download Infrastructure_Agent_apmia_*.tar  (same page -- needed for DB Monitor)
+[ ] 4. Download Business_Transaction_Listener.zip
+[ ] 5. Download Business_Payload_Analyzer_WebServer_Plugins.zip
+[ ] 6. Place all four archives in src/dx-o2-agents/installers/
+[ ] 7. Verify archive layouts:
        tar -tf src/dx-o2-agents/installers/PHP_apmia*.tar | grep IntroscopeAgent.profile
        # must show: apmia/core/config/IntroscopeAgent.profile
-[ ] 7. Set APMIA_AGENT_NAME, APMIA_APP_NAME, APMIA_HOST_NAME in .config
-[ ] 8. Set APMIA_EM_HOST to a non-empty value in .config (enables dxo2.enabled)
-[ ] 9. (Optional) Set APMIA_BROWSER_SNIPPET in .config if browser agent is needed
-[ ] 10. Run: build-scripts/build.sh
+       tar -tf src/dx-o2-agents/installers/Infrastructure_Agent_apmia*.tar | grep 'extensions/deploy/mysql'
+       # must show: apmia/extensions/deploy/mysql-*.tar.gz
+[ ] 8. Set APMIA_AGENT_NAME, APMIA_APP_NAME, APMIA_HOST_NAME in .config
+[ ] 9. Set APMIA_EM_HOST to a non-empty value in .config (enables dxo2.enabled)
+[ ] 10. (Optional) Set APMIA_BROWSER_SNIPPET in .config if browser agent is needed
+[ ] 11. Run: build-scripts/build.sh
         Confirm: "[build] dx-o2-agents built successfully."
-[ ] 11. Run: build-scripts/push.sh
-[ ] 12. Run: build-scripts/deploy.sh
+        Confirm: "[Dockerfile] MySQL monitor extension staged at /opt/apmia/extensions/deploy/mysql-*.tar.gz."
+[ ] 12. Run: build-scripts/push.sh
+[ ] 13. Run: build-scripts/deploy.sh
         deploy.sh sets dxo2.enabled: true automatically when APMIA_EM_HOST is set
-[ ] 13. Verify: kubectl get pods -n <APP_NAMESPACE> -w
+[ ] 14. Verify: kubectl get pods -n <APP_NAMESPACE> -w
         Wait for 3/3 containers Running (or 4/4 with dxo2 enabled)
-[ ] 14. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep "probe active"
-        expected: "DX O2 PHP probe active – APM instrumentation enabled."
-[ ] 15. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep "BPA WebServer"
-        expected: "BPA WebServer Plugin active – BPA instrumentation enabled."
-[ ] 16. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep "Infrastructure Agent"
+[ ] 15. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep "probe active"
+        expected: "DX O2 PHP probe active -- APM instrumentation enabled."
+[ ] 16. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep "BPA WebServer"
+        expected: "BPA WebServer Plugin active -- BPA instrumentation enabled."
+[ ] 17. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep "DB Monitor"
+        expected: "[entrypoint] DB Monitor: enabled (profile=bpadb, host=mariadb:3306, ...)"
+[ ] 18. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep "Infrastructure Agent"
         expected: "Infrastructure Agent started (PID ...)"
-[ ] 17. Verify in DX O2 console: agent tree shows configured agent name under configured app
+[ ] 19. Verify in DX O2 console: agent tree shows configured agent name under configured app
 ```

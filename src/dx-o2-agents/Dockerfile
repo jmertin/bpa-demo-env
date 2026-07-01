@@ -164,6 +164,33 @@ RUN set -euo pipefail && \
     \
     rm -rf /tmp/bpa-extract /tmp/bpa-ngx /tmp/bpa-tmp
 
+# ── MySQL/MariaDB Monitor Extension ──────────────────────────────────────────
+# Optional: extract the mysql monitor extension from Infrastructure_Agent_apmia*.tar
+# and stage it for auto-deployment by the APMIA at container startup.
+# The entrypoint patches bundle.properties credentials at runtime from APMENV_* vars.
+# Non-fatal: if the Infrastructure archive is absent the container starts without
+# DB monitoring (MYSQL_MONITOR=true will have no effect until the image is rebuilt
+# with the archive present).
+#
+# Download from: DX O2 -> Agents -> Infrastructure Agent -> Linux
+# Place as: src/dx-o2-agents/installers/Infrastructure_Agent_apmia_*.tar
+RUN set -euo pipefail && \
+    INFRA_TAR=$(ls /tmp/installers/Infrastructure_Agent_apmia*.tar 2>/dev/null | head -1 || true) && \
+    if [[ -z "${INFRA_TAR}" ]]; then \
+        echo "[Dockerfile] Infrastructure_Agent_apmia*.tar not found -- mysql monitor extension skipped."; \
+        exit 0; \
+    fi && \
+    MYSQL_PATH=$(tar -tf "${INFRA_TAR}" | grep -m1 'extensions/deploy/mysql-.*\.tar\.gz$' || true) && \
+    if [[ -z "${MYSQL_PATH}" ]]; then \
+        echo "[Dockerfile] WARNING: mysql extension not found inside $(basename "${INFRA_TAR}") -- skipped."; \
+        exit 0; \
+    fi && \
+    echo "[Dockerfile] Extracting mysql monitor extension: $(basename "${MYSQL_PATH}")..." && \
+    tar -xf "${INFRA_TAR}" -C /tmp "${MYSQL_PATH}" && \
+    cp "/tmp/${MYSQL_PATH}" /opt/apmia/extensions/deploy/ && \
+    rm -rf /tmp/apmia && \
+    echo "[Dockerfile] MySQL monitor extension staged at /opt/apmia/extensions/deploy/$(basename "${MYSQL_PATH}")."
+
 # ── Permissions and runtime directories ──────────────────────────────────────
 RUN set -euo pipefail && \
     chmod +x /opt/apmia/bin/APMIAgent.sh \
