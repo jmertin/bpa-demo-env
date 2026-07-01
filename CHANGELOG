@@ -5,6 +5,38 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-01 @ 15:00 - [Fix – Browser agent not injected in front-controller app]:
+  src/apache-php/config/vhost.conf: added RewriteEngine On + two RewriteRules
+  inside the <Directory> block.  Bare / redirects to /shop (302).  Clean URL
+  pattern ^([a-z][a-z0-9_-]*)$ rewrites /shop, /basket, /product, /login, etc.
+  to index.php?page=<slug> via an internal rewrite [L,QSA].
+  Root cause: the PHP probe extracts the last URL path segment to name its
+  browser-agent cookie.  It treats bare / and the filename index.php as null
+  segments and skips BA injection silently.  Clean URLs give the probe a
+  meaningful segment (shop, basket, product, …) on every page request.
+  app/src/templates/layout.php: all href="?page=…" → href="/…" (absolute clean
+  URLs); sidebar brand/cap filter links → /shop?brand=… and /shop?cap=….
+  app/src/pages/shop.php: filter form action → /shop; hidden page input removed;
+  pagination params: page key removed, hrefs → /shop?….
+  app/src/pages/product.php: breadcrumb and back-button hrefs → /shop, /shop?brand=…;
+  add-to-basket form action → /basket; redirect → /shop.
+  app/src/pages/basket.php: PRG redirect → /basket; shop/checkout links updated.
+  app/src/pages/checkout.php: redirects → /basket, /order?id=…; link → /basket.
+  app/src/pages/order.php: redirect → /login; shop/order-detail links updated.
+  app/src/pages/login.php: redirects → /shop and /<slug>.
+  app/src/pages/logout.php: redirect → /shop.
+  app/src/pages/admin.php: PRG redirect → /admin.
+  app/src/lib/auth.php: auth_require_login redirect → /login.
+  app/src/usecases/locked.php: redirect → /login.
+  README.md: route table updated from ?page=… to /…; browser-agent row updated
+  with clean URL requirement note; /login direct link and admin diagnostic URLs.
+  CLAUDE.md: updated front-controller description, browser-agent section, admin
+  route table.
+  COMPATIBILITY.md: added clean URL requirement note to browser-agent section.
+  bug_php_probe.md: full bug report documenting root cause, diagnosis, all four
+  bugs found, and the fix.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 09:00 - [Fix – PHP probe logLevel written as string instead of number]:
   src/apache-php/entrypoint.sh: added name-to-number mapping (case statement)
   before writing wily_php_agent.logLevel.  The INI only accepts numeric values

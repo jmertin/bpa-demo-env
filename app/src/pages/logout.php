@@ -1,4 +1,4 @@
 <?php
 auth_logout();
-header('Location: ?page=shop');
+header('Location: /shop');
 exit;

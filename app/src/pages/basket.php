@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 
   // POST–Redirect–GET to prevent double-submit.
-  header('Location: ?page=basket');
+  header('Location: /basket');
   exit;
 }
 
@@ -64,7 +64,7 @@ require __DIR__ . '/../templates/layout.php';
 <?php endif ?>
 
 <?php if (empty($items)): ?>
-  <div class="alert alert-info">Your basket is empty. <a href="?page=shop">Continue shopping →</a></div>
+  <div class="alert alert-info">Your basket is empty. <a href="/shop">Continue shopping →</a></div>
 <?php else: ?>
 
 <table class="basket-table">
@@ -82,7 +82,7 @@ require __DIR__ . '/../templates/layout.php';
     <?php foreach ($items as $item): ?>
     <tr>
       <td>
-        <a href="?page=product&slug=<?= htmlspecialchars($item['product']['slug']) ?>">
+        <a href="/product?slug=<?= htmlspecialchars($item['product']['slug']) ?>">
           <?= htmlspecialchars($item['product']['name']) ?>
         </a>
       </td>
@@ -119,8 +119,8 @@ require __DIR__ . '/../templates/layout.php';
 </table>
 
 <div style="margin-top:1.2rem;display:flex;gap:.8rem;justify-content:flex-end">
-  <a href="?page=shop" class="btn btn-secondary">&larr; Continue shopping</a>
-  <a href="?page=checkout" class="btn btn-primary">Proceed to checkout →</a>
+  <a href="/shop" class="btn btn-secondary">&larr; Continue shopping</a>
+  <a href="/checkout" class="btn btn-primary">Proceed to checkout →</a>
 </div>
 <?php endif ?>
 

@@ -33,7 +33,7 @@ All scripts source `.config` from the project root (copy from `.config.example`;
 `app/src/index.php` is the single entry point for all requests. It:
 1. Bootstraps session and CSRF via `config/app.php`.
 2. Opens the PDO singleton via `config/database.php`.
-3. Resolves `?page=<slug>` against a static `$routes` array.
+3. Resolves `?page=<slug>` against a static `$routes` array. Apache mod_rewrite maps clean URLs (`/shop`, `/basket`, `/product`, etc.) to `index.php?page=<slug>` via `vhost.conf`, so `$_GET['page']` is always set by the time the front controller runs.
 4. Emits `X-Page-ID: page_<slug>` as a baseline header (e.g. `page_dxo2`) so every response carries a human-readable page identifier. Pages that call `set_monitoring_headers()` override this with a richer value.
 5. Calls `usecase_run($ctx)` to apply any behaviour modifier assigned to the current user.
 6. Requires the resolved page file.
@@ -181,7 +181,7 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 - Copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/`; symlinks as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`.
 - Patches `collectorHost`, `collectorPort`, `application.name`, `agentName`, `hostname` via `sed -i`. `agentName` and `hostname` are both set to `APMIA_PHP_AGENT_NAME` (default `bpa-demo-php-probe`) — `hostname` overrides OS `gethostname()` so the PHP probe appears with a recognisable name in the metric path instead of an auto-generated pod ID.
 - Sets `logdir="/var/log/php-probe"`, `disableLogging=0`, `logLevel=<N>` (numeric). `APMIA_PHP_LOG_LEVEL` accepts a name (TRACE/DEBUG/INFO/WARN/WARNING/ERROR/FATAL) or a number (0–5); the entrypoint maps the name to its numeric equivalent before writing the INI because `wily_php_agent.logLevel` only accepts `0=trace,1=debug,2=info,3=warning,4=error,5=fatal`. The log directory is created in the Dockerfile and owned by `www-data` so the Apache process can write logs without privilege escalation.
-- Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes). Three properties are set: `response.decoration=1` (master switch — activates the browser agent module; required by the PHP probe before `autoInjection` is honoured), `snippet.autoInjection=1`, and `browseragent.autoInjection.snippetString='...'`. When `APMIA_BROWSER_SNIPPET` is empty all three are disabled/removed. Also sets `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000` unconditionally — `<head>` is at byte 33 and `</head>`/`<body>` at byte ~239/247 (CSS is a separate static file), well within the probe's 100–30000 valid range.
+- Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes). Three properties are set: `response.decoration=1` (master switch — activates the browser agent module; required by the PHP probe before `autoInjection` is honoured), `snippet.autoInjection=1`, and `browseragent.autoInjection.snippetString='...'`. When `APMIA_BROWSER_SNIPPET` is empty all three are disabled/removed. Also sets `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000` unconditionally — `<head>` is at byte 33 and `</head>`/`<body>` at byte ~239/247 (CSS is a separate static file), well within the probe's 100–30000 valid range. **Important:** the probe extracts the last URL path segment to name the browser-agent cookie (`x-apm-brtm-response-bt-page-<seg>`). It treats bare `/` and `index.php` as null segments and skips injection for those URLs. All demo pages use clean URLs (`/shop`, `/basket`, `/product`, etc.) served via mod_rewrite in `vhost.conf`; these give the probe a meaningful segment on every request.
 
 ### BPA Apache module injection
 
@@ -271,11 +271,11 @@ Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section
 
 | Route | File | Purpose |
 |---|---|---|
-| `?page=info` | `pages/info.php` | PHP version, SAPI, OS, memory limit, loaded extensions |
-| `?page=db` | `pages/db.php` | Live PDO connection test, server version, uptime |
-| `?page=dxo2` | `pages/dxo2.php` | Full DX O2 stack health check |
+| `/info` | `pages/info.php` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| `/db` | `pages/db.php` | Live PDO connection test, server version, uptime |
+| `/dxo2` | `pages/dxo2.php` | Full DX O2 stack health check |
 
-### `?page=dxo2` checks
+### `/dxo2` checks
 
 - **PHP probe:** `extension_loaded('wily_php_agent')`; globs `$phpConfD/*-wily_php_agent.ini` (phpConfD built from `PHP_MAJOR_VERSION`/`PHP_MINOR_VERSION`); `realpath()` to resolve symlink to mods-available; displays key INI properties.
 - **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.

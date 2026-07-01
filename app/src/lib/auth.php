@@ -107,7 +107,7 @@ function auth_user(): ?array {
  */
 function auth_require_login(): void {
   if (empty($_SESSION['user_id'])) {
-    header('Location: ?page=login');
+    header('Location: /login');
     exit;
   }
 }

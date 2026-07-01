@@ -24,7 +24,7 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 ├── app/
 │   └── src/                      # PHP application source
 │       ├── health                # static file – K8s liveness/readiness/startup probe target (no PHP)
-│       ├── index.php             # front-controller (routes via ?page=)
+│       ├── index.php             # front-controller (mod_rewrite maps /shop, /basket, etc. → ?page=)
 │       ├── config/               # session bootstrap, PDO singleton
 │       ├── lib/                  # auth, product, basket, order, usecase, validate, headers
 │       ├── pages/                # shop, product, basket, checkout, order, login, admin
@@ -146,7 +146,7 @@ Services run in separate containers and communicate via the Compose network.
 | APMENV_* identity | Agent identity set via native APMIA Docker env var mechanism; `IntroscopeAgent.profile` (tenant JWT + EM URL) is never modified |
 | Container hostname in metric path | `spec.hostname` on the pod template sets the OS hostname used by the IA and BPA Apache module. The PHP probe additionally has `wily_php_agent.hostname` patched to `APMIA_PHP_AGENT_NAME` by the entrypoint, so it always reports a fixed name regardless of pod hostname |
 | DB Monitor | APMIA DB Monitor extension enabled via APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_* vars; credentials from Kubernetes Secret |
-| Browser agent | PHP probe injects the DX O2 browser snippet when `APMIA_BROWSER_SNIPPET` is set. Three INI properties are written: `response.decoration=1` (master switch — activates the browser agent module), `snippet.autoInjection=1`, and `snippetString`. `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000` (probe-documented max; valid range 100–30000) is always set; `</head>` appears at byte ~239 with CSS in a static file |
+| Browser agent | PHP probe injects the DX O2 browser snippet when `APMIA_BROWSER_SNIPPET` is set. Three INI properties are written: `response.decoration=1` (master switch — activates the browser agent module), `snippet.autoInjection=1`, and `snippetString`. `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000` (probe-documented max; valid range 100–30000) is always set; `</head>` appears at byte ~239 with CSS in a static file. The probe names its cookie after the last URL path segment; it treats bare `/` and `index.php` as null and skips injection — all pages therefore use clean URLs (`/shop`, `/basket`, etc.) via mod_rewrite |
 | Stylesheet delivery | All CSS is served as a separate static file (`/css/app.css`); no inline `<style>` block in HTML — keeps HTML responses small and ensures `</head>` appears at byte ~239 |
 | Caching disabled | All caching is intentionally off: PHP OPcache disabled via Dockerfile ini drop-in; `mod_cache` never loaded; `vhost.conf` sends `Cache-Control: no-store` + `Pragma: no-cache` + epoch `Expires` on every response, strips ETags and `Last-Modified` — every page load hits PHP and the DB fresh for accurate APM telemetry |
 | Kubernetes probes | All three probes (`startupProbe`, `livenessProbe`, `readinessProbe`) target `GET /health` — a static file served without PHP, so the APMIA PHP probe extension is never triggered; probes succeed independently of the `dx-o2-agent` sidecar startup timing |
@@ -327,7 +327,7 @@ Replace `<APP_NAMESPACE>` with the value of `APP_NAMESPACE` from your `.config`
 
 ### Logging in
 
-Click **Sign in** in the top-right corner, or navigate directly to `?page=login`.
+Click **Sign in** in the top-right corner, or navigate directly to `/login`.
 All demo accounts use the password **`demo123`**.
 
 | Username | Role | Notes |
@@ -348,9 +348,9 @@ pages that inspect the runtime from inside the container:
 
 | Page | URL | Shows |
 |---|---|---|
-| DX O2 Status | `?page=dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, APMIA IA / PHP probe / BTListener log tails |
-| PHP Info | `?page=info` | PHP version, SAPI, OS, memory limit, loaded extensions |
-| Database | `?page=db` | Live MariaDB connection result, server version, uptime |
+| DX O2 Status | `/dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, APMIA IA / PHP probe / BTListener log tails |
+| PHP Info | `/info` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| Database | `/db` | Live MariaDB connection result, server version, uptime |
 
 These pages are available even when DX O2 is not deployed — all probes will report
 "not loaded", which is the expected state for a vanilla deployment.
@@ -453,20 +453,20 @@ All accounts use the password **`demo123`**.
 
 | URL | Description |
 |---|---|
-| `?page=shop` | Product grid with filter bar (default landing page) |
-| `?page=shop&brand=<slug>` | Filter by brand: `shelly` / `sonoff` / `tuya` |
-| `?page=shop&cap=<slug>` | Filter by protocol capability |
-| `?page=shop&q=<search>` | Full-text product search |
-| `?page=product&slug=<slug>` | Product detail page |
-| `?page=basket` | Shopping basket |
-| `?page=checkout` | Billing form + Luhn-validated fake credit-card payment |
-| `?page=order&id=<id>` | Order confirmation |
-| `?page=order` | Order history (login required) |
-| `?page=login` | Sign in |
-| `?page=admin` | Admin panel (admin role required) |
-| `?page=info` | PHP runtime diagnostics — **admin only** |
-| `?page=db` | MariaDB connection test — **admin only** |
-| `?page=dxo2` | DX O2 agent status and log tails — **admin only** |
+| `/shop` | Product grid with filter bar (default landing page) |
+| `/shop?brand=<slug>` | Filter by brand: `shelly` / `sonoff` / `tuya` |
+| `/shop?cap=<slug>` | Filter by protocol capability |
+| `/shop?q=<search>` | Full-text product search |
+| `/product?slug=<slug>` | Product detail page |
+| `/basket` | Shopping basket |
+| `/checkout` | Billing form + Luhn-validated fake credit-card payment |
+| `/order?id=<id>` | Order confirmation |
+| `/order` | Order history (login required) |
+| `/login` | Sign in |
+| `/admin` | Admin panel (admin role required) |
+| `/info` | PHP runtime diagnostics — **admin only** |
+| `/db` | MariaDB connection test — **admin only** |
+| `/dxo2` | DX O2 agent status and log tails — **admin only** |
 
 ### Admin diagnostic pages
 
