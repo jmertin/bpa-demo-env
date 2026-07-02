@@ -67,6 +67,10 @@ HELM_CHART_PATH=""
 #   Credentials come from MARIADB_USER / MARIADB_PASSWORD (above).
 #   In Docker Compose the database is reached by service name "mariadb".
 #   In Kubernetes all containers share 127.0.0.1.
+#   The dxo2 entrypoint also uses MARIADB_ROOT_PASSWORD (above) to verify the
+#   MARIADB_USER login exists in MariaDB, creating it with monitoring grants
+#   (SELECT, PROCESS, REPLICATION CLIENT) if missing -- the DB Monitor
+#   extension cannot authenticate or gather metrics without this login.
 #
 # Set APMIA_EM_HOST to a non-empty value to enable the DX O2 monitoring stack.
 # Leave it empty to deploy without APM; all containers start cleanly without

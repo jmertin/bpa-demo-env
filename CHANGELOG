@@ -39,6 +39,23 @@ Format: YYYY-MM-DD @ HH:MM  <summary>
   download requirement.
 
 ------------------------------------------------------------------------------
+2026-07-02 @ 10:00 - [Fix – Create DB Monitor login before starting APMIA]:
+  src/dx-o2-agents/Dockerfile: added mariadb-client package so the entrypoint
+  can connect to MariaDB to verify/create the DB Monitor login.
+  src/dx-o2-agents/entrypoint.sh: new _ensure_monitor_user() runs inside
+  _db_monitor_setup(), before bundle.properties is patched and before the IA
+  starts.  Connects to MariaDB as root (MARIADB_ROOT_USER/MARIADB_ROOT_PASSWORD),
+  waits up to 60s for the server to accept connections, checks mysql.user for
+  the configured DB Monitor username, and if missing runs CREATE USER plus
+  GRANT SELECT, PROCESS, REPLICATION CLIENT ON *.* so the extension can
+  authenticate and gather metrics.  Existing logins are left untouched.
+  docker-compose.yml: dxo2 service now receives MARIADB_ROOT_USER/PASSWORD and
+  depends_on mariadb: condition: service_healthy.
+  helm/php-demo/templates/deployment.yaml: dx-o2-agent container now receives
+  MARIADB_ROOT_PASSWORD via secretKeyRef (dbMonitor.enabled block only).
+  .config.example, CLAUDE.md: documented the new login-verification step.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:
   README.md: file tree updated to show wrapper files (shop.php, basket.php, etc.)
   alongside index.php; Browser agent row expanded with both probe gates (Frontend

@@ -126,6 +126,66 @@ _db_monitor_setup() {
         echo "[entrypoint] WARNING: DB Monitor: no username set (${_pu}_USERNAME unset)" >&2
     fi
 
+    # Verify the DB Monitor login exists in MariaDB and create it if missing.
+    # Without this account the extension cannot authenticate and silently
+    # gathers no metrics. Runs before the IA is started (_db_monitor_setup is
+    # called before AGENT_SCRIPT is launched, below).
+    # Requires MARIADB_ROOT_PASSWORD (root credentials) to connect and, if
+    # needed, create the login; the password is passed via the MYSQL_PWD
+    # environment variable scoped to each mariadb invocation, never on argv.
+    _ensure_monitor_user() {
+        local -r _root_user="${MARIADB_ROOT_USER:-root}"
+        local -r _root_pass="${MARIADB_ROOT_PASSWORD:-}"
+
+        if [[ -z "${_root_pass}" ]]; then
+            echo "[entrypoint] WARNING: DB Monitor: MARIADB_ROOT_PASSWORD not set -- cannot verify/create '${_db_user}'; assuming it already exists." >&2
+            return 0
+        fi
+
+        if ! command -v mariadb >/dev/null 2>&1; then
+            echo "[entrypoint] WARNING: DB Monitor: mariadb client not installed -- cannot verify/create '${_db_user}'." >&2
+            return 0
+        fi
+
+        local -a _admin=(mariadb -h "${_db_host}" -P "${_db_port}" -u "${_root_user}" -N -B -e)
+
+        echo "[entrypoint] DB Monitor: waiting for MariaDB at ${_db_host}:${_db_port}..."
+        local _waited=0
+        until MYSQL_PWD="${_root_pass}" "${_admin[@]}" 'SELECT 1;' >/dev/null 2>&1; do
+            _waited=$(( _waited + 2 ))
+            if [[ ${_waited} -ge 60 ]]; then
+                echo "[entrypoint] WARNING: DB Monitor: MariaDB not reachable after 60s -- skipping login verification." >&2
+                return 0
+            fi
+            sleep 2
+        done
+
+        local _exists
+        _exists=$(MYSQL_PWD="${_root_pass}" "${_admin[@]}" \
+            "SELECT COUNT(*) FROM mysql.user WHERE User='${_db_user}';" 2>/dev/null || echo "")
+
+        if [[ "${_exists}" == "1" ]]; then
+            echo "[entrypoint] DB Monitor: login '${_db_user}' already exists in MariaDB."
+            return 0
+        fi
+
+        # Username/password may not contain a single quote -- same limitation
+        # as the '@' sed delimiter used above for passwords.
+        echo "[entrypoint] DB Monitor: login '${_db_user}' not found -- creating with monitoring grants..."
+        if MYSQL_PWD="${_root_pass}" "${_admin[@]}" \
+            "CREATE USER IF NOT EXISTS '${_db_user}'@'%' IDENTIFIED BY '${_db_pass}'; \
+             GRANT SELECT, PROCESS, REPLICATION CLIENT ON *.* TO '${_db_user}'@'%'; \
+             FLUSH PRIVILEGES;"; then
+            echo "[entrypoint] DB Monitor: login '${_db_user}' created (SELECT, PROCESS, REPLICATION CLIENT)."
+        else
+            echo "[entrypoint] WARNING: DB Monitor: failed to create login '${_db_user}' -- extension will not be able to connect." >&2
+        fi
+    }
+
+    if [[ -n "${_db_user}" ]]; then
+        _ensure_monitor_user
+    fi
+
     # Patch a bundle.properties file in-place.
     # Renames the original profile entry to _prof and updates all connection properties.
     # Uses @ as sed delimiter -- passwords containing @ are not supported.
