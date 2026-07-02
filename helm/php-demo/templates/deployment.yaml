@@ -158,7 +158,7 @@ spec:
             - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_PORT
               value: {{ .Values.dxo2.dbMonitor.port | quote }}
             - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_VERSION
-              value: ""
+              value: {{ .Values.dxo2.dbMonitor.schemaVersion | quote }}
             - name: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_{{ .Values.dxo2.dbMonitor.profileName | upper }}_USERNAME
               valueFrom:
                 secretKeyRef:

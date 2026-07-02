@@ -56,7 +56,10 @@ services:
       APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_PORT:         "3306"
       APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_USERNAME:     ${MARIADB_USER}
       APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_PASSWORD:     ${MARIADB_PASSWORD}
-      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_VERSION:      ""
+      # 5_6x selects the extension's information_schema-based query set
+      # (global_variables/global_status) instead of the default performance_schema
+      # ones, which MariaDB does not implement -- see CLAUDE.md for details.
+      APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_VERSION:      "5_6x"
     volumes:
       # Mount read-write so Docker copies /opt/apmia from the image into the
       # named volume on first start (probe .so, BPA .so, pre-configured profile).
