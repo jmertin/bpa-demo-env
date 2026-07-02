@@ -99,6 +99,29 @@ Format: YYYY-MM-DD @ HH:MM  <summary>
   MariaDB; all other DB Monitor metrics collect normally.
 
 ------------------------------------------------------------------------------
+2026-07-02 @ 12:00 - [Fix – DB Monitor ScriptException for innodb_additional_mem_pool_size]:
+  Root cause: schema5_6x.json's "Resource Utilization:Total Size of Shared
+  Buffers(KB)" calculated metric sums five variables from `show global
+  variables`, including innodb_additional_mem_pool_size -- removed from MySQL
+  since 5.6.3 and never implemented in MariaDB.  With no matching row, the
+  JSONPath filter for that term is emitted unresolved into the calculation
+  string and the Nashorn expression evaluator fails to parse it
+  (javax.script.ScriptException: Expected an operand but found ?), logged as
+  an [ERROR] [IntroscopeAgent.DBMonitor] every query interval.
+  src/dx-o2-agents/entrypoint.sh: new _patch_schema5_6x_calc() removes just
+  the "+ $.resultSet[?(@.VARIABLE_NAME == 'innodb_additional_mem_pool_size')]
+  .VARIABLE_VALUE" term from config/schema5_6x.json, leaving the other four
+  variables summed correctly.  Applied to both the staged .tar.gz (step 1)
+  and the already-deployed extension directory (step 2), same double-patch
+  pattern as _patch_bundle_props().  Idempotent: re-running finds nothing to
+  remove.
+  CLAUDE.md: documented the stale calculated-metric term and the fix.
+  Verified: python3 -m json.tool confirms the patched schema5_6x.json remains
+  valid JSON; after rebuild and restart, `docker compose logs dxo2 | grep
+  -c "unable to evaluate expression"` and the DBMonitor ERROR count are both
+  zero across multiple query intervals.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:
   README.md: file tree updated to show wrapper files (shop.php, basket.php, etc.)
   alongside index.php; Browser agent row expanded with both probe gates (Frontend
