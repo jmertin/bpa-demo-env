@@ -42,6 +42,11 @@ services:
       # MARIADB_* vars in .config (git-ignored, never committed).
       # Hostname is the Docker Compose service name (not 127.0.0.1 as in Kubernetes).
       MYSQL_MONITOR: ${MYSQL_MONITOR:-true}
+      # Root credentials: the entrypoint uses these to verify the DB Monitor
+      # login exists in MariaDB and to create it (with monitoring grants) if
+      # it does not, before the IA starts.
+      MARIADB_ROOT_USER: root
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
       APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES:                    bpadb
       APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_QUERY_SNAPSHOTS:             "false"
       APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_QUERYINTERVAL:               "15"
@@ -56,6 +61,9 @@ services:
       # Mount read-write so Docker copies /opt/apmia from the image into the
       # named volume on first start (probe .so, BPA .so, pre-configured profile).
       - apmia_data:/opt/apmia
+    depends_on:
+      mariadb:
+        condition: service_healthy
     restart: unless-stopped
 
   mariadb:

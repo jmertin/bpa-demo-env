@@ -38,6 +38,8 @@ ENV BTL_HOME=/opt/btlistener
 # The PHP_apmia package includes a bundled JRE – openjdk is not required.
 # Troubleshooting tools: curl, dnsutils (dig/nslookup/host), iputils-ping,
 #   less, net-tools (netstat/ifconfig/route), procps (ps/top/free/kill).
+# mariadb-client: provides the `mariadb` CLI the entrypoint uses to verify/
+#   create the DB Monitor login in MariaDB before the IA starts.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         unzip \
@@ -47,7 +49,8 @@ RUN apt-get update && \
         iputils-ping \
         less \
         net-tools \
-        procps && \
+        procps \
+        mariadb-client && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

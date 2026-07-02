@@ -169,6 +169,16 @@ spec:
                 secretKeyRef:
                   name: {{ include "php-demo.secretName" . }}
                   key: MARIADB_PASSWORD
+            # Root credentials: the entrypoint uses these to verify the DB
+            # Monitor login exists in MariaDB and to create it (with
+            # monitoring grants) if it does not, before the IA starts.
+            - name: MARIADB_ROOT_USER
+              value: "root"
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "php-demo.secretName" . }}
+                  key: MARIADB_ROOT_PASSWORD
             {{- end }}
             - name: APMIA_PHP_COLLECTOR_HOST
               value: {{ .Values.dxo2.phpCollectorHost | quote }}
