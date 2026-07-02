@@ -180,6 +180,10 @@ dxo2:
     querySnapshots: "false"
     queryInterval: "15"
     traceInterval: "30"
+    # 5_6x selects the extension's information_schema-based query set
+    # (global_variables/global_status) instead of the default performance_schema
+    # ones, which MariaDB does not implement -- see CLAUDE.md for details.
+    schemaVersion: "5_6x"
 
   # ── Probe / plugin identity ─────────────────────────────────────────────────
   # phpAgentName: agent name patched into wily_php_agent.agentName (PHP probe).

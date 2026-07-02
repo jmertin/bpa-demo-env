@@ -75,6 +75,30 @@ Format: YYYY-MM-DD @ HH:MM  <summary>
   appears in dxo2 logs after a restart.
 
 ------------------------------------------------------------------------------
+2026-07-02 @ 11:30 - [Fix – DB Monitor "Table performance_schema.global_variables doesn't exist"]:
+  Root cause: with grants fixed, the extension's default query set still
+  targets MySQL 5.7+ and queries performance_schema.global_variables/
+  global_status, which MariaDB does not implement.  The extension bundles an
+  alternate query set (config/schema5_6x.json) that queries
+  information_schema.global_variables/global_status instead, which MariaDB
+  does support -- confirmed via `SELECT COUNT(*) FROM
+  information_schema.global_variables` (683 rows) vs the missing
+  performance_schema table.
+  docker-compose.yml: APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_VERSION
+  changed from "" to "5_6x", selecting the information_schema-based query set.
+  helm/php-demo/values.yaml: added dxo2.dbMonitor.schemaVersion, default "5_6x".
+  helm/php-demo/templates/deployment.yaml: the profile VERSION env now reads
+  from dxo2.dbMonitor.schemaVersion instead of being hardcoded to "".
+  CLAUDE.md: documented the version property and why "5_6x" (not a MySQL
+  version match) is the correct setting for MariaDB.
+  Verified: dxo2 logs show "Using previous schema version file: .../
+  schema5_6x.json" and the "Table ... doesn't exist" error is gone.  One
+  cosmetic residual remains: a single calculated metric (total InnoDB memory)
+  references the MySQL-only, long-removed innodb_additional_mem_pool_size
+  variable and logs a harmless ScriptException every query interval on
+  MariaDB; all other DB Monitor metrics collect normally.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:
   README.md: file tree updated to show wrapper files (shop.php, basket.php, etc.)
   alongside index.php; Browser agent row expanded with both probe gates (Frontend
