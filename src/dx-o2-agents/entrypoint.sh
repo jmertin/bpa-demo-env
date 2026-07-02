@@ -232,11 +232,29 @@ _db_monitor_setup() {
         fi
     }
 
+    # Remove a stale calculated-metric term from schema5_6x.json referencing
+    # innodb_additional_mem_pool_size, a MySQL variable removed since 5.6.3
+    # and never implemented in MariaDB. Left in place, "show global variables"
+    # returns no row for it, its JSONPath filter is emitted unresolved into
+    # the "Resource Utilization:Total Size of Shared Buffers(KB)" calculation
+    # string, and the Nashorn expression evaluator fails every query interval
+    # (javax.script.ScriptException: Expected an operand but found ?). The
+    # other four variables summed by that metric are still queried and the
+    # total still computes correctly without this term.
+    _patch_schema5_6x_calc() {
+        local -r _sj="$1"
+        [[ -f "${_sj}" ]] || return 0
+        sed -i -E \
+            's# \+ \$\.resultSet\[\?\(@\.VARIABLE_NAME == '"'"'innodb_additional_mem_pool_size'"'"'\)\]\.VARIABLE_VALUE##g' \
+            "${_sj}"
+    }
+
     # 1. Patch the staged .tar.gz so the APMIA gets correct credentials on first deploy.
     local _tmpdir
     _tmpdir=$(mktemp -d)
     tar -xzf "${mysql_tar}" -C "${_tmpdir}"
     _patch_bundle_props "${_tmpdir}/bundle.properties"
+    _patch_schema5_6x_calc "${_tmpdir}/config/schema5_6x.json"
     tar -czf "${mysql_tar}" -C "${_tmpdir}" .
     rm -rf "${_tmpdir}"
 
@@ -244,6 +262,7 @@ _db_monitor_setup() {
     local -r _ext_dir="${APMIA_HOME}/extensions/$(basename "${mysql_tar}" .tar.gz)"
     if [[ -d "${_ext_dir}" ]]; then
         _patch_bundle_props "${_ext_dir}/bundle.properties"
+        _patch_schema5_6x_calc "${_ext_dir}/config/schema5_6x.json"
         echo "[entrypoint] DB Monitor: patched deployed extension at $(basename "${_ext_dir}")/"
     fi
 
