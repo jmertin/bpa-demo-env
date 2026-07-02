@@ -48,12 +48,31 @@ Format: YYYY-MM-DD @ HH:MM  <summary>
   waits up to 60s for the server to accept connections, checks mysql.user for
   the configured DB Monitor username, and if missing runs CREATE USER plus
   GRANT SELECT, PROCESS, REPLICATION CLIENT ON *.* so the extension can
-  authenticate and gather metrics.  Existing logins are left untouched.
+  authenticate and gather metrics.
   docker-compose.yml: dxo2 service now receives MARIADB_ROOT_USER/PASSWORD and
   depends_on mariadb: condition: service_healthy.
   helm/php-demo/templates/deployment.yaml: dx-o2-agent container now receives
   MARIADB_ROOT_PASSWORD via secretKeyRef (dbMonitor.enabled block only).
   .config.example, CLAUDE.md: documented the new login-verification step.
+
+------------------------------------------------------------------------------
+2026-07-02 @ 11:00 - [Fix – DB Monitor "SELECT command denied" for performance_schema]:
+  src/dx-o2-agents/entrypoint.sh: _ensure_monitor_user() now re-applies the
+  GRANT SELECT, PROCESS, REPLICATION CLIENT ON *.* every start regardless of
+  whether the login already existed, not only on first creation.  Root cause:
+  MariaDB's own MARIADB_USER bootstrapping already creates phpuser, scoped
+  only to grants on its own database (phpapp.*); the DB Monitor extension
+  then failed with "SELECT command denied to user 'phpuser'@'...' for table
+  performance_schema.global_variables" because the pre-existing login never
+  received the global grant.  CREATE USER IF NOT EXISTS remains a no-op
+  (including the password clause) when the login is already present, so an
+  existing password is never overwritten -- only the GRANT is reapplied.
+  CLAUDE.md: updated the login-verification description to reflect that
+  grants are (re-)applied unconditionally, not only for newly created logins.
+  Verified: docker exec into mariadb confirms `SHOW GRANTS FOR 'phpuser'@'%'`
+  now includes SELECT, PROCESS, BINLOG MONITOR (MariaDB's name for
+  REPLICATION CLIENT) ON *.*, and the "SELECT command denied" error no longer
+  appears in dxo2 logs after a restart.
 
 ------------------------------------------------------------------------------
 2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:

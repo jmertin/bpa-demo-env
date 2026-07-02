@@ -126,9 +126,14 @@ _db_monitor_setup() {
         echo "[entrypoint] WARNING: DB Monitor: no username set (${_pu}_USERNAME unset)" >&2
     fi
 
-    # Verify the DB Monitor login exists in MariaDB and create it if missing.
-    # Without this account the extension cannot authenticate and silently
-    # gathers no metrics. Runs before the IA is started (_db_monitor_setup is
+    # Verify the DB Monitor login exists in MariaDB (creating it if missing)
+    # and ensure it holds the privileges the extension needs. A pre-existing
+    # login is common: MariaDB's own MARIADB_USER bootstrapping creates
+    # ${_db_user} with grants scoped only to its own database, which is not
+    # enough for the extension to query performance_schema/information_schema
+    # (e.g. "SELECT command denied ... for table performance_schema.global_
+    # variables"). Grants are therefore (re-)applied unconditionally, not only
+    # on first creation. Runs before the IA is started (_db_monitor_setup is
     # called before AGENT_SCRIPT is launched, below).
     # Requires MARIADB_ROOT_PASSWORD (root credentials) to connect and, if
     # needed, create the login; the password is passed via the MYSQL_PWD
@@ -165,20 +170,24 @@ _db_monitor_setup() {
             "SELECT COUNT(*) FROM mysql.user WHERE User='${_db_user}';" 2>/dev/null || echo "")
 
         if [[ "${_exists}" == "1" ]]; then
-            echo "[entrypoint] DB Monitor: login '${_db_user}' already exists in MariaDB."
-            return 0
+            echo "[entrypoint] DB Monitor: login '${_db_user}' already exists -- ensuring monitoring grants..."
+        else
+            echo "[entrypoint] DB Monitor: login '${_db_user}' not found -- creating with monitoring grants..."
         fi
 
         # Username/password may not contain a single quote -- same limitation
-        # as the '@' sed delimiter used above for passwords.
-        echo "[entrypoint] DB Monitor: login '${_db_user}' not found -- creating with monitoring grants..."
+        # as the '@' sed delimiter used above for passwords. CREATE USER IF NOT
+        # EXISTS is a no-op (including the password clause) when the login is
+        # already present, so an existing password is never overwritten; the
+        # GRANT is re-applied every start regardless, since that is the part a
+        # pre-existing login is commonly missing.
         if MYSQL_PWD="${_root_pass}" "${_admin[@]}" \
             "CREATE USER IF NOT EXISTS '${_db_user}'@'%' IDENTIFIED BY '${_db_pass}'; \
              GRANT SELECT, PROCESS, REPLICATION CLIENT ON *.* TO '${_db_user}'@'%'; \
              FLUSH PRIVILEGES;"; then
-            echo "[entrypoint] DB Monitor: login '${_db_user}' created (SELECT, PROCESS, REPLICATION CLIENT)."
+            echo "[entrypoint] DB Monitor: login '${_db_user}' has monitoring grants (SELECT, PROCESS, REPLICATION CLIENT)."
         else
-            echo "[entrypoint] WARNING: DB Monitor: failed to create login '${_db_user}' -- extension will not be able to connect." >&2
+            echo "[entrypoint] WARNING: DB Monitor: failed to grant monitoring privileges to '${_db_user}' -- extension may not be able to gather all metrics." >&2
         fi
     }
 
