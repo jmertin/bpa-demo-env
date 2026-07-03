@@ -356,9 +356,10 @@ container startup.
 **Step 3 — Configure credentials in `.config`:**
 
 ```bash
-MYSQL_MONITOR="true"          # true (default) = enable; false = disable
-MARIADB_USER="phpuser"        # used for DB Monitor connection
-MARIADB_PASSWORD="..."        # used for DB Monitor connection
+MYSQL_MONITOR="true"                  # true (default) = enable; false = disable
+MARIADB_USER="phpuser"                # used for DB Monitor connection
+MARIADB_PASSWORD="..."                # used for DB Monitor connection
+MARIADB_ROOT_PASSWORD="..."           # used by the entrypoint to verify/create the login below
 ```
 
 `docker-compose.yml` passes these as
@@ -367,8 +368,33 @@ The `dx-o2-agents` entrypoint (`_db_monitor_setup`) patches `bundle.properties`
 inside the staged extension archive at container startup, so the APMIA always
 connects with the current `.config` credentials.
 
-In Kubernetes, credentials are injected via `secretKeyRef` from the mariadb
-Secret — they are never in plain-text values files.
+In Kubernetes, credentials (including `MARIADB_ROOT_PASSWORD`) are injected via
+`secretKeyRef` from the mariadb Secret — they are never in plain-text values
+files.
+
+**The entrypoint also handles two MariaDB-specific gotchas automatically —
+no further configuration is needed, but it's useful to know what's happening:**
+
+1. **Login verification/creation (`_ensure_monitor_user`).** The extension
+   authenticates as `MARIADB_USER`; if that login doesn't exist in MariaDB,
+   connections fail silently and no metrics are gathered. Before patching
+   `bundle.properties`, the entrypoint connects to MariaDB as root (waits up
+   to 60s for the server), checks `mysql.user`, and runs `CREATE USER IF NOT
+   EXISTS` plus `GRANT SELECT, PROCESS, REPLICATION CLIENT ON *.*` —
+   **every start**, whether the login is new or pre-existing. This matters
+   because `MARIADB_USER` is commonly the same account MariaDB's own
+   bootstrapping already created, scoped only to its own database; without
+   the grant the extension fails with `SELECT command denied ... for table
+   performance_schema.global_variables`.
+2. **Schema version (`version=5_6x`).** Even with correct grants, the
+   extension's default query set targets MySQL 5.7+ and queries
+   `performance_schema.global_variables`/`global_status`, tables MariaDB
+   does not implement (`ERROR 1146: Table 'performance_schema.global_variables'
+   doesn't exist`). `docker-compose.yml` and the Helm chart
+   (`dxo2.dbMonitor.schemaVersion`, default `5_6x`) both set
+   `APMENV_..._VERSION=5_6x`, which selects the extension's alternate
+   `information_schema`-based query set. Despite the "5_6x" (MySQL 5.6.x)
+   name, this is the correct setting for MariaDB, not a version match.
 
 **Verify DB Monitor is active:**
 
@@ -376,9 +402,15 @@ Secret — they are never in plain-text values files.
 # Look for the extension in the deployed extensions directory
 docker exec <dxo2-container> ls /opt/apmia/extensions/ | grep mysql
 
-# Check entrypoint log for the DB Monitor line
+# Check entrypoint log for the DB Monitor lines
 docker compose logs dxo2 | grep 'DB Monitor'
-# expected: [entrypoint] DB Monitor: enabled (profile=bpadb, host=mariadb:3306, ...)
+# expected:
+#   [entrypoint] DB Monitor: login 'phpuser' has monitoring grants (SELECT, PROCESS, REPLICATION CLIENT).
+#   [entrypoint] DB Monitor: enabled (profile=bpadb, host=mariadb:3306, ...)
+
+# Confirm no DBMonitor errors are being logged
+docker compose logs dxo2 | grep -c '\[ERROR\] \[IntroscopeAgent.DBMonitor\]'
+# expected: 0
 
 # After a few minutes, metrics should appear in DX O2 under:
 # MySQL Databases | mariadb | phpapp | ...
@@ -786,6 +818,8 @@ it is empty, overriding any pre-configured INI values.
        tar -tf src/dx-o2-agents/installers/Infrastructure_Agent_apmia*.tar | grep 'extensions/deploy/mysql'
        # must show: apmia/extensions/deploy/mysql-*.tar.gz
 [ ] 8. Set APMIA_AGENT_NAME, APMIA_APP_NAME, APMIA_HOST_NAME in .config
+       Also set MARIADB_ROOT_PASSWORD if not already set -- required for the
+       DB Monitor login verification/creation step (checklist item 17).
 [ ] 9. Set APMIA_EM_HOST to a non-empty value in .config (enables dxo2.enabled)
 [ ] 10. (Optional) Set APMIA_BROWSER_SNIPPET in .config if browser agent is needed
 [ ] 11. Run: build-scripts/build.sh
@@ -801,7 +835,12 @@ it is empty, overriding any pre-configured INI values.
 [ ] 16. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c apache-php | grep "BPA WebServer"
         expected: "BPA WebServer Plugin active -- BPA instrumentation enabled."
 [ ] 17. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep "DB Monitor"
-        expected: "[entrypoint] DB Monitor: enabled (profile=bpadb, host=mariadb:3306, ...)"
+        expected:
+          "[entrypoint] DB Monitor: login 'phpuser' has monitoring grants (SELECT, PROCESS, REPLICATION CLIENT)."
+          "[entrypoint] DB Monitor: enabled (profile=bpadb, host=mariadb:3306, ...)"
+        Also confirm no DBMonitor errors:
+          kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep -c '\[ERROR\] \[IntroscopeAgent.DBMonitor\]'
+          expected: 0
 [ ] 18. Check: kubectl logs -n <APP_NAMESPACE> <pod> -c dx-o2-agent | grep "Infrastructure Agent"
         expected: "Infrastructure Agent started (PID ...)"
 [ ] 19. Verify in DX O2 console: agent tree shows configured agent name under configured app

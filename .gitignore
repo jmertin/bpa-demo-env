@@ -10,6 +10,9 @@ src/apache-php/app.tar.gz
 src/dx-o2-agents/installers/*
 !src/dx-o2-agents/installers/.gitkeep
 
+# Local tooling binaries - never commit (see tools/README.md)
+tools/*
+
 # Helm local overrides
 helm/php-demo/values.local.yaml
 

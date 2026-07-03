@@ -122,6 +122,30 @@ Format: YYYY-MM-DD @ HH:MM  <summary>
   zero across multiple query intervals.
 
 ------------------------------------------------------------------------------
+2026-07-02 @ 13:00 - [Docs – Full documentation sync for DB Monitor fixes; tools/ directory]:
+  CLAUDE.md: added "Local tooling (tools/)" section documenting the
+  git-ignored tools/ directory used for demo-app automation binaries (e.g.
+  dx-do); added tools/* to the Git practices "never commit" list.
+  README.md: project structure tree now lists tools/; DB Monitor summary row
+  expanded to describe login verification/creation with re-applied grants and
+  the version=5_6x schema selection; added dxo2.dbMonitor.schemaVersion to
+  the Helm key values table.
+  COMPATIBILITY.md: DB Monitor compatibility row now notes the version=5_6x
+  requirement (extension's default query set targets MySQL 5.7+
+  performance_schema tables MariaDB doesn't implement); Updated date bumped.
+  DX-O2-AGENT-SETUP.md: section 7.4 rewritten to document the three DB
+  Monitor fixes from this session -- MARIADB_ROOT_PASSWORD requirement,
+  automatic login verification/creation with grants, and version=5_6x schema
+  selection; "Verify DB Monitor is active" now checks the new log lines and
+  a zero DBMonitor ERROR count; end-to-end checklist items 8 and 17 updated
+  to match.
+  .gitignore: tools/* added (git-ignored local binaries, not previously
+  documented in the changelog since it was a separate ad hoc request).
+  tools/README.md: new file documenting tools/dx-do-linux-x64's source
+  (github.com/kialambroca/dx-do-dist, release v6.3.5) -- itself git-ignored
+  along with the rest of tools/*.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:
   README.md: file tree updated to show wrapper files (shop.php, basket.php, etc.)
   alongside index.php; Browser agent row expanded with both probe gates (Frontend

@@ -55,6 +55,8 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 │   ├── deploy.sh                 # renders values.local.yaml from .config, helm upgrade
 │   └── compose.sh                # docker compose wrapper (sources .config, exports vars)
 │
+├── tools/                        # local-only binaries for demo automation (git-ignored, see tools/README.md)
+│
 └── helm/
     └── php-demo/                 # Helm chart v0.2.0
         ├── Chart.yaml
@@ -148,7 +150,7 @@ Services run in separate containers and communicate via the Compose network.
 | DX O2 opportunistic injection | PHP probe and BPA module NOT baked into app image; `dxo2-init` initContainer populates an `emptyDir`; entrypoint injects at startup if the volume is present; starts cleanly without it |
 | APMENV_* identity | Agent identity set via native APMIA Docker env var mechanism; `IntroscopeAgent.profile` (tenant JWT + EM URL) is never modified |
 | Container hostname in metric path | `spec.hostname` on the pod template sets the OS hostname used by the IA and BPA Apache module. The PHP probe additionally has `wily_php_agent.hostname` patched to `APMIA_PHP_AGENT_NAME` by the entrypoint, so it always reports a fixed name regardless of pod hostname |
-| DB Monitor | APMIA DB Monitor extension enabled via APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_* vars; credentials from Kubernetes Secret |
+| DB Monitor | APMIA DB Monitor extension enabled via APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_* vars; credentials from Kubernetes Secret. The entrypoint verifies the login exists in MariaDB before the IA starts, creating it (and re-applying SELECT/PROCESS/REPLICATION CLIENT grants every start) if missing — a pre-existing login from MariaDB's own bootstrapping only has grants on its own database. `version=5_6x` selects the extension's information_schema-based query set, since MariaDB doesn't implement the default MySQL 5.7+ performance_schema tables the extension otherwise queries |
 | Browser agent | PHP probe injects the DX O2 browser snippet when `APMIA_BROWSER_SNIPPET` is set. Three INI properties are written: `response.decoration=1` (master switch), `snippet.autoInjection=1`, and `snippetString`. `maxSearchingLength=30000` always set. **Two probe gates must both pass:** (1) the very first PHP opcode of the entry script must be non-include; (2) `SCRIPT_NAME` must not be `index.php` or bare `/`. A front-controller pattern (all requests through `index.php`) silently fails both. Fix: per-page wrapper files (`shop.php`, `basket.php`, etc.) each run `$_GET['page'] ??= basename(__FILE__, '.php')` (non-include opcode) before `require __DIR__ . '/index.php'` — this triggers `Frontend start: /shop.php`; `vhost.conf` routes `/shop` → `shop.php?page=shop` so `SCRIPT_NAME=/shop.php` passes Gate 2 and `REQUEST_URI=/shop` names the cookie |
 | Stylesheet delivery | All CSS is served as a separate static file (`/css/app.css`); no inline `<style>` block in HTML — keeps HTML responses small and ensures `</head>` appears at byte ~239 |
 | Caching disabled | All caching is intentionally off: PHP OPcache disabled via Dockerfile ini drop-in; `mod_cache` never loaded; `vhost.conf` sends `Cache-Control: no-store` + `Pragma: no-cache` + epoch `Expires` on every response, strips ETags and `Last-Modified` — every page load hits PHP and the DB fresh for accurate APM telemetry |
@@ -408,6 +410,7 @@ Chart: `helm/php-demo` — version **0.2.0**
 | `dxo2.hostName` | `bpa-demo-host` | Pod hostname + APMENV_INTROSCOPE_AGENT_HOSTNAME |
 | `dxo2.logLevel` | `INFO` | APMENV_LOG4J_LOGGER_INTROSCOPEAGENT level |
 | `dxo2.dbMonitor.enabled` | `true` | Enable APMIA DB Monitor for MariaDB |
+| `dxo2.dbMonitor.schemaVersion` | `5_6x` | Selects the extension's information_schema-based query set (MariaDB doesn't implement the default MySQL 5.7+ performance_schema tables); not a MySQL version match |
 | `dxo2.browserSnippet` | `''` | Browser agent snippet — use YAML single quotes (snippet contains HTML double-quotes); empty = disabled |
 | `dxo2.resources.requests.memory` | `792Mi` | Scheduler reservation — sized to observed IA+BTL idle baseline (~757 MiB) |
 | `dxo2.resources.limits.memory` | `4Gi` | Hard ceiling — APMIA JVM grows under APM load; 512 Mi causes OOMKilled |

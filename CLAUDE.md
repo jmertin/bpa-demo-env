@@ -248,6 +248,12 @@ BTL at `/opt/btlistener/bin/BTListener.sh`; config at `/opt/btlistener/conf/cust
 
 ---
 
+## Local tooling (`tools/`)
+
+`tools/` holds local-only binaries that support demo-app automation (e.g. `dx-do`, downloaded from an external GitHub release). The entire directory is excluded via `tools/*` in `.gitignore` — nothing under it is ever committed, including its own `README.md`, which documents each binary's source/version for local reference. Do not commit files here; do not assume `tools/` is populated in a fresh clone.
+
+---
+
 ## Container image contents (both images)
 
 Both `apache-php` and `dx-o2-agents` include these troubleshooting packages (Ubuntu 22.04):
@@ -373,7 +379,7 @@ Update on every commit. Format: `YYYY-MM-DD @ HH:MM - [Type – Description]`. P
 
 - Branch: `master`. Commit format: `<type>: <short description>` (feat/fix/refactor/docs/chore).
 - Every commit includes `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
-- Never commit: `.config`, `.build_number`, `src/dx-o2-agents/installers/*`, `src/apache-php/app.tar.gz`, `helm/*/values.local.yaml`, `.claude/`.
+- Never commit: `.config`, `.build_number`, `src/dx-o2-agents/installers/*`, `src/apache-php/app.tar.gz`, `helm/*/values.local.yaml`, `.claude/`, `tools/*`.
 
 ---
 
