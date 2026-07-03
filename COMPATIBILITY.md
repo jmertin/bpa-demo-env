@@ -1,6 +1,6 @@
 # Version Compatibility Matrix – BPA-Demo / DX O2 Integration
 
-Updated: 2026-06-17
+Updated: 2026-07-02
 Status: All action items resolved; stack is at its target baseline.
 
 ---
@@ -28,7 +28,7 @@ Status: All action items resolved; stack is at its target baseline.
 | BPA WebServer Plugin (nginx `ngx_http_ca_*`) | NGINX **1.29.x** | n/a (Apache stack) | — |
 | Infrastructure Agent binary | Ubuntu 20.04 / 22.04 (glibc ≥ 2.17) | ubuntu:22.04 (glibc 2.35) | ✅ confirmed |
 | Business Transaction Listener | Same OS as Infra Agent | ubuntu:22.04 | ✅ confirmed |
-| DB Monitor (MySQL/MariaDB) | MariaDB / MySQL compatible | mariadb:11 | ✅ compatible |
+| DB Monitor (MySQL/MariaDB) | MariaDB / MySQL compatible | mariadb:11 | ✅ compatible with `version=5_6x` (extension's default query set targets MySQL 5.7+ `performance_schema` tables MariaDB doesn't implement) |
 
 Sources: Broadcom DX APM Compatibility Guide.
 
