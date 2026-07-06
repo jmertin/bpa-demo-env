@@ -25,7 +25,7 @@ function usecase_locked(PDO $db, array &$ctx): void {
     unset($_SESSION[$key]);
   }
   session_regenerate_id(true);
-  $_SESSION['login_error'] = 'Your account is not allowed to log in. Please contact the web administrator.';
+  $_SESSION['login_error'] = 'Locked by admin. Please contact site admin';
   header('Location: /login');
   exit;
 }

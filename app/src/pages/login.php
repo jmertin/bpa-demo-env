@@ -1,9 +1,13 @@
 <?php
 // Consume any flash error set by usecase_locked (before auth_user() redirect).
 $error = '';
+$usecase = '';
 if (!empty($_SESSION['login_error'])) {
   $error = $_SESSION['login_error'];
   unset($_SESSION['login_error']);
+  if ($error === 'Locked by admin. Please contact site admin') {
+    $usecase = 'locked';
+  }
 }
 
 // Redirect if already logged in.
@@ -32,7 +36,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (['user_id', 'username', 'role', 'full_name', 'usecase', 'csrf_token'] as $key) {
       unset($_SESSION[$key]);
     }
-    $error = 'Your account is not allowed to log in. Please contact the web administrator.';
+    // The form below is about to re-render on this same request and needs a
+    // token for the retry submission — regenerate one now that the old
+    // token was wiped, otherwise csrf_token() reads an unset array key and
+    // its `: string` return type turns that into an uncaught TypeError
+    // (HTTP 500) instead of the 403 below.
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $error = 'Locked by admin. Please contact site admin';
+    $usecase = 'locked';
   }
   else {
     $redirect = validate_slug($_GET['from'] ?? 'shop') ?? 'shop';
@@ -41,7 +52,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 }
 
-set_monitoring_headers('AUTH', 'LOGIN', 'FORM', 'anonymous', 0, $error ? 'LOGIN_FAILED' : '');
+if ($usecase === 'locked') {
+  http_response_code(403);
+}
+
+set_monitoring_headers(
+  'AUTH', 'LOGIN', 'FORM', 'anonymous', 0,
+  $usecase === 'locked' ? 'LOGIN_LOCKED' : ($error ? 'LOGIN_FAILED' : ''),
+  $usecase
+);
 
 $pageTitle = APP_NAME . ' – Login';
 require __DIR__ . '/../templates/layout.php';
