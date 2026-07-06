@@ -57,6 +57,12 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 │
 ├── tools/                        # local-only binaries for demo automation (git-ignored, see tools/README.md)
 │
+├── dxo2-scripts/                 # scripted DX O2 tenant config (Service + alerts) via the dx-do CLI
+│   ├── bpa-demo-service.sh       # "BPA-Demo" Service: create|check|delete
+│   ├── bpa-demo-management-module.sh  # "BPA-Demo" MM + trouble-use-case alert
+│   ├── bpa-demo-agent-alerts.sh  # 12 more alerts: DB Monitor, PHP probe, browser/RUM
+│   └── .state/                   # resource ids created in the tenant (git-ignored)
+│
 └── helm/
     └── php-demo/                 # Helm chart v0.2.0
         ├── Chart.yaml
@@ -386,6 +392,12 @@ build-scripts/push.sh
 
 # 5. Deploy — dxo2.enabled=true is set automatically when APMIA_EM_HOST is non-empty
 build-scripts/deploy.sh
+
+# 6. (Optional) Console-side Service + alerts, once traffic has flowed —
+#    see dxo2-scripts/README.md
+dxo2-scripts/bpa-demo-service.sh create
+dxo2-scripts/bpa-demo-management-module.sh create
+dxo2-scripts/bpa-demo-agent-alerts.sh create
 ```
 
 ---

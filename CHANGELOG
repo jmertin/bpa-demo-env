@@ -5,6 +5,125 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-06 @ 19:00 - [Fix - AGENT_EXPRESSION missing SuperDomain prefix; self-heal on both scripts' create]:
+  Root cause found while troubleshooting an alert the user reported as
+  "linked to no metric tree": bpa-demo-management-module.sh's
+  AGENT_EXPRESSION was 'bpa-demo.*' with no 'SuperDomain|' prefix. The
+  4-segment MM agentExpressions/metricgrouping sourceNamePattern regime is
+  implicitly start-anchored against the FULL 'SuperDomain|<host>|<process>|
+  <agent>' path, so a pattern missing that prefix matches zero agents --
+  silently: the create succeeds, the alert shows in the console, but
+  `metricgrouping list-metrics` (and therefore the alert) has had zero
+  matched series since the original setup. Confirmed empirically:
+  recreating the identical grouping with an explicit
+  sourceNamePattern='SuperDomain\|.*bpa-demo.*' and
+  useManagementModuleAgentExpression=false immediately returned 30+ live
+  matches; the inherited version returned none.
+  dxo2-scripts/bpa-demo-management-module.sh: fixed AGENT_EXPRESSION to
+  'SuperDomain\|.*bpa-demo.*'; the Metric Grouping create call now passes
+  sourceNamePattern + useManagementModuleAgentExpression=false instead of
+  inheriting the MM's (broken) agentExpressions. cmd_create now also
+  self-heals: if the Management Module already exists, it checks
+  `metricgrouping list-metrics` for at least one live match and re-applies
+  the fix via `metricgrouping update` if it finds none, instead of treating
+  "exists" as "working."
+  While troubleshooting this, the user deleted the original Management
+  Module (mm-3322) and its Metric Grouping/Alert (mg-3324/simplealert-3325)
+  from the tenant. Repaired the live resource in place via
+  `metricgrouping update` (0 -> 37 matched series) after re-running create,
+  which had landed on a fresh mm-3562/mg-3563/simplealert-3564 since the
+  old ids no longer existed. Rebuilt all 12 bpa-demo-agent-alerts.sh
+  Metric Groupings/Alerts under the new mm-3562 (their own Management
+  Module state file now points there); verified all 13 Metric Groupings
+  under mm-3562 (the original plus the 12 per-agent/browser ones) have at
+  least one live matched series via list-metrics, and all 13 Alerts are
+  active.
+  dxo2-scripts/README.md, CLAUDE.md: updated the bpa-demo-management-module.sh
+  and bpa-demo-agent-alerts.sh descriptions to document the bug, the fix,
+  and the self-heal behavior; added a general "Landmine" note on the two
+  agentExpressions/sourceNamePattern segment regimes (3-segment bare path
+  for `metric data`/`agent query-by-regex` vs. 4-segment full path for
+  `managementmodule create`/`metricgrouping create/update`) since mixing
+  them up is silent and easy to repeat.
+
+------------------------------------------------------------------------------
+2026-07-06 @ 17:30 - [Feat - BPA WebServer Agent content group added to the BPA-Demo Service]:
+  Investigated where the BPA's reported "Average Page Load Time (ms)" and
+  "Page Hits Per Interval" metrics actually come from: neither of the two
+  known agents (bpa-demo-host, bpa-demo-php-probe). Confirmed via
+  `dx-done metric data` with a broad agent regex that both are reported
+  per-URL under a third agent identity, `SuperDomain|Experience Collector
+  Host|DxC Agent|Logstash-APM-Plugin`, at `Business Segment|BPA
+  Demo|<url>:<leaf>` -- real, queryable data that never appears in
+  `dx-done agent list`/`query-by-regex` output. Established (with the user)
+  that the raw timing originates client-side from the Browser Agent (BA)
+  snippet; the BPA Webserver Extension is the reporting/ingestion path
+  that surfaces it into APM under this Logstash-APM-Plugin identity; and a
+  further path, `SuperDomain|Custom Metric Host (Virtual)|Custom Metric
+  Process (Virtual)|Custom Business Application Agent (Virtual)|By
+  Business Service|BPA Demo|<url>|Browser:<leaf>`, shows the same values
+  again, rolled up under the Business Service view -- one underlying
+  measurement, not two or three independent ones.
+  dxo2-scripts/bpa-demo-service.sh: added a fourth content query group,
+  `agent EQUALS "Experience Collector Host|DxC Agent|Logstash-APM-Plugin"`,
+  confirmed via dry-run preview (1 matching entity) before applying live.
+  Deliberately did NOT add a group for the `Custom Business Application
+  Agent (Virtual)` path: exhaustively confirmed empirically (agent
+  EQUALS/MATCHES on the full path and bare name, type EQUALS AGENT + name
+  EQUALS/MATCHES) that it returns zero matches under every content-query
+  attribute tried -- it is not a real topology entity, only a
+  metric-source-path label, so the new group already covers its data.
+  cmd_create rewritten to self-heal: if the Service already exists, it now
+  checks the live content query for the BPA WebServer Agent group and adds
+  it via `service add-content` if missing, instead of treating "exists" as
+  "up to date."
+  CLAUDE.md, dxo2-scripts/README.md: updated the bpa-demo-service.sh
+  description with the fourth content group and the virtual-agent finding.
+
+------------------------------------------------------------------------------
+2026-07-06 @ 16:00 - [Feat - dxo2-scripts/bpa-demo-agent-alerts.sh: 10 per-agent alerts]:
+  Investigated which metrics each of the two agents monitoring BPA-Demo
+  actually reports (`dx-done agent list` confirms exactly bpa-demo-host and
+  bpa-demo-php-probe) via `dx-done metric data` over a live 2-hour window,
+  then picked 5 sensible alert-worthy metrics per agent from what came back
+  non-flat/measurable, with thresholds set from the observed p90-p99 tail
+  rather than guessed.
+  New dxo2-scripts/bpa-demo-agent-alerts.sh: create|check|delete for 10
+  Metric Groupings + Alerts attached to the existing "BPA-Demo" Management
+  Module. Infrastructure Agent (DB Monitor extension): DB Availability Down
+  (LESS_THAN 1/1), DB Connection Refusals (GREATER_THAN 0/5), DB Connection
+  Pool Pressure (GREATER_THAN 80/95), DB Buffer Pool Cache Degraded
+  (LESS_THAN 95/90), DB Slow Query Rate Rising (GREATER_THAN 1/5). PHP
+  probe agent: App Response Time High (GREATER_THAN 100/250 -- reuses
+  bpa-demo-management-module.sh's measured thresholds), App Error Rate
+  Rising (GREATER_THAN 2/5), App Concurrency Spike (GREATER_THAN 5/15), DB
+  Backend Response Time High (GREATER_THAN 50/150), DB Backend Query Storm
+  (GREATER_THAN 20000/40000).
+  Each Metric Grouping uses an explicit sourceNamePattern (4-segment full
+  agent path, $-anchored) + useManagementModuleAgentExpression=false rather
+  than inheriting the parent MM's agentExpressions, so per-agent alerts
+  never conflate the two agents.
+  Along the way, found and fixed two bugs while proving create/check/delete
+  end to end against the live tenant (create -> check -> delete ->
+  recreate): (1) `[[ -f "${STATE_FILE}" ]] && source "${STATE_FILE}"` as a
+  function's LAST statement dies under `set -e` when the file doesn't
+  exist -- the common first-run case -- because the function's own return
+  status becomes the compound statement's (nonzero) exit code; fixed with
+  an explicit `if` guard in both bpa-demo-agent-alerts.sh's and
+  bpa-demo-management-module.sh's load_state(). (2) `declare -p` output
+  sourced from inside a function creates a *local* (not global) array by
+  bash's default scoping rule, so idempotency silently broke (every
+  create call saw empty state and tried to recreate everything); fixed by
+  forcing `declare -gA` on the sourced state file's array declarations.
+  Extended the same script two hours later (still 2026-07-06) with two
+  more alerts once the BPA WebServer Agent's browser/RUM telemetry was
+  identified (see the 17:30 entry below): Page Load Time High
+  (GREATER_THAN 300/1000ms) and Page Hits Spike (GREATER_THAN 10/20),
+  bringing the total to 12.
+  dxo2-scripts/README.md, CLAUDE.md: documented the new script, its
+  thresholds and their provenance, and the two bugs found/fixed.
+
+------------------------------------------------------------------------------
 2026-07-01 @ 18:00 - [Docs – Vendor recommendation section in bug_php_probe.md]:
   bug_php_probe.md: added "Recommended Probe Changes (Vendor)" section with two
   vendor-facing fix requests:
@@ -144,6 +263,100 @@ Format: YYYY-MM-DD @ HH:MM  <summary>
   tools/README.md: new file documenting tools/dx-do-linux-x64's source
   (github.com/kialambroca/dx-do-dist, release v6.3.5) -- itself git-ignored
   along with the rest of tools/*.
+
+------------------------------------------------------------------------------
+2026-07-06 @ 14:00 - [Feat - Scripted DX O2 Service creation via dxo2-scripts/]:
+  Created a "BPA-Demo" DX O2 Service using the dx-do CLI to group every
+  BPA-Demo-related telemetry entity under one console view: the php-probe's
+  frontend URLs (GENERICFRONTEND), the BPA Webserver Extension's business
+  transactions (BUSINESSTRANSACTION -- page_login, SHOP-LIST-MATTER,
+  SHOP-LIST-SHELLY, etc., which also carry the browser agent's BRTM cookie
+  correlation attributes, covering the browser agent without a separate
+  content rule), and the mysql backend database (both the php-probe's
+  inferred DATABASE dependency and the DB Monitor extension's own richer
+  CI). Content query (3 groups, OR'd): applicationName EQUALS "BPA-Demo",
+  agent EQUALS "bpa-demo-host|bpa-demo|bpa-demo-infra-agent" (Infrastructure
+  Agent), agent EQUALS "bpa-demo-php-probe|php-probes|bpa-demo-infra-
+  agent(/usr/sbin/apache2)" (PHP probe agent) -- confirmed via dx-do dry-run
+  preview (28 matched entities) before creating for real.
+  New dxo2-scripts/ directory (tracked in git -- unlike tools/, these
+  scripts hold no secrets) for scripted DX O2 tenant configuration changes,
+  so demo runners without AI access can manage them directly:
+  dxo2-scripts/bpa-demo-service.sh: create|check|delete for the BPA-Demo
+  Service. create is idempotent (checks first, warns instead of failing if
+  it exists); delete prompts for confirmation unless -y/--yes is passed.
+  Resolves the dx-do binary via a platform check (DX_DO env var override
+  supported) and defensively strips any Authorization header from dx-do's
+  own output (observed dx-do dumping one on certain failed API calls during
+  testing). Verified end to end against the real tenant: check and create
+  (idempotent path) both succeed against the already-created Service;
+  delete's confirmation prompt correctly aborts without touching tenant
+  state when not confirmed.
+  dxo2-scripts/README.md: documents the create/check/delete convention and
+  prerequisites (dx-do binary + ~/.dxdo/default.dxo2.config.json) for future
+  scripts in this directory.
+  CLAUDE.md: new "DX O2 tenant configuration scripts (dxo2-scripts/)"
+  section documenting the directory, its convention, and the exact content
+  query bpa-demo-service.sh uses.
+
+------------------------------------------------------------------------------
+2026-07-06 @ 15:00 - [Feat - Scripted DX O2 Management Module/Alert for the trouble use case]:
+  Investigated which of the three demo use cases (trouble, empty_basket,
+  locked) have a real, currently-observable APM signal to alert on. Only
+  trouble does: usecases/trouble.php's 5000 sequential DB reads/request
+  measurably spikes response time. empty_basket and locked do not --
+  confirmed by reading login.php/usecases/locked.php (neither sets an HTTP
+  error status, just a 200 + redirect with an on-page message) and
+  vertex vertex-definition vertexType="BUSINESSTRANSACTION" (BPA's payload
+  metrics only expose request/response size in bytes, not extracted field
+  values). Measured real response times rather than guessing thresholds:
+  normal traffic ~6-7ms, trouble user ~350-690ms on this stack.
+  Created via dx-do: Management Module "BPA-Demo" (mm-3322,
+  agentExpressions: bpa-demo.* -- matches both the Infrastructure Agent and
+  the PHP probe agent), Metric Grouping "BPA-Demo Frontend Response Time"
+  (mg-3324, attributeNamePattern matching
+  Frontends|Apps|BPA-Demo|URLs|*:Average Response Time (ms) -- every
+  tracked frontend URL), and Alert "Trouble User - High Response Time"
+  (simplealert-3325, GREATER_THAN, warning=100ms, error=250ms -- both
+  comfortably between the measured normal/trouble response time ranges).
+  Along the way: discovered managementmodule create executes immediately,
+  unlike service/metricgrouping/alert create which default to dry-run --
+  accidentally created a throwaway module with a bogus agentExpressions
+  value while probing its parameters, caught it, and deleted it
+  immediately (confirmed gone via managementmodule list) before creating
+  the real one. Also found alert update-simple needs nested
+  warningThreshold.threshold=/errorThreshold.threshold= parameters, not
+  flat ones (flat ones are silently ignored) -- used to correct the
+  alert's thresholds after the initial 1500/3000ms guess turned out to be
+  10x too high for the real measured response times.
+  Investigated exposing RESP_HEADER_X_BASKET_TOTAL (the checkout page's
+  X-Basket-Total response header, already emitted by checkout.php) as a
+  BPA-captured attribute for a real empty_basket alert -- generated live
+  checkout traffic (logged in as a real demo user, added a product,
+  hit /checkout repeatedly) and confirmed via `vertex detail` on both
+  checkout business-transaction vertices that the attribute does not yet
+  appear, even after restarting the dxo2 container (BTL logs confirm it
+  re-fetches its capture-rule cache on startup) and generating fresh
+  traffic afterward. Deferred pending further investigation on the tenant
+  side; not implemented in this entry.
+  New dxo2-scripts/bpa-demo-management-module.sh: create|check|delete for
+  the above three resources together. Unlike bpa-demo-service.sh, this
+  script persists the ids it creates to a local
+  dxo2-scripts/.state/bpa-demo-management-module.env file (git-ignored --
+  new .gitignore entry for dxo2-scripts/.state/) since dx-do's
+  managementmodule/metricgrouping/alert list commands return wrapped table
+  output with no raw-JSON mode, making reliable by-name re-lookup
+  impractical. create is idempotent (checks the state file's recorded id
+  against a fresh managementmodule list before creating); delete removes
+  the alert, metric grouping, and management module in dependency order
+  and prompts for confirmation unless -y/--yes is passed. Verified end to
+  end against the real tenant: check prints live detail for all three
+  resources; create correctly no-ops against the already-created ones;
+  delete's confirmation prompt aborts without touching tenant state when
+  not confirmed (resources confirmed still intact via check afterward).
+  dxo2-scripts/README.md, CLAUDE.md: documented the new script, the
+  state-file convention it introduces, and the still-open empty_basket
+  question.
 
 ------------------------------------------------------------------------------
 2026-07-01 @ 17:30 - [Docs – Full documentation sync for PHP probe BA injection fix]:

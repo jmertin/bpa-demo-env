@@ -13,6 +13,10 @@ src/dx-o2-agents/installers/*
 # Local tooling binaries - never commit (see tools/README.md)
 tools/*
 
+# dxo2-scripts runtime state (resource ids created in a specific tenant) -
+# never commit; the scripts themselves are tracked
+dxo2-scripts/.state/
+
 # Helm local overrides
 helm/php-demo/values.local.yaml
 

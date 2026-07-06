@@ -107,7 +107,26 @@ Password for all accounts: **`demo123`**
 
 ---
 
-## 6 — Tear down
+## 6 — DX O2 tenant configuration (optional)
+
+Once the app is deployed with DX O2 monitoring enabled (`APMIA_EM_HOST` set)
+and has taken some traffic, set up the console-side Service and alerts with
+the scripts in `dxo2-scripts/` — no AI assistant required, just the `dx-do`
+CLI (see `dxo2-scripts/README.md` for setup):
+
+```bash
+dxo2-scripts/bpa-demo-service.sh create           # "BPA-Demo" Service
+dxo2-scripts/bpa-demo-management-module.sh create # MM + trouble-use-case alert
+dxo2-scripts/bpa-demo-agent-alerts.sh create       # 12 more alerts (DB, PHP, browser/RUM)
+```
+
+Every script supports `create` (safe to re-run), `check`, and `delete`.
+`bpa-demo-agent-alerts.sh` depends on `bpa-demo-management-module.sh` having
+been run first.
+
+---
+
+## 7 — Tear down
 
 ```bash
 helm uninstall php-demo -n php-demo
@@ -117,4 +136,4 @@ kubectl delete namespace php-demo   # optional
 
 ---
 
-> Full documentation: [README.md](README.md) | DX O2 agent setup: [DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)
+> Full documentation: [README.md](README.md) | DX O2 agent setup: [DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md) | DX O2 tenant config scripts: [dxo2-scripts/README.md](dxo2-scripts/README.md)
