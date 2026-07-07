@@ -63,6 +63,16 @@
 #   ~/.dxdo/default.dxo2.config.json    dx-do tenant credentials - see
 #                                        https://github.com/kialambroca/dx-do-dist
 #                                        for how to generate this file.
+#   .config (project root)              DXO2_TENANT_USER_EMAIL must be set -
+#                                        see .config.example. `create` renders
+#                                        the SLI template into a temp file
+#                                        with the __DXO2_TENANT_USER_EMAIL__
+#                                        placeholder substituted for this
+#                                        value before importing it, so the
+#                                        tenant's createdBy/created_by
+#                                        attribution matches whoever is
+#                                        actually running this script rather
+#                                        than a hardcoded original author.
 #
 # State:
 #   This script persists the sliId it creates to
@@ -79,6 +89,7 @@ readonly SLI_NAME="BPA-Demo Frontend Response Time"
 readonly SERVICE_NAME="BPA-Demo"
 readonly TEMPLATE_FILE="${SCRIPT_DIR}/templates/bpa-demo-response-time-sli.json"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
+readonly PROJECT_CONFIG="${ROOT_DIR}/.config"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
 readonly STATE_FILE="${STATE_DIR}/bpa-demo-sli.env"
 
@@ -124,6 +135,26 @@ check_prerequisites() {
         fatal "dx-do tenant config not found at ${DXDO_CONFIG}. See https://github.com/kialambroca/dx-do-dist for how to generate it."
     [[ -f "${TEMPLATE_FILE}" ]] || \
         fatal "SLI template not found at ${TEMPLATE_FILE}."
+}
+
+## Load DXO2_TENANT_USER_EMAIL from the project .config. Only called by
+## cmd_create, which is the only subcommand that renders the SLI template.
+load_config() {
+    [[ -f "${PROJECT_CONFIG}" ]] || \
+        fatal ".config not found at ${PROJECT_CONFIG}. Copy .config.example to .config and set DXO2_TENANT_USER_EMAIL."
+    # shellcheck disable=SC1090
+    source "${PROJECT_CONFIG}"
+    : "${DXO2_TENANT_USER_EMAIL:?DXO2_TENANT_USER_EMAIL must be set in .config -- see .config.example}"
+}
+
+## Render TEMPLATE_FILE into a fresh temp file with the
+## __DXO2_TENANT_USER_EMAIL__ placeholder substituted for the real tenant
+## user email from .config. Prints the temp file's path; caller must rm -f
+## it when done.
+render_template() {
+    local -r rendered_file="$(mktemp -t bpa-demo-sli-import-XXXXXX.json)"
+    sed "s/__DXO2_TENANT_USER_EMAIL__/${DXO2_TENANT_USER_EMAIL}/g" "${TEMPLATE_FILE}" > "${rendered_file}"
+    printf '%s' "${rendered_file}"
 }
 
 ## Run a dx-do command, stripping progress noise and defensively dropping any
@@ -214,12 +245,17 @@ for row in data:
         return 0
     fi
 
-    info "Importing SLI '${SLI_NAME}' for service '${SERVICE_NAME}'..."
+    load_config
+    local rendered_file
+    rendered_file="$(render_template)"
+
+    info "Importing SLI '${SLI_NAME}' for service '${SERVICE_NAME}' (createdBy: ${DXO2_TENANT_USER_EMAIL})..."
     local import_json
     import_json=$("${DX_DO_BIN}" sli import \
-        file="${TEMPLATE_FILE}" \
+        file="${rendered_file}" \
         serviceName="${SERVICE_NAME}" \
         dry-run=false 2>&1 | grep -v -e '^ℹ' -e '^☒' -e '^…' -e '^☐' -e 'Authorization')
+    rm -f "${rendered_file}"
     echo "${import_json}"
     SLI_ID=$(printf '%s' "${import_json}" | grep -o '"groupId": *[0-9]*' | head -1 | grep -o '[0-9]*$')
     [[ -n "${SLI_ID}" ]] || fatal "Could not parse SLI id (groupId) from dx-do output above."

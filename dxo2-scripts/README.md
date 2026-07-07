@@ -120,3 +120,12 @@ semantics differ between the two examples in ways that couldn't be fully
 verified from the outside; see `bpa-demo-sli.sh`'s header comment for the
 full reasoning. Treat the SLO layer as a follow-up once those semantics are
 confirmed.
+
+The import payload's `createdBy`/`created_by` attribution is not hardcoded
+to a specific tenant user: the tracked template
+(`templates/bpa-demo-response-time-sli.json`) carries a
+`__DXO2_TENANT_USER_EMAIL__` placeholder, and `bpa-demo-sli.sh create`
+substitutes it at runtime from `DXO2_TENANT_USER_EMAIL` in `.config` (see
+`.config.example`) -- required so a different tenant user running this
+script gets their own login attributed, since the original author's login
+may not exist in someone else's tenant.
