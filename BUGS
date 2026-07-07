@@ -1,0 +1,69 @@
+PHP Probe reporting issus
+- The PHP-Probe only sees a fronted coming in if it is not the index.php that is loaded.
+
+APM Universe (dx-do apm-universe) Topology view only shows php-probe, not the other 3 entities
+- Triage / Topology, scoped to the "BPA Demo universe", only renders the
+  bpa-demo-php-probe generic frontend. The Infrastructure Agent, the BPA
+  WebServer Agent (Logstash-APM-Plugin), and the database CI are missing
+  even though `apm-universe add-metric-source` added all 3 agent paths
+  and NASS count correctly shows 3.
+- Root cause: the Topology view is driven by the Universe's `views.tas`
+  filter, not `views.nass` (which is all `add-metric-source` sets).
+  `views.tas` uses a legacy `{vertices, items, joins}` shape and, left
+  unset, appears to only surface entities with direct ATC-layer presence
+  tied to a NASS-matched agent -- which is just php-probe's own business
+  transactions.
+- Confirmed via a direct TAS query that scoping by Service membership
+  (`{op: "SERVICE", values: ["BPA-Demo"]}`) DOES return all 4 entities
+  correctly (the 3 agents + the MySQL DB CI + all business transactions).
+- No CLI fix exists: `dx-do apm-universe` has no `update` command at all;
+  `dx-do o2-universe` (the newer/modern-filter-shape universe type) has no
+  way to set a custom filter at create time (extra params are silently
+  ignored) and no update/add-view command either, and no `delete` command
+  (though `apm-universe delete id=<id> name=<label>` works on an
+  o2-universe's id too, despite being a separate CLI command group).
+- Fix requires a manual console step: edit the "BPA Demo universe"'s
+  Topology/TAS scope to filter by Service -> "BPA-Demo", instead of by
+  individual agent list. Exact menu path not confirmed (no console
+  access in this session) -- look for wherever the Universe's Topology
+  filter is edited and switch it from an agent-based filter to a
+  Service-based one.
+- See dxo2-scripts/bpa-demo-universe.sh (APM Universe type) and
+  dxo2-scripts/bpa-demo-services-universe.sh (O2/Platform Universe type,
+  a.k.a. "Services Universe" -- a separate resource the tenant also
+  needs until the two universe types are merged in the product; created
+  unscoped, same manual-console-step limitation) and
+  dxo2-scripts/README.md for the scripted (NASS-only) side of both.
+
+O2/Platform Universe ("Services Universe") detail page 404s in console -- can't be edited at all
+- Follow-on from the finding above, specific to the O2/Platform Universe
+  type only (dx-do o2-universe, not apm-universe). The "BPA Demo
+  universe" created by dxo2-scripts/bpa-demo-services-universe.sh
+  (VIEW617 at time of writing) 404s when opened via the console's
+  detail/edit page (URL shape: .../digital-oi/settings/universes/universe/<viewId>),
+  even though it's visible and its enable/disable toggle works from the
+  Universes list view. Confirmed not caused by: missing ACL (an
+  existing, working universe has the same empty access.users/groups),
+  a ~30s propagation delay (still 404s 4+ minutes after creation), or
+  the universe having been deleted (`o2-universe export` confirms it
+  exists, correctly owned).
+- Root cause (via side-by-side comparison against VIEW407 "CRepo", an
+  existing console-editable universe with an otherwise identical
+  shape): the broken universe's filters are unscoped/empty --
+  `tas.filter.filter.op = "ALL"` and `nass.filter.serviceFilter.values
+  = []` -- while the working one has both filters populated with real
+  Service names. The console's detail/edit page appears to require a
+  non-empty Service-scoped filter to render at all.
+- This is a chicken-and-egg problem: `dx-do o2-universe` has no
+  update/add-service command to populate serviceFilter.values after
+  creation (command group is only create/export/list/services, and
+  create silently ignores every param except name=), and the console's
+  own edit page -- the only place to add a Service scope -- 404s before
+  a scope exists. No other console entry point (list-view context menu,
+  alternate action) was found either. There is currently no way, CLI or
+  console, to fix this once an o2-universe is created via `dx-do`.
+- Full writeup with reproduction steps, side-by-side JSON diff, and
+  suggested fixes for the dx-do maintainer:
+  dxo2-scripts/dx-do-o2-universe-issue.md (committed to git for
+  external review).
+
