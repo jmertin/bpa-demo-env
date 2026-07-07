@@ -5,6 +5,48 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-07 @ 17:10 - [Feat - dxo2-scripts/bpa-demo-sli.sh: first SLI for BPA-Demo]:
+  Added the tenant's first SLI (Service Level Indicator) for BPA-Demo:
+  "BPA-Demo Frontend Response Time" (sliId 2767), bound to the "BPA-Demo"
+  Service. Modeled directly on the tenant's existing SLIs (found via
+  `dx-do sli list` -- 3 pre-existing, all unbound): "Total NonRunning
+  Containers" (raw SLI, no SLO) and "CEmperf DB Errors" (full SLO/
+  error-budget pipeline). Confirmed via `service metrics serviceName=
+  BPA-Demo` that the SLI data model is genuinely different from the
+  Alerts already on this project: an SLI's value is computed and written
+  onto the Service's own topology vertex (is_sli-tagged), not just a
+  threshold on a raw agent metric.
+  dx-do's `sli` command group has no native create/delete -- new SLIs are
+  made by `sli import`-ing a raw SLI export JSON bound to a target
+  service; unbinding uses `sli exclude-service` (no `sli delete` exists).
+  Shipped raw-SLI-only for now (average response time across every
+  Frontends|Apps|BPA-Demo|URLs|<page> metric from the PHP probe, REGEX-
+  scoped to exclude nested Called-Backends/SQL sub-metrics, EXACT-scoped
+  to the real probe agent source path) -- deliberately did not attempt
+  the SLO/error-budget/alert layer this round: the tenant's two SLO-
+  bearing example SLIs use attributeType numeric codes and an
+  errorbudget threshold whose exact semantics differ between the two
+  examples in ways that couldn't be confirmed from the outside, and
+  guessing risked the same silent-zero-match failure mode as the
+  agentExpressions bug from 2026-07-06.
+  Landmine hit while building the import payload: the raw export's
+  groupId (copied from the real existing SLI used as a base) must be
+  replaced with a placeholder number (0), not null -- null fails schema
+  validation ("expected number, received null"), and leaving the
+  original SLI's real numeric id in place risks the importer treating
+  the call as an update to that existing SLI rather than a new create.
+  Verified end to end against the live tenant, not just created: ran a
+  dry-run first (dx-do's default for `sli import`) and confirmed via
+  read-only `sli list`/`service slis` that no tenant state changed before
+  applying for real with dry-run=false; after applying, confirmed
+  enabled=true, totalMetrics=52, sli_compliant=true.
+  New: dxo2-scripts/bpa-demo-sli.sh (create/check/delete, same convention
+  as every other script in this directory), dxo2-scripts/templates/
+  bpa-demo-response-time-sli.json (the import payload).
+  dxo2-scripts/README.md, CLAUDE.md: documented the SLI mechanism and
+  this specific SLI.
+
+------------------------------------------------------------------------------
 2026-07-07 @ 15:00 - [Feat - traffic-generator/: synthetic user traffic for the demo shop]:
   New traffic-generator/ directory: a standalone container that continuously
   generates realistic shop traffic against the app, cycling through the
