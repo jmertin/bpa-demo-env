@@ -18,8 +18,8 @@
   "description": "Average response time across all BPA-Demo frontend page URLs (Frontends|Apps|BPA-Demo|URLs|<page>), excluding nested Called-Backends/SQL sub-metrics. Surfaces the trouble use case's 5000-sequential-DB-read slowdown regardless of which page the trouble user visits.",
   "creationTime": 0,
   "lastModifiedTime": 0,
-  "createdBy": "JOERG.MERTIN@BROADCOM.COM",
-  "lastUpdatedBy": "JOERG.MERTIN@BROADCOM.COM",
+  "createdBy": "__DXO2_TENANT_USER_EMAIL__",
+  "lastUpdatedBy": "__DXO2_TENANT_USER_EMAIL__",
   "totalMetrics": 0,
   "breached": false,
   "product": null,
@@ -108,7 +108,7 @@
               {
                 "name": "created_by",
                 "associationType": "PROVIDED",
-                "values": "JOERG.MERTIN@BROADCOM.COM"
+                "values": "__DXO2_TENANT_USER_EMAIL__"
               }
             ]
           },

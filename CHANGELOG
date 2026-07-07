@@ -5,6 +5,26 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-07 @ 17:45 - [Fix - dxo2-scripts/bpa-demo-sli.sh: tenant user email no longer hardcoded]:
+  The SLI import payload's createdBy/created_by attribution was hardcoded
+  to the tenant user who wrote it (JOERG.MERTIN@BROADCOM.COM) -- a problem
+  for anyone else running this against their own tenant, since that login
+  is specific to one person and may not exist elsewhere. Replaced all 3
+  occurrences in dxo2-scripts/templates/bpa-demo-response-time-sli.json
+  with a __DXO2_TENANT_USER_EMAIL__ placeholder. Added
+  DXO2_TENANT_USER_EMAIL to .config/.config.example (new "DX O2 tenant
+  configuration scripts" section). bpa-demo-sli.sh: new load_config()
+  (sources .config, fatals if DXO2_TENANT_USER_EMAIL is unset) and
+  render_template() (sed-substitutes the placeholder into a mktemp'd
+  file, cleaned up with rm -f right after the import call) -- only
+  cmd_create needs either; check/delete are unaffected and still work
+  without a .config present. Verified: substitution produces valid JSON
+  with zero placeholders remaining, and check/create's idempotent no-op
+  path (the SLI already exists from the prior commit) both still work
+  unchanged.
+  CLAUDE.md, dxo2-scripts/README.md: documented the mechanism.
+
+------------------------------------------------------------------------------
 2026-07-07 @ 17:10 - [Feat - dxo2-scripts/bpa-demo-sli.sh: first SLI for BPA-Demo]:
   Added the tenant's first SLI (Service Level Indicator) for BPA-Demo:
   "BPA-Demo Frontend Response Time" (sliId 2767), bound to the "BPA-Demo"
