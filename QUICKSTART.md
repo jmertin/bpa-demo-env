@@ -91,6 +91,12 @@ build-scripts/compose.sh down -v   # stop + wipe DB volume
 
 App available at **http://localhost:8080/**.
 
+The `traffic` service starts automatically alongside the app and generates
+synthetic shopper traffic (login/browse/basket/checkout) across all demo
+accounts, including the `trouble`/`empty`/`locked` use-case users. Set
+`TRAFFIC_ENABLED="false"` in `.config` to disable it. See
+[traffic-generator/README.md](traffic-generator/README.md).
+
 ---
 
 ## 5 — Default accounts
@@ -110,9 +116,11 @@ Password for all accounts: **`demo123`**
 ## 6 — DX O2 tenant configuration (optional)
 
 Once the app is deployed with DX O2 monitoring enabled (`APMIA_EM_HOST` set)
-and has taken some traffic, set up the console-side Service and alerts with
-the scripts in `dxo2-scripts/` — no AI assistant required, just the `dx-do`
-CLI (see `dxo2-scripts/README.md` for setup):
+and has taken some traffic — the `traffic` Compose service (see step 4) or
+its standalone container (`traffic-generator/`) can generate this
+automatically — set up the console-side Service and alerts with the scripts
+in `dxo2-scripts/` — no AI assistant required, just the `dx-do` CLI (see
+`dxo2-scripts/README.md` for setup):
 
 ```bash
 dxo2-scripts/bpa-demo-service.sh create           # "BPA-Demo" Service

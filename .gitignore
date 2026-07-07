@@ -4,6 +4,11 @@
 
 # Generated app archives
 src/apache-php/app.tar.gz
+src/php-fpm/app.tar.gz
+
+# Python bytecode cache (traffic-generator/)
+__pycache__/
+*.pyc
 
 # Broadcom DX O2 agent installers (binary, licensed, gitignored)
 # Download from https://support.broadcom.com/ and place in this directory.

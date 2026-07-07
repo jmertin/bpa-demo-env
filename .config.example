@@ -106,3 +106,22 @@ MYSQL_MONITOR="true"
 # Example:
 #   APMIA_BROWSER_SNIPPET='<script src="https://example.apm.broadcom.com/snippet.js"></script>'
 APMIA_BROWSER_SNIPPET=''
+
+# ── Traffic generator ────────────────────────────────────────────────────────
+# Synthetic user traffic for the demo shop (see traffic-generator/README.md).
+# Cycles through the full demo user roster (including trouble/empty_basket/
+# locked) so their use cases fire regularly without a human clicking through
+# the app.
+#
+# TRAFFIC_ENABLED: true (default) = generate traffic; false = container stays
+#   up but idle (same pattern as APMIA_DEPLOY above).
+# TRAFFIC_MIN/MAX_ACTION_DELAY_SECS: pause between actions within one session.
+# TRAFFIC_MIN/MAX_SESSION_DELAY_SECS: pause between one user's session and the next.
+# TRAFFIC_LOG_LEVEL: DEBUG logs every request; INFO (default) logs per-session
+#   summaries and notable outcomes (e.g. a blocked login) only.
+TRAFFIC_ENABLED="true"
+TRAFFIC_MIN_ACTION_DELAY_SECS="1"
+TRAFFIC_MAX_ACTION_DELAY_SECS="4"
+TRAFFIC_MIN_SESSION_DELAY_SECS="2"
+TRAFFIC_MAX_SESSION_DELAY_SECS="8"
+TRAFFIC_LOG_LEVEL="INFO"

@@ -134,6 +134,26 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  traffic:
+    image: ${REGISTRY}/${IMAGE_PREFIX}/traffic-generator:${IMAGE_TAG}
+    build:
+      context: ./traffic-generator
+    pull_policy: never             # use local image only – compose.sh builds it
+    environment:
+      TRAFFIC_ENABLED: ${TRAFFIC_ENABLED:-true}
+      # Compose service name – not from .config; Kubernetes would use
+      # 127.0.0.1 (same pod) or a Service DNS name instead.
+      TARGET_URL: http://apachephp:8080
+      MIN_ACTION_DELAY_SECS: ${TRAFFIC_MIN_ACTION_DELAY_SECS:-1}
+      MAX_ACTION_DELAY_SECS: ${TRAFFIC_MAX_ACTION_DELAY_SECS:-4}
+      MIN_SESSION_DELAY_SECS: ${TRAFFIC_MIN_SESSION_DELAY_SECS:-2}
+      MAX_SESSION_DELAY_SECS: ${TRAFFIC_MAX_SESSION_DELAY_SECS:-8}
+      LOG_LEVEL: ${TRAFFIC_LOG_LEVEL:-INFO}
+    depends_on:
+      apachephp:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   mariadb_data:
   apmia_data:   # populated from dx-o2-agents image on first start; delete with down -v
