@@ -91,14 +91,24 @@ load_config() {
     # docker-compose.yml can use the list/passthrough form (- APMIA_BROWSER_SNIPPET)
     # which passes the value straight to the container without YAML parsing.
     export APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET:-}"
+
+    # Traffic generator – optional; defaults produce steady, moderate traffic.
+    export TRAFFIC_ENABLED="${TRAFFIC_ENABLED:-true}"
+    export TRAFFIC_MIN_ACTION_DELAY_SECS="${TRAFFIC_MIN_ACTION_DELAY_SECS:-1}"
+    export TRAFFIC_MAX_ACTION_DELAY_SECS="${TRAFFIC_MAX_ACTION_DELAY_SECS:-4}"
+    export TRAFFIC_MIN_SESSION_DELAY_SECS="${TRAFFIC_MIN_SESSION_DELAY_SECS:-2}"
+    export TRAFFIC_MAX_SESSION_DELAY_SECS="${TRAFFIC_MAX_SESSION_DELAY_SECS:-8}"
+    export TRAFFIC_LOG_LEVEL="${TRAFFIC_LOG_LEVEL:-INFO}"
 }
 
-## Return 0 (true) when both application images exist in the local Docker store.
+## Return 0 (true) when all application images exist in the local Docker store.
 images_present() {
     local php_image="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
     local dxo2_image="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
+    local traffic_image="${REGISTRY}/${IMAGE_PREFIX}/traffic-generator:${IMAGE_TAG}"
     docker image inspect "${php_image}" >/dev/null 2>&1 && \
-    docker image inspect "${dxo2_image}" >/dev/null 2>&1
+    docker image inspect "${dxo2_image}" >/dev/null 2>&1 && \
+    docker image inspect "${traffic_image}" >/dev/null 2>&1
 }
 
 ## Package and build images locally (calls the build-scripts chain).

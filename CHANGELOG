@@ -5,6 +5,63 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-07 @ 15:00 - [Feat - traffic-generator/: synthetic user traffic for the demo shop]:
+  New traffic-generator/ directory: a standalone container that continuously
+  generates realistic shop traffic against the app, cycling through the
+  full demo user roster (shuffled once per pass) so trouble/empty_basket/
+  locked all fire regularly instead of only by chance. Per user: login, a
+  random number of random actions (browse with occasional brand/capability/
+  page filters, view a product, add to basket, view the basket, or
+  complete a checkout -- weighted so basket/checkout activity is common
+  without crowding out plain browsing), then logout; the admin account also
+  occasionally visits the admin diagnostic pages. A blocked login (locked,
+  403) or an empty-basket checkout attempt are tolerated, expected outcomes,
+  not errors.
+  generator.py uses only the Python standard library (urllib,
+  http.cookiejar) -- no requirements.txt, no pip install, no dependency
+  layer. This was forced, not stylistic: PyPI (files.pythonhosted.org) was
+  unreachable from the build sandbox used to write this (a 403 even after
+  fixing an initial TLS-interception cert error, i.e. a network policy
+  block, not a cert problem) -- requests would have been the more usual
+  choice otherwise.
+  Two real urllib bugs found and fixed while writing this: (1)
+  HTTPRedirectHandler.redirect_request returning None (to deliberately not
+  follow a 3xx so the caller can inspect Location itself -- e.g. to tell a
+  successful login apart from a re-rendered form) does not suppress the
+  exception as the stdlib docs imply -- urlopen still raises HTTPError for
+  the 3xx via the default error handler. (2) The app's own 403/404
+  responses raise the same way. Both are now caught in _do_request() and
+  converted into a normal Response object (HTTPError is itself a valid
+  response-like object: .code, .headers, .read()).
+  Dockerfile: python:3.12-slim, non-root `traffic` user, no apt-get/pip
+  layers at all given the stdlib-only design -- image is ~177MB, almost
+  entirely the base image.
+  TRAFFIC_ENABLED=false keeps the container up but idle, same pattern as
+  APMIA_DEPLOY in dx-o2-agents/entrypoint.sh. Pacing
+  (TRAFFIC_MIN/MAX_ACTION_DELAY_SECS, TRAFFIC_MIN/MAX_SESSION_DELAY_SECS)
+  and TRAFFIC_LOG_LEVEL are new .config variables; TARGET_URL is hardcoded
+  to the Compose service name in docker-compose.yml, matching the existing
+  APMIA_PHP_COLLECTOR_HOST/APMIA_BTL_HOST convention.
+  docker-compose.yml: new `traffic` service, depends_on apachephp
+  (service_started -- no healthcheck exists to depend on service_healthy;
+  the generator's own wait_for_app() polls /health with a bounded timeout
+  instead).
+  build-scripts/{build,push,compose}.sh: traffic-generator built/pushed
+  alongside the other two images; compose.sh's images_present() and
+  load_config() updated to include it and its new TRAFFIC_* vars.
+  Verified end to end against the real stack, not just a syntax check:
+  built and ran via compose.sh build/up -d; confirmed real traffic in
+  Apache's own access log with correct status codes per action (403 for
+  the blocked locked login, 302 for successful logins/redirects/checkout,
+  200 for pages); confirmed the trouble use case's 5000-sequential-DB-read
+  slowdown is visible in the generator's own action timing (~2.3s gap vs.
+  the configured 0.2-0.5s delay in a fast-paced test run); zero unexpected
+  errors or tracebacks across a multi-minute run cycling all 14 users
+  several times.
+  CLAUDE.md, README.md, .config.example: documented the new component, its
+  configuration, and the urllib gotchas.
+
+------------------------------------------------------------------------------
 2026-07-07 @ 10:00 - [Fix - o2-universe console crash-on-edit; dx-do upgraded to v6.4.0]:
   Upgraded tools/dx-do-linux-x64 from v6.3.5 to v6.4.0 (downloaded from the
   public github.com/kialambroca/dx-do-dist mirror, with explicit

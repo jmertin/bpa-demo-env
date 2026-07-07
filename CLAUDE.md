@@ -274,6 +274,24 @@ Every script follows the same `create`/`check`/`delete` convention so anyone run
 
 ---
 
+## Traffic generator (`traffic-generator/`)
+
+`traffic-generator/` is a standalone container that continuously generates synthetic user traffic against the app, so the DX O2 agents have real, varied data to report without a human clicking through the demo. Built with the rest of the stack (`build-scripts/build.sh`) and run as the `traffic` service in `docker-compose.yml`.
+
+`generator.py` uses only the Python standard library (`urllib`, `http.cookiejar`) — no third-party dependencies, no `pip install`, no dependency layer. This was a deliberate fallback, not a stylistic choice: PyPI (`files.pythonhosted.org`) was unreachable from the build environment used to write this component (network policy, not a cert issue — confirmed via a 403 even after fixing an initial TLS interception error). `requests` would have been the more common choice otherwise; if PyPI access is available in your build environment, that constraint no longer applies.
+
+Every full pass shuffles and cycles through **all** demo users (see "Demo use cases" above), not a random subset — this guarantees `trouble`/`empty_basket`/`locked` all fire regularly rather than only by chance. Per user: login, a random number of random actions (browse the shop with occasional filters, view a product, add to basket, view the basket, or complete a checkout — weighted so basket/checkout activity is common without crowding out plain browsing), then logout. The `admin` account also occasionally visits the admin diagnostic pages. A failed login (the `locked` use case returns `403`, not a redirect) is a normal, tolerated outcome, not an error — logged and the generator moves on to the next user.
+
+Two urllib gotchas hit while writing this, both now handled in `_do_request()`:
+- `HTTPRedirectHandler.redirect_request` returning `None` (to deliberately *not* follow a 3xx, so the caller can inspect `Location` itself — e.g. to tell a successful login apart from a re-rendered form) does **not** suppress the exception the way the stdlib docs suggest — `urlopen` still raises `HTTPError` for the 3xx via the default error handler. Must be caught and converted into a normal response object.
+- The app's own `403`/`404` responses raise the same way. `HTTPError` is itself a valid response-like object (`.code`, `.headers`, `.read()`), so the catch block reads through it rather than re-requesting.
+
+`TRAFFIC_ENABLED=false` keeps the container up but idle — same pattern as `APMIA_DEPLOY` in `dx-o2-agents/entrypoint.sh`. Pacing (`TRAFFIC_MIN/MAX_ACTION_DELAY_SECS`, `TRAFFIC_MIN/MAX_SESSION_DELAY_SECS`) and `TRAFFIC_LOG_LEVEL` are configurable via `.config`; `TARGET_URL` is hardcoded to the Compose service name (`http://apachephp:8080`) in `docker-compose.yml`, not read from `.config`, matching the same hardcoded-service-name convention used for `APMIA_PHP_COLLECTOR_HOST`/`APMIA_BTL_HOST`.
+
+Verified end to end against the real stack (not just a syntax check): built via `compose.sh build`, ran via `compose.sh up -d`, confirmed real traffic in Apache's own access log (correct status codes per action: `403` for the blocked `locked` login, `302` for successful logins/redirects, `200` for pages) and confirmed the `trouble` use case's 5000-sequential-DB-read slowdown is visible in the generator's own action timing.
+
+---
+
 ## Container image contents (both images)
 
 Both `apache-php` and `dx-o2-agents` include these troubleshooting packages (Ubuntu 22.04):

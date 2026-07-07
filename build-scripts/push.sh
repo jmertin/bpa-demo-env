@@ -19,8 +19,9 @@
 #              IMAGE_TAG must all be set.
 #
 # Images pushed:
-#   apache-php   Apache 2.4 + mod_php 8.1 application image (replaces nginx + php-fpm)
-#   dx-o2-agents Broadcom APMIA + BTL sidecar (conditional on --skip-dxo2)
+#   apache-php        Apache 2.4 + mod_php 8.1 application image (replaces nginx + php-fpm)
+#   dx-o2-agents      Broadcom APMIA + BTL sidecar (conditional on --skip-dxo2)
+#   traffic-generator Synthetic user traffic for the demo shop
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -127,6 +128,7 @@ load_config
 
 readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
 readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
+readonly TRAFFIC_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/traffic-generator:${IMAGE_TAG}"
 
 echo "=== BPA-Demo image push ==="
 echo "  Registry : ${REGISTRY}"
@@ -147,6 +149,9 @@ else
     push_image "${DXO2_IMAGE}"
 fi
 
+# Push the traffic generator image.
+push_image "${TRAFFIC_IMAGE}"
+
 # Clean up registry credentials from the local credential store.
 registry_logout
 
@@ -155,3 +160,4 @@ echo "  ${APACHE_PHP_IMAGE}"
 if [[ "${OPT_SKIP_DXO2}" == "false" ]]; then
     echo "  ${DXO2_IMAGE}"
 fi
+echo "  ${TRAFFIC_IMAGE}"

@@ -26,6 +26,10 @@
 # Application image:
 #   src/apache-php/ – Apache 2.4 + mod_php 8.1 in a single container, replacing
 #   the former nginx + php-fpm two-image setup.
+#
+# Traffic generator image:
+#   traffic-generator/ – synthetic user traffic for the demo shop; always
+#   built (no external installer dependency).  See traffic-generator/README.md.
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -131,6 +135,7 @@ load_config
 
 readonly APACHE_PHP_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}"
 readonly DXO2_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents:${IMAGE_TAG}"
+readonly TRAFFIC_IMAGE="${REGISTRY}/${IMAGE_PREFIX}/traffic-generator:${IMAGE_TAG}"
 
 echo "=== BPA-Demo image build ==="
 echo "  Registry  : ${REGISTRY}"
@@ -161,7 +166,10 @@ else
     echo ""
 fi
 
-# Step 4 – remove intermediate artefact
+# Step 4 – build traffic generator image (synthetic user traffic for the demo)
+build_image "traffic-generator" "${TRAFFIC_IMAGE}" "${ROOT_DIR}/traffic-generator/"
+
+# Step 5 – remove intermediate artefact
 cleanup
 
 # ── Build summary ──────────────────────────────────────────────────────────────
@@ -172,6 +180,7 @@ if [[ "${DXO2_BUILT}" == "true" ]]; then
 else
     echo "  [--]  ${DXO2_IMAGE}  (skipped – installer absent)"
 fi
+echo "  [OK]  ${TRAFFIC_IMAGE}"
 echo ""
 
 # Step 5 – optional push

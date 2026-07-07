@@ -55,6 +55,11 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 │   ├── deploy.sh                 # renders values.local.yaml from .config, helm upgrade
 │   └── compose.sh                # docker compose wrapper (sources .config, exports vars)
 │
+├── traffic-generator/            # synthetic user traffic for the demo shop (stdlib-only Python)
+│   ├── Dockerfile
+│   ├── generator.py               # cycles through all demo users; random shop actions
+│   └── README.md
+│
 ├── tools/                        # local-only binaries for demo automation (git-ignored, see tools/README.md)
 │
 ├── dxo2-scripts/                 # scripted DX O2 tenant config (Service + alerts) via the dx-do CLI
@@ -293,6 +298,20 @@ build-scripts/compose.sh down -v
 safe defaults, and calls `package-app.sh --no-bump` automatically before any
 build (the build counter is not modified). The application is reachable at
 **http://localhost:8080/** after `up`.
+
+### Synthetic traffic
+
+The `traffic` service (see `traffic-generator/README.md`) starts automatically
+with the rest of the stack and continuously generates realistic shop traffic,
+cycling through every demo user (including `trouble`/`empty_basket`/`locked`)
+so their use cases fire regularly without manual clicking. Set
+`TRAFFIC_ENABLED="false"` in `.config` to keep the container up but idle, or
+tune its pacing via the `TRAFFIC_*` variables (see `.config.example`).
+
+```bash
+# Watch it in action
+build-scripts/compose.sh logs -f traffic
+```
 
 ---
 
