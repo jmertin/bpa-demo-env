@@ -1,31 +1,48 @@
 #!/usr/bin/env bash
-# bpa-demo-services-universe.sh - Create, check, or delete the "BPA Demo
-# universe" O2/Platform Universe (a.k.a. "Services Universe" in the
-# console) on the DX O2 tenant.
+# bpa-demo-services-universe.sh - Create, check, or delete the "BPA Demo"
+# O2/Platform Universe (a.k.a. "Services Universe" in the console) on the
+# DX O2 tenant.
 #
 # `dx-do o2-universe` is the newer/platform universe surface -- distinct
 # from `dx-do apm-universe` (the "APM Universe" type; see
-# bpa-demo-universe.sh, which creates a universe with the SAME name under
-# that other surface). The two universe types are not the same resource
-# and don't share ids -- the tenant currently needs both, per the user:
-# they haven't been merged into one concept in the product yet.
+# bpa-demo-universe.sh, a separate resource under that other surface). The
+# two universe types are not the same resource and don't share ids -- the
+# tenant currently needs both, per the user: they haven't been merged into
+# one concept in the product yet.
 #
-# Unlike bpa-demo-universe.sh, this script does NOT scope the created
-# Universe to just the app's 4 telemetry entities -- it can't. See
-# "Known limitation" below.
+# Confirmed console bug (2026-07-07): a Universe created via
+# `o2-universe create name=...` (see "Known limitation" below) is left
+# unscoped -- its `tas` view filter is the bare `{"op": "ALL"}`, with none
+# of the fields (`input`, `values`, `includeServiceHierarchy`,
+# `excludeSubServices`) a `SERVICE`-scoped filter carries. The console's
+# edit UI crashes when opening a Universe in this state (confirmed by the
+# user against the first CLI-created Universe, viewId VIEW617, since
+# deleted) -- almost certainly because the edit form assumes every filter
+# object carries the `SERVICE`-filter fields regardless of `op` type, and
+# doesn't guard against them being absent. A Universe created through the
+# console's own wizard (which always has you pick a Service scope up
+# front) never produces this bare-`ALL` shape, so it doesn't hit this.
+# Per the developer working the fix: the console's data model changed to
+# require the `SERVICE`-scoped shape, but the change was never enforced
+# at the API level -- `o2-universe create` still silently accepts/produces
+# the old unscoped shape. Once that's fixed API-side, revisit whether
+# `create` can safely call `o2-universe create` again -- see
+# dx-do-o2-universe-issue.md's 2026-07-07 (2) update for what to check.
 #
-# Structure created:
-#   O2 Universe "BPA Demo universe"
-#     `o2-universe create name=...` accepts no other parameters -- any
-#     extra ones (a filter, a service scope, ...) are silently ignored
-#     ("ignoring extra args"), same landmine as `apm-universe create`'s
-#     dry-run-ignoring but for different params. The Universe is created
-#     with the platform's own default views, unscoped:
-#       - a `tas` view: `{"filter": {"op": "ALL"}, ...}`
-#       - a `nass` view: `{"filter": {"op": "ALL"}, "serviceFilter":
-#         {"op": "SERVICE", "values": []}}`
-#     i.e. it matches the ENTIRE tenant's topology and metric sources,
-#     not just BPA-Demo's.
+# Consequence: this script's `create` cannot produce a Universe that's
+# both (a) scoped to the app the way the sibling bpa-demo-universe.sh
+# manages, and (b) safe to edit afterward in the console -- there's no
+# `dx-do o2-universe` command to narrow the filter post-creation (see
+# "Known limitation"), and creating it unscoped hits the crash above.
+# Until Broadcom fixes the crash or adds a way to set the filter at
+# creation, **the working instance is a manually-created Universe** (the
+# user created one via the console, labeled "BPA Demo", scoped to the
+# existing "BPA-Demo" Service, viewId VIEW618) -- this script's state file
+# points at that one. `create`'s self-heal check (verifies the id still
+# resolves via `o2-universe export`) works the same regardless of how the
+# Universe was originally created, so check/delete both work normally
+# against it; only a fresh `create` from scratch would hit the crash-prone
+# unscoped shape again.
 #
 # Known limitation (see BUGS for the full writeup of the sibling
 # apm-universe finding this extends): there is no `dx-do o2-universe`
@@ -37,16 +54,21 @@
 # Service, which the sibling apm-universe investigation confirmed
 # correctly covers all 4 telemetry entities -- see
 # `dx-do tas query-json` with `{"op": "SERVICE", "values":
-# ["BPA-Demo"]}`), but there is no CLI path to set it. Narrowing this
-# Universe's scope requires manual console configuration -- edit the
-# "BPA Demo universe" O2 Universe's `nass`/`tas` view filters to scope by
-# Service -> "BPA-Demo" instead of leaving them at the "ALL" default.
+# ["BPA-Demo"]}`), but there is no CLI path to set it, and even if there
+# were, an unscoped Universe crashes the console's editor before it could
+# be narrowed (see above) -- manual console creation is the only reliable
+# path today.
 #
 # Usage:
-#   dxo2-scripts/bpa-demo-services-universe.sh create   - create the
-#                                        Universe. Safe to re-run: warns
-#                                        instead of failing if it already
-#                                        exists (by label).
+#   dxo2-scripts/bpa-demo-services-universe.sh create   - verify the
+#                                        Universe recorded in this script's
+#                                        state file still exists. Safe to
+#                                        re-run: no-ops if it does. Fails
+#                                        with instructions for manual
+#                                        console creation if the state file
+#                                        is missing/stale -- see "Confirmed
+#                                        console bug" above for why this
+#                                        script won't create one itself.
 #   dxo2-scripts/bpa-demo-services-universe.sh check    - print whether it
 #                                        exists and its current
 #                                        definition.
@@ -98,7 +120,7 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly UNIVERSE_NAME="BPA Demo universe"
+readonly UNIVERSE_NAME="BPA Demo"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
 readonly STATE_FILE="${STATE_DIR}/bpa-demo-services-universe.env"
@@ -215,23 +237,19 @@ cmd_create() {
         if "${DX_DO_BIN}" o2-universe export universeViewId="${UNIVERSE_ID}" >/dev/null 2>&1; then
             info "Universe '${UNIVERSE_NAME}' already created (${UNIVERSE_ID}) -- nothing to do."
             info "Run '${SCRIPT_NAME} check' to see its current definition."
-            info "Reminder: this Universe is unscoped (matches the whole tenant) -- see this script's header comment for why, and the manual console step needed to narrow it."
             return 0
         fi
-        info "State file points at ${UNIVERSE_ID} but it no longer exists on the tenant -- recreating."
+        info "State file points at ${UNIVERSE_ID} but it no longer exists on the tenant."
         UNIVERSE_ID=""
     fi
 
-    info "Creating Universe '${UNIVERSE_NAME}'..."
-    run_dx_do o2-universe create name="${UNIVERSE_NAME}"
-
-    UNIVERSE_ID="$(find_universe_id)"
-    [[ -n "${UNIVERSE_ID}" ]] || fatal "Created the universe but could not find its id afterward via 'o2-universe list' -- check the tenant manually for a duplicate named '${UNIVERSE_NAME}'."
-    info "Universe created: ${UNIVERSE_ID}"
-
-    save_state
-    info "Done. State saved to ${STATE_FILE}."
-    info "This Universe is unscoped (matches the whole tenant) -- see this script's header comment ('Known limitation') for why, and the manual console step needed to narrow it to BPA-Demo."
+    # Deliberately does NOT fall back to 'o2-universe create name=...' here.
+    # That call only accepts a name and always produces an unscoped Universe
+    # (tas view filter op=ALL, nass view serviceFilter.values=[]) that
+    # crashes the console's edit UI when opened -- confirmed 2026-07-07, see
+    # this script's header comment. There is currently no CLI path to
+    # create a Service-scoped, edit-safe Universe from scratch.
+    fatal "No existing Universe found for '${UNIVERSE_NAME}' and this script cannot safely create one -- 'o2-universe create' always produces an unscoped Universe that crashes the console's edit UI (see this script's header comment). Create it manually via the console instead: New Universe, label '${UNIVERSE_NAME}', scope both the tas and nass views to Service -> 'BPA-Demo'. Then note its viewId (VIEW###, via 'dx-do o2-universe list output.format=json' redirected to a file) and put it in ${STATE_FILE} as UNIVERSE_ID=<id>."
 }
 
 ## Print whether the Universe exists and its current definition.
