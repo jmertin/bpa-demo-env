@@ -5,6 +5,54 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-07 @ 10:00 - [Fix - o2-universe console crash-on-edit; dx-do upgraded to v6.4.0]:
+  Upgraded tools/dx-do-linux-x64 from v6.3.5 to v6.4.0 (downloaded from the
+  public github.com/kialambroca/dx-do-dist mirror, with explicit
+  confirmation, after the canonical internal
+  github.gwd.broadcom.net/IMS/dx-do-mono release host was unreachable
+  without a VPN tunnel and, once tunneled, required a GHE credential this
+  session doesn't have). Confirmed the release notes' Authorization-header
+  leak fix (the same bug found and worked around while writing
+  bpa-demo-service.sh) is real: the same error path that used to dump a
+  live Bearer token to stdout no longer does. Old binary kept alongside as
+  dx-do-linux-x64.v6.3.5.bak. Confirmed the new "agentic mcp" experimental
+  mode (a stdio MCP server for AI agent clients) is not applicable to
+  dxo2-scripts/ -- those scripts must run standalone for a human with no
+  AI in the loop, which is incompatible with an MCP server that expects an
+  MCP client to drive it; no changes made on that basis.
+  Investigated a user-reported console crash editing the "BPA Demo
+  universe" O2 Universe (VIEW617, created by
+  bpa-demo-services-universe.sh's original `o2-universe create` call).
+  Diffed it against a Universe the user created manually through the
+  console's own wizard (VIEW618, label "BPA Demo", scoped to the existing
+  "BPA-Demo" Service). Root cause confirmed identical to the earlier
+  404-on-open finding in dxo2-scripts/dx-do-o2-universe-issue.md: CLI
+  creation via `o2-universe create` always leaves the Universe unscoped
+  (tas view filter {"op": "ALL"}, nass view serviceFilter.values: []),
+  and the console's edit UI cannot handle that shape -- 404 in the earlier
+  finding, a crash in this one, same missing-fields root cause. Console
+  wizard creation (pick a Service scope up front) avoids it entirely --
+  this is the first confirmed-working creation path for this universe
+  type.
+  Deleted VIEW617 (`dx-do apm-universe delete id=VIEW617 name="BPA Demo
+  universe"` -- o2-universe has no delete command of its own, but the
+  cross-group call works, as already documented). Updated
+  bpa-demo-services-universe.sh: UNIVERSE_NAME changed from "BPA Demo
+  universe" to "BPA Demo" (VIEW618's actual label) so by-label recovery
+  still works if the state file is lost; state file repointed at VIEW618;
+  cmd_create no longer falls back to `o2-universe create` when its state
+  is missing/stale (now confirmed to always produce a console-breaking
+  Universe) -- it fails with explicit manual-console-creation instructions
+  instead. Verified all three subcommands against the live tenant: check
+  and create (self-heal path) both succeed against VIEW618; delete's
+  confirmation prompt aborts cleanly without touching tenant state when
+  not confirmed.
+  dxo2-scripts/dx-do-o2-universe-issue.md: added a 2026-07-07 update
+  section documenting the independent reconfirmation and the now-confirmed
+  workaround (console wizard creation).
+  dxo2-scripts/README.md, CLAUDE.md, tools/README.md: updated to match.
+
+------------------------------------------------------------------------------
 2026-07-06 @ 19:00 - [Fix - AGENT_EXPRESSION missing SuperDomain prefix; self-heal on both scripts' create]:
   Root cause found while troubleshooting an alert the user reported as
   "linked to no metric tree": bpa-demo-management-module.sh's

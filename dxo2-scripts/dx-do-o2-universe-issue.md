@@ -159,3 +159,54 @@ This tenant currently has a live example of the broken state:
 (label `"BPA Demo universe"`, an O2 Universe) as part of a demo-app
 alerting/observability setup. See that script and
 `dxo2-scripts/README.md` for the full context this issue was found in.
+
+## Update 2026-07-07: independently reconfirmed, workaround found
+
+The user hit the same root cause again, this time reporting it as the
+console **crashing** on open rather than **404**ing (both against the
+same underlying unscoped-filter state -- plausibly two different failure
+modes in the console's edit-page code for the same missing-fields
+condition, or the same bug described loosely). Confirmed by diffing the
+crashing Universe (`viewId VIEW617`, created by
+`bpa-demo-services-universe.sh` via `o2-universe create`) against a
+Universe the user created manually through the console's own wizard
+(`viewId VIEW618`, label `"BPA Demo"`, scoped to the existing `"BPA-Demo"`
+Service). The diff is exactly the shape difference already documented
+above (`tas` filter `{"op": "ALL"}` vs. the full `SERVICE`-shaped filter;
+`nass` `serviceFilter.values: []` vs. `["BPA-Demo"]`) -- same bug, same
+fix.
+
+**Workaround confirmed working**: creating the Universe through the
+console's own wizard (pick a Service scope up front) produces a
+Universe that opens/edits fine in the console -- this resolves the
+"Related, working case" question left open in the Workaround section
+above. `VIEW617` was deleted (`dx-do apm-universe delete id=VIEW617
+name="BPA Demo universe"`, the cross-group delete workaround already
+documented); `bpa-demo-services-universe.sh` now points at `VIEW618` and
+no longer attempts `o2-universe create` as a fallback -- it fails with
+instructions for manual console creation instead, since that call is now
+confirmed to always produce a console-breaking Universe. See that
+script's header comment for the current state.
+
+## Update 2026-07-07 (2): root cause confirmed by the developer fixing it
+
+Per the developer working the fix: the console's data model for Universes
+changed (to require the `SERVICE`-scoped shape), **but the change was
+never enforced at the API level** -- `o2-universe create` (and, by
+extension, `dx-do`) still accepts and produces the old unscoped shape
+without complaint. This matches the empirical finding above exactly: it's
+not that the console is buggy in isolation, it's a model/API version
+mismatch -- the write path (API) still speaks the old schema, the read
+path (console edit UI) only speaks the new one.
+
+Practical implication once the API-level fix ships: `o2-universe create`
+should start either rejecting scope-less creation or producing a
+correctly-`SERVICE`-scoped Universe by default. Either way,
+`bpa-demo-services-universe.sh`'s current refusal-with-manual-instructions
+behavior (see above) should be revisited then -- it may become safe to
+let `create` call `o2-universe create` again. Re-test with a fresh,
+disposable Universe (not `VIEW618`) before restoring that fallback, and
+watch for a signature change in `o2-universe create`'s required
+parameters (a `services=`/scope-shaped param finally being honored rather
+than silently ignored, per the "ignoring extra args" behavior documented
+above).
