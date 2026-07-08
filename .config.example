@@ -117,6 +117,16 @@ APMIA_BROWSER_SNIPPET=''
 #   up but idle (same pattern as APMIA_DEPLOY above).
 # TRAFFIC_MIN/MAX_ACTION_DELAY_SECS: pause between actions within one session.
 # TRAFFIC_MIN/MAX_SESSION_DELAY_SECS: pause between one user's session and the next.
+# TRAFFIC_ANONYMOUS_RATIO: fraction of each cycle's sessions that browse
+#   anonymously, no login (default 0.8 = 80%) -- the remaining share is
+#   always exactly one authenticated session per demo user, so
+#   trouble/empty_basket/locked still fire every cycle regardless.
+# TRAFFIC_CONCURRENT_SESSIONS: how many sessions run in parallel (default 3).
+#   Real traffic overlaps; without this every session runs strictly one at
+#   a time and response-time averages stay artificially flat.
+# TRAFFIC_SLOWDOWN_PROBABILITY / MIN/MAX_SECS: chance (default 12%) that a
+#   given action's pacing gets an extra randomized delay on top, simulating
+#   an occasional slow client/network burst.
 # TRAFFIC_LOG_LEVEL: DEBUG logs every request; INFO (default) logs per-session
 #   summaries and notable outcomes (e.g. a blocked login) only.
 TRAFFIC_ENABLED="true"
@@ -124,6 +134,11 @@ TRAFFIC_MIN_ACTION_DELAY_SECS="1"
 TRAFFIC_MAX_ACTION_DELAY_SECS="4"
 TRAFFIC_MIN_SESSION_DELAY_SECS="2"
 TRAFFIC_MAX_SESSION_DELAY_SECS="8"
+TRAFFIC_ANONYMOUS_RATIO="0.8"
+TRAFFIC_CONCURRENT_SESSIONS="3"
+TRAFFIC_SLOWDOWN_PROBABILITY="0.12"
+TRAFFIC_SLOWDOWN_MIN_SECS="3"
+TRAFFIC_SLOWDOWN_MAX_SECS="12"
 TRAFFIC_LOG_LEVEL="INFO"
 
 # ── DX O2 tenant configuration scripts (dxo2-scripts/) ───────────────────────
