@@ -35,6 +35,8 @@ All scripts source `.config` from the project root (copy from `.config.example`;
 2. Opens the PDO singleton via `config/database.php`.
 3. Resolves `?page=<slug>` against a static `$routes` array. Apache mod_rewrite maps clean URLs (`/shop`, `/basket`, `/product`, etc.) to the corresponding per-page wrapper (`shop.php?page=shop`, etc.) via `vhost.conf`, so `$_GET['page']` is always set by the time the front controller runs.
 4. Emits `X-Page-ID: page_<slug>` as a baseline header (e.g. `page_dxo2`) so every response carries a human-readable page identifier. Pages that call `set_monitoring_headers()` override this with a richer value.
+
+**`X-Page-ID` cardinality rule:** the BPA WebServer Extension groups business transactions by the full `X-Page-ID` value, so `target` in `set_page_id()`/`set_monitoring_headers()` calls must be a fixed string or a small bounded set (e.g. a brand slug), **never** a numeric row ID or other high-cardinality value — that creates one distinct metric path per request instead of one shared path per logical page. **Bug fixed 2026-07-08:** `pages/order.php`'s confirmation view passed the numeric order ID as `target` (`ORDER-CONFIRM-186`, `ORDER-CONFIRM-187`, ...), so BPA accumulated one metric path per checkout ever completed. Fixed to a fixed `'SUCCESS'` target (`ORDER-CONFIRM-SUCCESS` for every order), mirroring the sibling not-found case's existing fixed `'NOTFOUND'` target on the same page. Verified live: two separate checkouts (order ids 225, 226) both produced the identical header.
 5. Calls `usecase_run($ctx)` to apply any behaviour modifier assigned to the current user.
 6. Requires the resolved page file.
 

@@ -5,6 +5,29 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-08 @ 16:55 - [Fix - order confirmation X-Page-ID metric-path explosion]:
+  User reported the Business Payload Analyzer creating one metric path per
+  checkout. Root cause: app/src/pages/order.php's confirmation view passed
+  the numeric order ID as the set_monitoring_headers() target
+  (ORDER-CONFIRM-186, ORDER-CONFIRM-187, ...) -- BPA groups business
+  transactions by the full X-Page-ID, so every completed checkout ever
+  since launch had accumulated its own distinct metric path.
+  Fixed to a fixed 'SUCCESS' target (ORDER-CONFIRM-SUCCESS for every
+  order), mirroring the sibling order-not-found case's existing fixed
+  'NOTFOUND' target on the same page. Checked all other
+  set_monitoring_headers() call sites (basket/shop/login/admin/product/
+  checkout) -- none of the others pass a numeric or otherwise unbounded
+  value, so this was the only offender.
+  Verified live end to end, not just read: rebuilt the apache-php image,
+  logged in as a demo user via curl, completed two separate real
+  checkouts (order ids 225 and 226), and confirmed both produced the
+  identical X-Page-ID: ORDER-CONFIRM-SUCCESS header; also confirmed the
+  sibling ORDER-VIEW-NOTFOUND path is unaffected.
+  CLAUDE.md: documented the X-Page-ID cardinality rule (fixed string or
+  small bounded set only, never a numeric row ID) so future pages don't
+  reintroduce this.
+
+------------------------------------------------------------------------------
 2026-07-08 @ 09:30 - [Fix - stable network identity across redeploys (Compose + Helm)]:
   User reported DX O2's monitor showing strange behavior on redeploy,
   traced to container/pod IP addresses changing on every recreation --
