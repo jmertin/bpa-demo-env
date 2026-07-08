@@ -19,8 +19,12 @@ if ($orderId > 0) {
     exit;
   }
 
+  // Target is a fixed string, not the order ID: BPA groups business
+  // transactions by the full X-Page-ID, so a numeric target here would
+  // create one distinct metric path per checkout instead of one shared
+  // "ORDER-CONFIRM-SUCCESS" path for the whole order-confirmation page.
   set_monitoring_headers(
-    'ORDER', 'CONFIRM', (string) $orderId,
+    'ORDER', 'CONFIRM', 'SUCCESS',
     $user ? $user['role'] : 'anonymous',
     0,
     '',
