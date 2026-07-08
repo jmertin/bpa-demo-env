@@ -1,11 +1,20 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "php-demo.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "php-demo.labels" . | nindent 4 }}
 spec:
+  # StatefulSet, not Deployment: gives the pod a stable, predictable name
+  # (bpa-demo-0, not a random ReplicaSet-hash suffix that changes on every
+  # rollout) and, via serviceName below, a stable DNS identity that survives
+  # pod recreation. This does NOT pin the pod's IP address -- that's still
+  # assigned fresh by the cluster's CNI on every pod (re)creation in
+  # standard Kubernetes, StatefulSet or not. The pod's *hostname* (used for
+  # DX O2 agent identity, see below) was already pinned before this change
+  # and is unaffected either way.
+  serviceName: {{ include "php-demo.headlessServiceName" . }}
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
