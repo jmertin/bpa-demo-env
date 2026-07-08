@@ -73,6 +73,18 @@ Name of the registry image-pull secret.
 {{- end }}
 
 {{/*
+Name of the headless Service that governs the StatefulSet's pod DNS
+identity (bpa-demo-0.<this-name>.<namespace>.svc.cluster.local). Distinct
+from the normal ClusterIP Service (service.yaml) that Ingress routes
+through -- StatefulSet requires spec.serviceName to point at a headless
+Service (clusterIP: None), which is not something a normal Service can
+also be without breaking Ingress/load-balanced access.
+*/}}
+{{- define "php-demo.headlessServiceName" -}}
+{{- printf "%s-headless" (include "php-demo.fullname" .) }}
+{{- end }}
+
+{{/*
 Build the .dockerconfigjson payload for the registry pull secret.
 The auth field is base64(<username>:<password>) as required by the Docker
 credential format.
