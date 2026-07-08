@@ -13,9 +13,10 @@ Status: All action items resolved; stack is at its target baseline.
 | PHP | libapache2-mod-php8.1 (ubuntu:22.04 repos) | 8.1 | Within DX O2 PHP Agent ceiling ≤ 8.4 |
 | Base OS | ubuntu:22.04 (Jammy LTS) | glibc 2.35 | Confirmed compatible with APMIA binary |
 | Database | mariadb:11 (Docker Hub) | 11.x | Official image, pinned major |
-| DX O2 agent | PHP_apmia_*.tar (DX O2 interface) | tenant-specific | Bundled JRE; pre-configured profile |
-| BTL | Business_Transaction_Listener.zip | tenant-specific | Co-located in dx-o2-agents container |
-| BPA plugin | Business_Payload_Analyzer_WebServer_Plugins.zip | tenant-specific | Apache mod_*.so + nginx variants |
+| DX O2 agent (PHP Agent) | PHP_apmia_*.tar (DX O2 interface) | tenant-specific | Bundled JRE; pre-configured profile; base install |
+| DX O2 agent (MySQL Monitor extension) | Infrastructure_Agent_apmia_*.tar (DX O2 interface, optional) | tenant-specific | Only its mysql-*.tar.gz is used, layered onto the PHP Agent install |
+| BTL | Business_Transaction_Listener.zip (DX O2 interface) | tenant-specific | Co-located in dx-o2-agents container |
+| BPA plugin | Business_Payload_Analyzer_WebServer_Plugins.zip (DX O2 interface, optional) | tenant-specific | Apache mod_*.so + nginx variants |
 
 ---
 
