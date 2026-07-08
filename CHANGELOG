@@ -5,6 +5,49 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-08 @ 18:10 - [Feat - traffic-generator: anonymous traffic, concurrency, pacing shaping]:
+  User reported response-time averages in DX O2 looking suspiciously flat
+  when run on the same host. Root cause: the generator ran exactly one
+  session at a time, strictly sequentially -- zero real request overlap,
+  so there was never any genuine server-side contention to produce
+  natural variance in measured response times.
+  Added three independent changes to traffic-generator/generator.py:
+  (1) TRAFFIC_ANONYMOUS_RATIO (default 0.8): each cycle now builds a
+  shuffled mix of exactly one authenticated session per demo user plus
+  enough anonymous guest sessions (new run_guest_session(), no login at
+  all) to reach this ratio of the cycle's total -- 14 users -> 56 guest
+  sessions -> 70 total at the default 80/20 split, matching how most
+  real e-commerce traffic is anonymous browsing. Guest sessions run the
+  identical weighted action set including checkout, since checkout.php's
+  order_create() already accepts a null user id (guest checkout) -- no
+  app changes needed. The one-authenticated-session-per-user guarantee
+  is unaffected, so trouble/empty_basket/locked still fire every cycle
+  regardless of this ratio. Extracted the shared action loop into
+  _run_session_actions() so both session kinds pick actions the same way.
+  (2) TRAFFIC_CONCURRENT_SESSIONS (default 3): a small pool of worker
+  threads (stdlib threading + queue.Queue, no new dependencies) now
+  pulls from each cycle's shuffled session list and runs sessions in
+  parallel instead of one at a time -- this is the mechanism that
+  actually produces response-time variance, via genuine request overlap
+  and real contention (Apache workers, MariaDB connections).
+  (3) TRAFFIC_SLOWDOWN_PROBABILITY/_MIN_SECS/_MAX_SECS (defaults
+  0.12/3/12): new sleep_with_shaping() layers an extra randomized delay
+  on top of normal per-action pacing this fraction of the time, widening
+  the pacing distribution beyond a narrow uniform range and increasing
+  the odds of concurrent workers' requests landing close together.
+  Verified live end to end, not just read: rebuilt the image, watched
+  the generator's own logs confirm the exact 70-session/14-authenticated/
+  56-anonymous split and multiple sessions genuinely overlapping in time
+  (one session's full lifecycle straddling two others'), confirmed
+  Apache's access log showing multiple distinct requests landing within
+  the same second, confirmed a guest checkout completing end to end
+  (order created with no prior login), and confirmed the slowdown branch
+  fires via a temporary high-probability debug run.
+  docker-compose.yml, build-scripts/compose.sh, .config.example: wired
+  the three new TRAFFIC_* variables through with the same defaults.
+  traffic-generator/README.md, CLAUDE.md: documented the new behavior.
+
+------------------------------------------------------------------------------
 2026-07-08 @ 16:55 - [Fix - order confirmation X-Page-ID metric-path explosion]:
   User reported the Business Payload Analyzer creating one metric path per
   checkout. Root cause: app/src/pages/order.php's confirmation view passed
