@@ -78,13 +78,14 @@ indent, K&R braces, PHPDoc on every function, single quotes).
         │   └── seed.sql          # 3 brands, 6 capabilities, 300 products, 13 demo users
         └── templates/
             ├── _helpers.tpl
-            ├── deployment.yaml         # pod: apache-php + mariadb (+ dx-o2 sidecar + init)
+            ├── statefulset.yaml        # pod: apache-php + mariadb (+ dx-o2 sidecar + init)
             ├── serviceaccount.yaml     # automountServiceAccountToken: false
             ├── registry-secret.yaml    # kubernetes.io/dockerconfigjson pull secret
             ├── db-init-configmap.yaml  # embeds schema.sql + seed.sql for MariaDB init
             ├── configmap.yaml          # Apache VirtualHost config (mounted via subPath)
             ├── secret.yaml             # MariaDB credentials from Helm values
-            ├── service.yaml            # ClusterIP on port 8080
+            ├── service.yaml            # ClusterIP on port 8080 -- Ingress routes here
+            ├── service-headless.yaml   # clusterIP: None -- stable per-pod DNS for the StatefulSet
             ├── ingress.yaml            # TLS ingress with cert-manager annotation
             ├── pvc.yaml                # 1 Gi PersistentVolumeClaim for MariaDB data
             └── NOTES.txt
@@ -128,6 +129,16 @@ All containers share the same network namespace, communicating via `127.0.0.1`.
 The pod's `spec.hostname` is set to `dxo2.hostName` so the IA and BPA Apache
 module report a human-readable name. The PHP probe uses `wily_php_agent.hostname`
 (patched to `APMIA_PHP_AGENT_NAME` by the entrypoint) for its own metric path.
+
+The pod is managed by a **StatefulSet**, not a Deployment, so its name is
+always `<release>-0` rather than a random ReplicaSet-hash suffix that
+changes on every rollout. A headless Service (`service-headless.yaml`)
+gives it a stable, resolvable DNS name across pod recreation
+(`<pod>.<headless-svc>.<namespace>.svc.cluster.local`). This does **not**
+pin the pod's IP address -- Kubernetes assigns that fresh from the
+cluster's CNI on every pod (re)creation regardless of workload kind; only
+`hostNetwork: true` (not used here) or a CNI-specific static-IP annotation
+can do that.
 
 ### Docker Compose (local development)
 

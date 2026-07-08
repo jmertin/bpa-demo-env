@@ -14,6 +14,16 @@
 #   Unlike Kubernetes (shared pod network / 127.0.0.1), Compose services reach
 #   each other by service name – hence APMIA_PHP_COLLECTOR_HOST=dxo2 and
 #   APMIA_BTL_HOST=dxo2 rather than 127.0.0.1.
+#
+# Static IPs (bpa-demo network, below):
+#   Without a user-defined network, Compose puts every service on the
+#   project's auto-created default bridge, which Docker assigns IPs to from
+#   whichever subnet it picks at network-creation time -- this can shift
+#   across a `compose.sh down` + `up` cycle (new network = new IPAM subnet
+#   choice) and DX O2 was observed treating this as a distinct host each
+#   time, causing stale/duplicate topology entities. Pinning both the
+#   subnet and each service's ipv4_address makes every service's address
+#   deterministic across down/up cycles, independent of Docker's IPAM.
 services:
 
   dxo2:
@@ -68,6 +78,9 @@ services:
       mariadb:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      bpa-demo:
+        ipv4_address: 172.28.0.10
 
   mariadb:
     image: mariadb:11
@@ -90,6 +103,9 @@ services:
       retries:  6
       start_period: 30s
     restart: unless-stopped
+    networks:
+      bpa-demo:
+        ipv4_address: 172.28.0.11
 
   apachephp:
     image: ${REGISTRY}/${IMAGE_PREFIX}/apache-php:${IMAGE_TAG}
@@ -133,6 +149,9 @@ services:
       dxo2:
         condition: service_started
     restart: unless-stopped
+    networks:
+      bpa-demo:
+        ipv4_address: 172.28.0.12
 
   traffic:
     image: ${REGISTRY}/${IMAGE_PREFIX}/traffic-generator:${IMAGE_TAG}
@@ -153,6 +172,16 @@ services:
       apachephp:
         condition: service_started
     restart: unless-stopped
+    networks:
+      bpa-demo:
+        ipv4_address: 172.28.0.13
+
+networks:
+  bpa-demo:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 
 volumes:
   mariadb_data:

@@ -5,6 +5,57 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-08 @ 09:30 - [Fix - stable network identity across redeploys (Compose + Helm)]:
+  User reported DX O2's monitor showing strange behavior on redeploy,
+  traced to container/pod IP addresses changing on every recreation --
+  DX O2 was treating each redeploy as a distinct host.
+
+  Docker Compose (docker-compose.yml): added a dedicated `bpa-demo` bridge
+  network with a fixed subnet (172.28.0.0/24) and a static ipv4_address
+  per service (dxo2=.10, mariadb=.11, apachephp=.12, traffic=.13).
+  Without a user-defined network, Compose puts every service on the
+  project's auto-created default bridge, whose subnet Docker assigns
+  fresh at network-creation time -- this could shift across a
+  `compose.sh down` + `up` cycle. Verified end to end: brought the stack
+  up, recorded all 4 IPs, ran a full down + up cycle, confirmed identical
+  IPs, and confirmed service-name DNS resolution (mariadb, dxo2) and app
+  health (/health, /shop) both still work.
+
+  Kubernetes/Helm: converted templates/deployment.yaml to
+  templates/statefulset.yaml (kind: Deployment -> StatefulSet). Note this
+  does NOT pin the pod's IP address -- standard Kubernetes assigns that
+  fresh from the cluster's CNI on every pod (re)creation regardless of
+  workload kind, and there is no portable, CNI-agnostic way to pin it
+  (hostNetwork: true would work but drops network-policy isolation for
+  this pod; CNI-specific static-IP annotations like Calico's
+  cni.projectcalico.org/ipAddrs aren't portable across clusters, and this
+  chart already supports arbitrary clusters via a configurable
+  INGRESS_CLASS_NAME). What StatefulSet actually buys: a stable,
+  predictable pod name (<release>-0, not a random ReplicaSet-hash suffix
+  that changes on every rollout) and, via a new dedicated headless
+  Service (templates/service-headless.yaml, clusterIP: None, referenced
+  by the StatefulSet's new spec.serviceName), a stable per-pod DNS name
+  that survives pod recreation. The pod's spec.hostname (used for DX O2
+  agent identity) was already pinned to a fixed value before this change
+  and is unaffected either way. Added php-demo.headlessServiceName to
+  _helpers.tpl. No volumeClaimTemplates introduced -- the existing named
+  MariaDB PVC is still referenced directly in volumes:, unchanged from
+  the Deployment, since replicaCount stays at 1.
+  Verified via `helm lint` (0 failures) and `helm template` with
+  dxo2.enabled=true and =false (both render cleanly; confirmed the
+  StatefulSet's serviceName correctly points at the new headless Service,
+  and the existing ClusterIP Service used by Ingress is unaffected) --
+  no live cluster available in this environment to test an actual
+  `helm upgrade` transition, so the first upgrade against a real cluster
+  should be watched (a StatefulSet name collision handling: since kind
+  changes, Kubernetes/Helm deletes the old Deployment and creates the new
+  StatefulSet, causing a one-time full pod recreation).
+  README.md: updated the project-structure tree (deployment.yaml ->
+  statefulset.yaml, added service-headless.yaml) and the Kubernetes
+  architecture section to describe the StatefulSet + headless Service.
+  CLAUDE.md: documented both fixes under their respective sections.
+
+------------------------------------------------------------------------------
 2026-07-07 @ 17:45 - [Fix - dxo2-scripts/bpa-demo-sli.sh: tenant user email no longer hardcoded]:
   The SLI import payload's createdBy/created_by attribution was hardcoded
   to the tenant user who wrote it (JOERG.MERTIN@BROADCOM.COM) -- a problem

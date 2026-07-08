@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "php-demo.headlessServiceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "php-demo.labels" . | nindent 4 }}
+spec:
+  # Headless (no ClusterIP) -- required by the StatefulSet's spec.serviceName.
+  # Gives each pod a stable, resolvable DNS name
+  # (<pod>.{{ include "php-demo.headlessServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local)
+  # that survives pod recreation, unlike the pod's own ephemeral IP address.
+  # This is separate from the normal ClusterIP Service (service.yaml) that
+  # Ingress routes through -- a Service can't be both headless and
+  # load-balanced at the same time.
+  clusterIP: None
+  selector:
+    {{- include "php-demo.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
