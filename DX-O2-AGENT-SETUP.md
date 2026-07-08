@@ -5,16 +5,28 @@ Broadcom DX O2 monitoring components used in BPA-Demo.
 
 | Component | Installer package | Runtime location |
 |---|---|---|
-| Infrastructure Agent (APMIA) | `PHP_apmia_*.tar` | `/opt/apmia/` in `dx-o2-agents` image |
-| Business Transaction Listener (BTL) | `Business_Transaction_Listener.zip` | `/opt/btlistener/` in `dx-o2-agents` image |
+| PHP Agent (Infrastructure Agent core + PHP Probe + JRE) | `PHP_apmia_*.tar` | `/opt/apmia/` in `dx-o2-agents` image (base install) |
 | PHP Probe | `PHP_apmia_*.tar` (bundled) | `/opt/apmia/extensions/PHPAgent/` |
+| Infrastructure Agent + MySQL Monitor extension | `Infrastructure_Agent_apmia_*.tar` | Only the bundled `mysql-*.tar.gz` is used, staged at `/opt/apmia/extensions/deploy/` |
+| Business Transaction Listener (BTL) | `Business_Transaction_Listener.zip` | `/opt/btlistener/` in `dx-o2-agents` image |
 | BPA WebServer Plugin (Apache) | `Business_Payload_Analyzer_WebServer_Plugins.zip` | `/opt/apmia/extensions/WebServerPlugin/mod_*.so` |
 
-The three packages are downloaded from the **DX O2 interface** (not from
-support.broadcom.com).  The DX O2 download includes a pre-configured
-`IntroscopeAgent.profile` with your tenant's EM URL and JWT credential already
-embedded — the agent connects to your DX O2 backend automatically without any
-manual EM configuration.
+Four packages, from two different console locations, all downloaded from the
+**DX O2 interface** (not from support.broadcom.com):
+
+- **PHP Agent** and **Infrastructure Agent + MySQL Monitor extension** are two
+  separate file selections on the same **Agents → Infrastructure Agent →
+  Linux** page — despite both being full APMIA installer trees, only the
+  first (`PHP_apmia_*.tar`) is used as this image's base install (it's the
+  one bundling the PHP probe); the second (`Infrastructure_Agent_apmia_*.tar`)
+  is used only to extract its `mysql-*.tar.gz` DB Monitor extension.
+- **BTL** and the **BPA WebServer Plugin** are downloaded together from
+  **Settings → Web Payload Capture Rules (Webserver) → Download** (the button
+  in the top-right corner) — not from an "Agents" page.
+
+Every DX O2 download includes a pre-configured `IntroscopeAgent.profile` with
+your tenant's EM URL and JWT credential already embedded — the agent connects
+to your DX O2 backend automatically without any manual EM configuration.
 
 ---
 
@@ -35,20 +47,36 @@ If targeting `linux/arm64` (Apple Silicon, AWS Graviton), download the
 
 ## 2. Obtaining the packages
 
-### 2.1 Navigate to the DX O2 Agents download area
+### 2.1 Navigate to the DX O2 download areas
+
+Two different console locations are involved:
 
 1. Log in to your **DX O2 interface** (the SaaS portal, e.g.
    `https://dx.dxi-eu1.saas.broadcom.com/` for the EU1 region).
-2. Go to **Administration → Agents** (or the equivalent section in your tenant).
-3. You will find separate download links for each component.
+2. **Agents → Infrastructure Agent → Linux** — offers (at least) two separate
+   file selections: the **PHP Agent** variant (`PHP_apmia_*.tar`, used as this
+   image's base install) and a second, plain **Infrastructure Agent** variant
+   (`Infrastructure_Agent_apmia_*.tar`, used here only for its bundled MySQL
+   Monitor extension). Download both.
+3. **Settings → Web Payload Capture Rules (Webserver) → Download** (the
+   button in the top-right corner) — downloads the Business Transaction
+   Listener and BPA WebServer Plugin together.
 
-### 2.2 Download the three required packages
+### 2.2 Download the four packages
 
 | Package | DX O2 navigation | File name pattern |
 |---|---|---|
-| Infrastructure Agent + PHP Probe | Agents → Infrastructure Agent → Linux | `PHP_apmia_<date>_v<n>.tar` |
-| Business Transaction Listener | Agents → Business Transaction Listener | `Business_Transaction_Listener.zip` |
-| BPA WebServer Plugin | Agents → Business Payload Analyzer WebServer Plugins | `Business_Payload_Analyzer_WebServer_Plugins.zip` |
+| PHP Agent (base install + PHP Probe) | Agents → Infrastructure Agent → Linux | `PHP_apmia_<date>_v<n>.tar` |
+| Infrastructure Agent (for its MySQL Monitor extension) | Agents → Infrastructure Agent → Linux (second file) | `Infrastructure_Agent_apmia_<date>_v<n>.tar` |
+| Business Transaction Listener | Settings → Web Payload Capture Rules (Webserver) → Download | `Business_Transaction_Listener.zip` |
+| BPA WebServer Plugin | Settings → Web Payload Capture Rules (Webserver) → Download | `Business_Payload_Analyzer_WebServer_Plugins.zip` |
+
+Of these four, `PHP_apmia_*.tar` and `Business_Transaction_Listener.zip` are
+**required** — the Dockerfile build fails without either. The other two are
+**optional**: `Business_Payload_Analyzer_WebServer_Plugins.zip` is skipped
+gracefully (BPA instrumentation just won't be available), and
+`Infrastructure_Agent_apmia_*.tar` is skipped gracefully (no DB Monitor
+metrics until it's added and the image rebuilt — see §7.4).
 
 > **Why from the DX O2 interface and not support.broadcom.com?**
 > Packages downloaded from the DX O2 interface include a pre-configured
@@ -66,6 +94,9 @@ tar -tf PHP_apmia_*.tar | head -20
 # Must show: apmia/core/config/IntroscopeAgent.profile
 tar -tf PHP_apmia_*.tar | grep IntroscopeAgent.profile
 
+# Must show: apmia/extensions/deploy/mysql-*.tar.gz
+tar -tf Infrastructure_Agent_apmia_*.tar | grep 'extensions/deploy/mysql'
+
 unzip -l Business_Transaction_Listener.zip | tail -5
 unzip -l Business_Payload_Analyzer_WebServer_Plugins.zip | tail -5
 ```
@@ -78,6 +109,8 @@ unzip -l Business_Payload_Analyzer_WebServer_Plugins.zip | tail -5
 # From the project root
 cp ~/Downloads/PHP_apmia_*.tar \
    src/dx-o2-agents/installers/
+cp ~/Downloads/Infrastructure_Agent_apmia_*.tar \
+   src/dx-o2-agents/installers/
 cp ~/Downloads/Business_Transaction_Listener.zip \
    src/dx-o2-agents/installers/
 cp ~/Downloads/Business_Payload_Analyzer_WebServer_Plugins.zip \
@@ -85,7 +118,9 @@ cp ~/Downloads/Business_Payload_Analyzer_WebServer_Plugins.zip \
 
 # Verify placement
 ls -lh src/dx-o2-agents/installers/
-# should show exactly three files
+# should show exactly four files (Infrastructure_Agent_apmia*.tar and
+# Business_Payload_Analyzer_WebServer_Plugins.zip are optional -- see §2.2 --
+# but both are recommended for full DB Monitor + BPA coverage)
 ```
 
 The `installers/` directory is gitignored — the archives are never committed.
@@ -96,8 +131,12 @@ before adding new ones.
 
 ## 4. What the Dockerfile extracts
 
-`build.sh` builds the `dx-o2-agents` image.  The Dockerfile extracts the three
-archives in sequence.
+`build.sh` builds the `dx-o2-agents` image.  The Dockerfile extracts all
+present archives in sequence — `PHP_apmia*.tar` and
+`Business_Transaction_Listener.zip` are required (the build fails without
+either); `Infrastructure_Agent_apmia*.tar` and
+`Business_Payload_Analyzer_WebServer_Plugins.zip` are optional and skipped
+gracefully if absent.
 
 ### 4.1 `/opt/apmia/` (from `PHP_apmia*.tar`)
 
@@ -137,6 +176,15 @@ The `PHP_apmia*.tar` archive places probe files at `probe/lib/php81/`.
 The Dockerfile copies them to `extensions/PHPAgent/` so the `apache-php`
 entrypoint always finds them at the same path regardless of APMIA release generation.
 
+### 4.4 MySQL Monitor extension (from `Infrastructure_Agent_apmia*.tar`, optional)
+
+The Dockerfile does **not** extract this archive's full tree — only its
+bundled `apmia/extensions/deploy/mysql-*.tar.gz` is pulled out and staged at
+`/opt/apmia/extensions/deploy/mysql-*.tar.gz`, layered on top of the
+`PHP_apmia`-based install above. The APMIA auto-deploys anything in
+`extensions/deploy/` at container startup. See §7.4 for full configuration
+(credentials, schema version, the automatic MariaDB monitor-user setup).
+
 ---
 
 ## 5. Building the dx-o2-agents image
@@ -145,9 +193,15 @@ entrypoint always finds them at the same path regardless of APMIA release genera
 build-scripts/build.sh
 ```
 
-`build.sh` detects the `PHP_apmia*.tar` archive and builds the `dx-o2-agents`
-image.  If any archive is absent, the Dockerfile build fails with a clear banner
-identifying which package is missing.
+`build.sh` detects the `PHP_apmia*.tar` archive to decide whether to attempt
+the `dx-o2-agents` image at all. Within the Dockerfile itself, `PHP_apmia*.tar`
+and `Business_Transaction_Listener.zip` are hard requirements — the build
+fails with a clear banner identifying which is missing.
+`Infrastructure_Agent_apmia*.tar` and
+`Business_Payload_Analyzer_WebServer_Plugins.zip` are optional: their build
+steps print a warning and continue (`exit 0`) when absent, so a build with
+only the two required archives still succeeds — just without DB Monitor
+metrics or BPA instrumentation until the optional archives are added.
 
 ---
 
@@ -328,9 +382,10 @@ In Docker Compose the hosts are hardcoded to the `dxo2` service name in
 
 ### 7.4 DB Monitor (MariaDB)
 
-The APMIA DB Monitor extension for MySQL/MariaDB ships in a **separate archive**
-(`Infrastructure_Agent_apmia_*.tar`) that must be downloaded and placed alongside
-the other installer archives before building.
+The APMIA DB Monitor extension for MySQL/MariaDB ships in a **separate,
+optional archive** (`Infrastructure_Agent_apmia_*.tar`) that must be
+downloaded and placed alongside the other installer archives before building.
+Without it, the image builds fine but has no DB Monitor metrics.
 
 **Step 1 — Download the Infrastructure archive:**
 
@@ -340,7 +395,10 @@ File: Infrastructure_Agent_apmia_<date>_v<n>.tar
 Place in: src/dx-o2-agents/installers/
 ```
 
-This is distinct from `PHP_apmia_*.tar`.  Both archives must be present.
+This is a different file selection on the same page as `PHP_apmia_*.tar` (see
+§2.1) — despite both being full APMIA installer trees, only its bundled
+`mysql-*.tar.gz` extension is actually used (see §4.4); `PHP_apmia_*.tar`
+remains the base install either way.
 
 **Step 2 — Rebuild the `dx-o2-agents` image:**
 
@@ -620,7 +678,8 @@ WSS; ensure your cluster can reach the tenant EM endpoint.
 **Symptom:** Build fails with `IntroscopeAgent.profile not found` or the
 extracted archive has a different directory layout.
 
-**Fix:** Download the three packages from your DX O2 interface.  Verify:
+**Fix:** Download the packages from your DX O2 interface (see §2), not
+support.broadcom.com.  Verify:
 ```bash
 tar -tf PHP_apmia_*.tar | grep IntroscopeAgent.profile
 # must show: apmia/core/config/IntroscopeAgent.profile
@@ -809,8 +868,10 @@ it is empty, overriding any pre-configured INI values.
 [ ] 1. Log in to DX O2 interface (e.g. https://dx.dxi-eu1.saas.broadcom.com/)
 [ ] 2. Download PHP_apmia_*.tar             (Agents -> Infrastructure Agent -> Linux)
 [ ] 3. Download Infrastructure_Agent_apmia_*.tar  (same page -- needed for DB Monitor)
-[ ] 4. Download Business_Transaction_Listener.zip
-[ ] 5. Download Business_Payload_Analyzer_WebServer_Plugins.zip
+[ ] 4. Download Business_Transaction_Listener.zip           (Settings -> Web
+       Payload Capture Rules (Webserver) -> Download, top right)
+[ ] 5. Download Business_Payload_Analyzer_WebServer_Plugins.zip  (same
+       download as step 4 -- both come from that one button)
 [ ] 6. Place all four archives in src/dx-o2-agents/installers/
 [ ] 7. Verify archive layouts:
        tar -tf src/dx-o2-agents/installers/PHP_apmia*.tar | grep IntroscopeAgent.profile

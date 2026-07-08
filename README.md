@@ -222,8 +222,10 @@ Steps performed automatically:
 
 1. Calls `package-app.sh --no-bump` → `src/apache-php/app.tar.gz` (no version bump)
 2. Builds **apache-php** (multi-stage) tagged `<REGISTRY>/<IMAGE_PREFIX>/apache-php:<IMAGE_TAG>`
-3. Builds **dx-o2-agents** — only when the three installer archives are present in
-   `src/dx-o2-agents/installers/`; skipped gracefully otherwise
+3. Builds **dx-o2-agents** — only when `PHP_apmia*.tar` is present in
+   `src/dx-o2-agents/installers/`; skipped gracefully otherwise. (The build
+   itself also requires `Business_Transaction_Listener.zip`; the other two
+   installer archives are optional — see DX-O2-AGENT-SETUP.md §2.2.)
 4. Removes the temporary archive
 
 > **Note:** `IMAGE_TAG` is not modified by `build.sh`. Run `package-app.sh` first to
@@ -233,14 +235,19 @@ Add `--push` to push immediately after a successful build.
 
 ### 2 — (Optional) Download the DX O2 agent packages
 
-Download three packages from your **DX O2 interface** (not from
-support.broadcom.com).  See **[DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)**
-for full instructions.
+Download four packages from your **DX O2 interface** (not from
+support.broadcom.com): two from **Agents → Infrastructure Agent → Linux**,
+two more together from **Settings → Web Payload Capture Rules (Webserver) →
+Download** (top right). See
+**[DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)** for full instructions.
 
 ```bash
-# Place all three archives here:
+# Required -- the build fails without these two:
 src/dx-o2-agents/installers/PHP_apmia_*.tar
 src/dx-o2-agents/installers/Business_Transaction_Listener.zip
+
+# Optional -- skipped gracefully if absent (no DB Monitor / no BPA plugin):
+src/dx-o2-agents/installers/Infrastructure_Agent_apmia_*.tar
 src/dx-o2-agents/installers/Business_Payload_Analyzer_WebServer_Plugins.zip
 ```
 
@@ -407,7 +414,7 @@ These pages are available even when DX O2 is not deployed — all probes will re
 ### Quick-start (Kubernetes)
 
 ```bash
-# 1. Download three packages from your DX O2 interface and place in installers/
+# 1. Download four packages from your DX O2 interface and place in installers/
 # 2. Configure agent identity in .config:
 APMIA_AGENT_NAME="bpa-demo-agent"
 APMIA_APP_NAME="bpa-demo"

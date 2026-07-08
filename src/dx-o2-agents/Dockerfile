@@ -2,21 +2,32 @@
 # Broadcom DX O2 – Combined Infrastructure Agent + BTL Container
 # Base: ubuntu:22.04 (Jammy LTS, glibc 2.35)
 #
-# Installer prerequisites (build-time) – download from your DX O2 interface:
+# Installer prerequisites (build-time) – download from your DX O2 interface,
+# four archives from two different console locations:
 #
-#   PHP_apmia_<date>_v<n>.tar
-#     DX O2 → Agents → Infrastructure Agent → Linux
-#     Contains the Infrastructure Agent, PHP probe (all PHP versions), and a
+#   PHP_apmia_<date>_v<n>.tar                                    (required)
+#     DX O2 → Agents → Infrastructure Agent → Linux (PHP Agent variant)
+#     Used as the base /opt/apmia/ install in this image: contains the
+#     Infrastructure Agent core, the PHP probe (all PHP versions), and a
 #     bundled JRE.  The archive includes a pre-configured IntroscopeAgent.profile
 #     with your tenant's EM URL and JWT credential – do NOT overwrite this.
 #
-#   Business_Transaction_Listener.zip
-#     DX O2 → Agents → Business Transaction Listener
+#   Business_Transaction_Listener.zip                            (required)
+#     DX O2 → Settings → Web Payload Capture Rules (Webserver) →
+#     Download button (top right)
 #
-#   Business_Payload_Analyzer_WebServer_Plugins.zip
-#     DX O2 → Agents → Business Payload Analyzer WebServer Plugins
+#   Business_Payload_Analyzer_WebServer_Plugins.zip              (optional)
+#     Same console location as the BTL zip above, downloaded together.
+#     Skipped gracefully if absent (BPA instrumentation only).
 #
-# Place all three archives in src/dx-o2-agents/installers/ before running
+#   Infrastructure_Agent_apmia_<date>_v<n>.tar                   (optional)
+#     DX O2 → Agents → Infrastructure Agent → Linux (a second, separate file
+#     selection on the same page – not the same download as PHP_apmia above).
+#     Used only to extract the mysql-*.tar.gz DB Monitor extension, layered
+#     onto the PHP_apmia-based install. Skipped gracefully if absent (no DB
+#     Monitor metrics until it's added and the image rebuilt).
+#
+# Place all four archives in src/dx-o2-agents/installers/ before running
 # build.sh.  The installers/ directory is git-ignored.
 #
 # Runtime environment variables (optional – EM connection is pre-configured):
@@ -97,7 +108,8 @@ RUN set -euo pipefail && \
         echo "╔══════════════════════════════════════════════════════════════╗"; \
         echo "║  BUILD ERROR: Business_Transaction_Listener.zip not found.  ║"; \
         echo "║  Download from your DX O2 interface:                        ║"; \
-        echo "║    Agents → Business Transaction Listener                   ║"; \
+        echo "║    Settings → Web Payload Capture Rules (Webserver) →       ║"; \
+        echo "║    Download button (top right)                              ║"; \
         echo "║  and place it in src/dx-o2-agents/installers/               ║"; \
         echo "╚══════════════════════════════════════════════════════════════╝"; \
         echo ""; \

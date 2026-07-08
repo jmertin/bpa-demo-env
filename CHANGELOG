@@ -5,6 +5,46 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-08 @ 19:20 - [Docs - fix stale "3 archives" framing; correct BTL/BPA download navigation]:
+  User pointed out src/dx-o2-agents/installers/ has 4 real archives against
+  the "three packages" framing in docs. Verified by inspecting the actual
+  archive contents (tar -tf on both APMIA tars) rather than trusting the
+  existing prose: PHP_apmia_*.tar and Infrastructure_Agent_apmia_*.tar are
+  both full APMIA installer trees from the same "Agents -> Infrastructure
+  Agent -> Linux" page -- PHP_apmia bundles the PHP probe (probe/, used as
+  this image's base install) and a php-monitor/acc-controller extension
+  pair; Infrastructure_Agent_apmia bundles a different extension set
+  (attributedecoration-ia/http-collector/mysql/acc-controller) and is used
+  here only to extract its mysql-*.tar.gz DB Monitor extension -- matching
+  the user's framing of "APMIA + MySQL extension is one download, PHP
+  Agent is another." Also corrected: BTL and the BPA WebServer Plugin are
+  downloaded together from Settings -> Web Payload Capture Rules
+  (Webserver) -> Download (top right), not from an "Agents" page as
+  previously documented.
+  Also fixed a real (not just doc) inaccuracy found while cross-checking
+  the Dockerfile: DX-O2-AGENT-SETUP.md/README.md claimed all archives
+  "must be present"/"the build fails" without any of them, but the
+  Dockerfile only hard-fails on PHP_apmia*.tar and
+  Business_Transaction_Listener.zip -- Infrastructure_Agent_apmia*.tar and
+  the BPA zip both print a warning and exit 0 when absent. Corrected this
+  required-vs-optional framing everywhere it appeared.
+  Verified the MariaDB DB Monitor credential setup (the user's other
+  question -- "I don't remember how we configure the mariadb accesses")
+  is already accurately documented in both CLAUDE.md and
+  DX-O2-AGENT-SETUP.md section 7.4: _ensure_monitor_user() in
+  dx-o2-agents/entrypoint.sh connects as root and runs CREATE USER IF NOT
+  EXISTS + GRANT every container start, automatically, no manual step --
+  cross-checked entrypoint.sh's actual code, no correction needed there.
+  Updated: DX-O2-AGENT-SETUP.md (overview table, sections 2/3/4/5/7.4/9/10),
+  src/dx-o2-agents/Dockerfile (header comment + BTL build-error banner),
+  README.md (quickstart + package list + build.sh description),
+  COMPATIBILITY.md (deployed-stack table, split into 4 rows).
+  Verified end to end, not just prose: `docker build --check` on the
+  edited Dockerfile (clean), then a full `docker build` confirmed the
+  image still builds successfully and the mysql extension still stages
+  correctly at /opt/apmia/extensions/deploy/.
+
+------------------------------------------------------------------------------
 2026-07-08 @ 18:10 - [Feat - traffic-generator: anonymous traffic, concurrency, pacing shaping]:
   User reported response-time averages in DX O2 looking suspiciously flat
   when run on the same host. Root cause: the generator ran exactly one
