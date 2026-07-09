@@ -99,7 +99,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
+                    "pattern": "SuperDomain\\|Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
                   }
                 ]
               }
@@ -280,7 +280,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
+                    "pattern": "SuperDomain\\|Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
                   }
                 ]
               }
@@ -461,7 +461,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
+                    "pattern": "SuperDomain\\|Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
                   }
                 ]
               }
@@ -655,7 +655,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                    "pattern": "SuperDomain\\|bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
                   }
                 ]
               }
@@ -796,7 +796,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                    "pattern": "SuperDomain\\|bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
                   }
                 ]
               }
@@ -958,7 +958,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                    "pattern": "SuperDomain\\|bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
                   }
                 ]
               }
@@ -1120,7 +1120,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                    "pattern": "SuperDomain\\|bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
                   }
                 ]
               }
@@ -1295,7 +1295,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
                   }
                 ]
               }
@@ -1457,7 +1457,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
                   }
                 ]
               }
@@ -1619,7 +1619,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
                   }
                 ]
               }
@@ -1781,7 +1781,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
                   }
                 ]
               }
@@ -1956,7 +1956,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
                   }
                 ]
               }
@@ -2118,7 +2118,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
                   }
                 ]
               }

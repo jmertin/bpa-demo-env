@@ -157,6 +157,29 @@ were verified live against real `dx-do metric data` output before being
 wired into the dashboard JSON, including confirming the lights show a real
 mix of ok/warning/critical rather than being trivially all-green.
 
+**Bug fixed 2026-07-09: every panel still rendered empty despite that
+verification.** `metric data`'s `agentExpression` regime strips the
+`SuperDomain|` prefix before matching, but the dashboard's own NASS query
+engine (`basicFilters[].sourceNameSpecifier[].pattern` -- the same
+mechanism `dx-do nass query` exposes directly) matches the **full**
+`metric.source` string, which always starts with `SuperDomain|`. Every
+`sourceNameSpecifier` pattern in the template was written in the bare
+3-segment form (correctly verified against `metric data`, which
+normalizes the prefix away) and so matched zero rows against the
+dashboard's actual query surface -- the same "3-/4-segment path regime"
+confusion documented under `reference-agent-expressions` and the
+`bpa-demo-management-module.sh` bug, hitting a third API surface this
+time. Found via the empirical-discovery move: a `dx-do nass query`
+`FROM_METADATA` + `KEEP` probe with the bare pattern returned zero rows;
+the identical pattern with `SuperDomain\|` prepended returned the real
+metric. Fixed by prepending `SuperDomain\|` to all 13
+`sourceNameSpecifier` patterns (3 polystat + 10 metric-graph targets);
+re-verified every one of the 18 panels' query patterns individually
+against the raw `nass query` API before redeploying. **`dx-do metric
+data` is not a valid stand-in for verifying a dashboard's own NASS query
+shape** -- verify `sourceNameSpecifier` patterns with `dx-do nass query`
+instead.
+
 **Landmines found on this dx-do build, none of which match some dx-do
 documentation written for newer builds:**
 - `dashboard-export`/`dashboard-import`/`dashboard-update` all take
