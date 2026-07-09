@@ -5,6 +5,41 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-09 @ 14:35 - [Docs - Situations never form from BPA-Demo's alarms, investigated and documented]:
+  User asked to create "situation alarms" for the existing alarms/metrics.
+  Found dx-do situation has no create command -- Situations are entirely
+  auto-correlated by DX O2's AIOps engine from firing alarms, not a
+  user-defined resource like Alerts/SLIs.
+  Verified live whether the existing alerts (bpa-demo-management-module.sh,
+  bpa-demo-agent-alerts.sh) actually feed that correlation, in two rounds:
+  (1) triggered the trouble use case for real (sustained curl traffic as
+  the trouble user); confirmed 4 alerts fired within ~30s of each other,
+  all on the same entity (bpa-demo-php-probe) -- Trouble User High
+  Response Time, PHP Probe App Response Time High, PHP Probe DB Backend
+  Query Storm, PHP Probe App Error Rate Rising. situation query stayed
+  [] for ~15 minutes.
+  (2) to rule out same-entity-only correlation, stopped the mariadb
+  container for ~2 minutes (docker stop/start, no volumes touched) to
+  force a genuine cross-tier fault -- confirmed via dxo2 sidecar logs
+  (SQLNonTransientConnectionException/UnknownHostException: mariadb)
+  and app behavior (/shop returned 500 throughout, /health stayed 200
+  as designed) that both tiers broke simultaneously. Confirmed two
+  distinct-CI alarms fired within ~90s of each other: Infra Agent - DB
+  Availability Down (Infrastructure Agent CI) and Trouble User/PHP
+  Probe App Response Time High (PHP probe agent CI). Polled
+  situation query every 30s for a full 10 minutes after restoring
+  mariadb. Still [] throughout.
+  Conclusion: a genuine two-tier incident still produced zero
+  Situations across ~25 minutes of combined testing -- ruled out
+  same-entity-only correlation as the cause. No fix identified from the
+  CLI alone; needs the console's own Situations view checked directly
+  or confirmation from Broadcom on what enables correlation for a
+  tenant this size. Demo stack confirmed fully healthy after both test
+  rounds -- no lasting side effects.
+  BUGS: new entry with full reproduction detail. CLAUDE.md: cross-
+  referenced from bpa-demo-agent-alerts.sh's paragraph.
+
+------------------------------------------------------------------------------
 2026-07-08 @ 19:20 - [Docs - fix stale "3 archives" framing; correct BTL/BPA download navigation]:
   User pointed out src/dx-o2-agents/installers/ has 4 real archives against
   the "three packages" framing in docs. Verified by inspecting the actual
