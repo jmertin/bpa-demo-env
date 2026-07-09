@@ -1,3 +1,40 @@
+Situations (AIOps alarm correlation) never form from BPA-Demo's alarms
+- `dx-do situation` has no create command -- Situations are entirely
+  auto-correlated by DX O2's AIOps engine from firing alarms, not a
+  user-defined resource like Alerts/SLIs. Investigated whether our
+  existing alerts (bpa-demo-management-module.sh,
+  bpa-demo-agent-alerts.sh) actually feed that correlation.
+- Test 1 (same-tier cluster): triggered the `trouble` use case for real
+  (sustained curl traffic as the `trouble` user). Confirmed multiple
+  alerts fired for real, all within ~30s of each other, all on the same
+  entity (`bpa-demo-php-probe`): "Trouble User - High Response Time",
+  "PHP Probe - App Response Time High", "PHP Probe - DB Backend Query
+  Storm", "PHP Probe - App Error Rate Rising". `situation query`
+  returned `[]` after ~15 minutes.
+- Test 2 (cross-tier cluster): stopped the `mariadb` container for ~2
+  minutes (`docker stop`/`docker start`, no volumes touched) to force a
+  genuine cross-tier fault. Confirmed via dxo2 sidecar logs
+  (`SQLNonTransientConnectionException`/`UnknownHostException: mariadb`)
+  and app behavior (`/shop` returned 500 throughout, `/health` stayed
+  200 as designed) that both tiers broke simultaneously. Confirmed two
+  distinct-CI alarms fired within ~90s of each other: "Infra Agent - DB
+  Availability Down" (Infrastructure Agent CI) and "Trouble User - High
+  Response Time" / "PHP Probe - App Response Time High" (PHP probe
+  agent CI). Polled `situation query` every 30s for a full 10 minutes
+  after restoring MariaDB. Still `[]` throughout.
+- Conclusion: ruled out "same-entity-only correlation" as the cause --
+  a genuine two-tier incident (distinct CIs, real root cause, confirmed
+  alarms on both sides) still produced zero Situations across ~25
+  minutes of combined testing. Remaining candidate explanations, none
+  confirmable via the CLI: the tenant's Situation/AIOps correlation
+  isn't enabled or tuned for this scale/topology, the processing lag is
+  much longer than 25 minutes, or `dx-do situation query` doesn't
+  reflect everything the console's own Situations view shows.
+- No fix attempted -- this needs either the DX O2 console's Situations
+  view checked directly, or confirmation from Broadcom on what enables
+  Situation correlation for a tenant this size. The app/demo stack was
+  fully restored and confirmed healthy after both test runs.
+
 PHP Probe reporting issus
 - The PHP-Probe only sees a fronted coming in if it is not the index.php that is loaded.
 
