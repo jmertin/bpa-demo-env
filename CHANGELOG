@@ -5,6 +5,44 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-09 @ 17:05 - [Fix - agent health dashboard panels all rendered empty]:
+  User reported all panels on "BPA-Demo * Agent Health" (added 16:10 today)
+  were empty. Root cause: `dx-do metric data`'s `agentExpression` regime
+  strips the `SuperDomain|` prefix before matching (the 3-segment
+  bare-path regime used for the earlier alert/SLI verification work in
+  this project), but the dashboard's own NASS query engine
+  (`basicFilters[].sourceNameSpecifier[].pattern`) matches the FULL
+  `metric.source` string, which always starts with `SuperDomain|`. Every
+  `sourceNameSpecifier` pattern in the dashboard template was written in
+  the bare 3-segment form -- correctly verified against `metric data`
+  before shipping, which is exactly why the bug wasn't caught: that
+  verification used a different API surface than the one the dashboard
+  actually queries, and `metric data` silently normalizes away the exact
+  prefix the dashboard needs. Same underlying "3-/4-segment path regime"
+  confusion as the bpa-demo-management-module.sh agentExpressions bug
+  from 2026-07-06 and documented under reference-agent-expressions, just
+  hitting a third API surface (NASS dashboard queries) this time.
+  Found via the empirical-discovery move from the dx-done-nas skill:
+  probed the raw `dx-do nass query` API directly with a minimal
+  FROM_METADATA + KEEP payload. The bare-path pattern returned zero
+  rows; the identical pattern with `SuperDomain\|` prepended returned
+  the real metric -- confirmed for all 13 sourceNameSpecifier patterns
+  in the template (3 polystat traffic lights + 10 metric-graph targets),
+  not just the one that first exposed the bug.
+  Fixed by prepending `SuperDomain\|` to every sourceNameSpecifier
+  pattern in dxo2-scripts/templates/bpa-demo-agent-health-dashboard.json.
+  Re-verified all 18 panels' query patterns individually against the raw
+  `nass query` API before redeploying via
+  `bpa-demo-agent-health-dashboard.sh create` (upserted in place, same
+  uid, no duplicate). Confirmed via a fresh `dashboard-export` that the
+  live tenant copy carries the fix, not just the local template.
+  Lesson recorded in CLAUDE.md and dxo2-scripts/README.md: `dx-do metric
+  data` is not a valid stand-in for verifying a dashboard's own NASS
+  query shape -- use `dx-do nass query` (or `dashboard-render`, which
+  this dx-do build doesn't have) to verify dashboard `sourceNameSpecifier`
+  patterns specifically.
+
+------------------------------------------------------------------------------
 2026-07-09 @ 16:10 - [Feat - dxo2-scripts/bpa-demo-agent-health-dashboard.sh: agent status dashboard]:
   Added "BPA-Demo · Agent Health" dashboard to the pre-existing "BPA-Demo"
   dashboard folder (found a folder and a dashboard,
