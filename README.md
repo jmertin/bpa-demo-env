@@ -73,6 +73,8 @@ indent, K&R braces, PHPDoc on every function, single quotes).
         ├── Chart.yaml
         ├── values.yaml           # all defaults – no secrets, no registry credentials
         ├── .helmignore
+        ├── files/
+        │   └── vhost.conf        # symlink -> src/apache-php/config/vhost.conf (single source of truth)
         ├── sql/
         │   ├── schema.sql        # 8-table MariaDB schema
         │   └── seed.sql          # 3 brands, 6 capabilities, 300 products, 13 demo users
@@ -82,7 +84,7 @@ indent, K&R braces, PHPDoc on every function, single quotes).
             ├── serviceaccount.yaml     # automountServiceAccountToken: false
             ├── registry-secret.yaml    # kubernetes.io/dockerconfigjson pull secret
             ├── db-init-configmap.yaml  # embeds schema.sql + seed.sql for MariaDB init
-            ├── configmap.yaml          # Apache VirtualHost config (mounted via subPath)
+            ├── configmap.yaml          # {{ .Files.Get "files/vhost.conf" }} (mounted via subPath)
             ├── secret.yaml             # MariaDB credentials from Helm values
             ├── service.yaml            # ClusterIP on port 8080 -- Ingress routes here
             ├── service-headless.yaml   # clusterIP: None -- stable per-pod DNS for the StatefulSet

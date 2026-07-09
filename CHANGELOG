@@ -5,6 +5,50 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-09 @ 19:05 - [Fix - Helm ConfigMap's vhost.conf had drifted years out of sync]:
+  User testing the Helm chart deployment reported the browser-agent
+  per-page-wrapper fix "wasn't reflected in the Ingress configuration (or
+  Traefik)". Investigated the actual routing mechanism first: the fix is
+  entirely internal to Apache's own vhost.conf (mod_rewrite mapping clean
+  URLs to per-page wrapper files); the Ingress here is a plain host +
+  `path: /` prefix rule with zero rewrite annotations, so it passes every
+  request path through to Apache completely unchanged regardless of
+  which controller (Traefik, nginx, etc.) is in front of it -- ruled out
+  the Ingress/Traefik layer as the cause before looking anywhere else.
+  Diffed helm/php-demo/templates/configmap.yaml's embedded vhost.conf
+  against the real src/apache-php/config/vhost.conf and found the
+  ConfigMap was carrying its own hand-copied literal block that had
+  silently drifted: missing the no-cache Cache-Control/Pragma/Expires
+  headers entirely, missing the ETag/Last-Modified stripping, missing
+  the /health request log suppression, and -- the actual reported
+  symptom -- missing the RewriteEngine/RewriteRule pair the per-page
+  wrapper files (shop.php, basket.php, etc.) depend on. Kubernetes
+  deployments had been running without all of this since whenever the
+  ConfigMap was first written; Docker Compose was never affected, since
+  it mounts src/apache-php/config/vhost.conf directly with no duplicate
+  copy able to drift.
+  Fixed the duplication at the root instead of just re-syncing the copy
+  (which would only drift again): added helm/php-demo/files/vhost.conf
+  as a symlink to src/apache-php/config/vhost.conf, and changed
+  configmap.yaml to read it via `{{ .Files.Get "files/vhost.conf" }}`
+  instead of embedding a literal copy. Editing the real vhost.conf now
+  automatically flows into the next `helm upgrade` -- nothing left to
+  remember to keep in sync.
+  Verified live: `helm lint`/`helm template` both print an explicit
+  "found symbolic link in path... Contents of linked file included and
+  used" info line and the rendered ConfigMap now contains the full,
+  current vhost.conf byte-for-byte (RewriteRule, cache headers, health
+  check suppression, all present). Confirmed the symlink is safe for
+  this project's actual deployment path: build-scripts/deploy.sh runs
+  `helm upgrade --install php-demo "${chart_dir}"` directly against the
+  local chart directory, never `helm package` into a `.tgz` that could
+  separate the symlink from its target.
+  New: helm/php-demo/files/vhost.conf (symlink, git-tracked as such).
+  Changed: helm/php-demo/templates/configmap.yaml.
+  CLAUDE.md, README.md: documented the fix and the new single-source-of-
+  truth mechanism.
+
+------------------------------------------------------------------------------
 2026-07-09 @ 18:20 - [Feat - agent health dashboard: 4-source split, panel descriptions, network-time comparison]:
   User asked for two changes: (1) add a hover description to every graph
   ("i" icon, top-left), and (2) correctly reflect that there are 4

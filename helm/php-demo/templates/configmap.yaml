@@ -11,27 +11,17 @@ data:
   #   /etc/apache2/sites-available/bpa-demo.conf (subPath mount)
   # The sites-enabled/ symlink created by a2ensite in the image follows this
   # ConfigMap-sourced file automatically.
+  #
+  # Sourced from files/vhost.conf, a symlink to
+  # src/apache-php/config/vhost.conf -- the same file Docker Compose mounts
+  # directly and the Dockerfile bakes in. This chart previously carried its
+  # own hand-copied duplicate of vhost.conf here, which silently drifted out
+  # of sync with the real file (missing the no-cache headers, the health
+  # check log suppression, and -- critically -- the per-page-wrapper
+  # RewriteRule the browser agent injection depends on) since nothing kept
+  # the two in sync. `.Files.Get` reading the symlinked file makes this a
+  # single source of truth: editing src/apache-php/config/vhost.conf is
+  # picked up here automatically on the next `helm upgrade`, no separate
+  # copy to remember to update.
   vhost.conf: |
-    <VirtualHost *:8080>
-        ServerAdmin webmaster@localhost
-        DocumentRoot /var/www/html
-
-        DirectoryIndex index.php index.html
-
-        <Directory /var/www/html>
-            Options -Indexes +FollowSymLinks
-            AllowOverride All
-            Require all granted
-        </Directory>
-
-        <Location /setup/>
-            Require all denied
-        </Location>
-
-        <FilesMatch "^\.">
-            Require all denied
-        </FilesMatch>
-
-        ErrorLog  /proc/self/fd/2
-        CustomLog /proc/self/fd/1 combined
-    </VirtualHost>
+{{ .Files.Get "files/vhost.conf" | indent 4 }}
