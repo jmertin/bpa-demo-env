@@ -85,6 +85,14 @@ also be without breaking Ingress/load-balanced access.
 {{- end }}
 
 {{/*
+Name of the traffic-generator Deployment/pods. Distinct resource name so it
+never collides with the main app's StatefulSet ("php-demo.fullname").
+*/}}
+{{- define "php-demo.trafficFullname" -}}
+{{- printf "%s-traffic" (include "php-demo.fullname" .) }}
+{{- end }}
+
+{{/*
 Build the .dockerconfigjson payload for the registry pull secret.
 The auth field is base64(<username>:<password>) as required by the Docker
 credential format.

@@ -16,6 +16,10 @@ spec:
   clusterIP: None
   selector:
     {{- include "php-demo.selectorLabels" . | nindent 4 }}
+    # See service.yaml -- without this, the traffic-generator Deployment's
+    # pods would also match this selector and get pulled into the
+    # StatefulSet's per-pod DNS peer set.
+    app.kubernetes.io/component: app
   ports:
     - name: http
       port: 8080

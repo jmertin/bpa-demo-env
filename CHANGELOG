@@ -5,6 +5,126 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-09 @ 21:15 - [Note - both fixes below confirmed live in production]:
+  The root-redirect fix (20:55 entry) initially appeared not to take
+  effect on the user's production k3s host (nuc1) even after the source
+  fix was verified correct. Root cause: nuc1's deployment process copies
+  only the helm/ directory over from this repo, not a full checkout --
+  and helm/php-demo/files/vhost.conf is a symlink to
+  ../../../src/apache-php/config/vhost.conf, which lives outside helm/
+  entirely and was never copied along with it. No chart/code change
+  needed; the user re-synced the missing file to nuc1 and confirmed the
+  app now loads correctly end to end (traffic-generator on a separate
+  node, the Service-selector 502 fix, and the redirect scheme/port fix
+  all verified working together in the live deployment). Recorded as a
+  process gotcha, not a code fix, since it's specific to how nuc1 mirrors
+  this repo -- anything living outside helm/ (src/apache-php/,
+  src/dx-o2-agents/, build-scripts/) needs to be synced there separately
+  or the sync needs to cover the whole repo.
+
+------------------------------------------------------------------------------
+2026-07-09 @ 20:55 - [Fix - root-redirect Location header had the wrong scheme and an exposed internal port]:
+  User reported the app unreachable behind Traefik/k8s: hitting
+  https://bpa-demo.shdw.fr/ returned a 302 to
+  http://bpa-demo.shdw.fr:8080/shop -- wrong scheme (http instead of
+  https) and a port (8080) never exposed externally by the
+  Ingress/Service. Root cause: src/apache-php/config/vhost.conf's bare-root
+  redirect (added earlier for the PHP-probe browser-agent fix -- see the
+  Frontend start/SCRIPT_NAME entry above) used a relative substitution,
+  `RewriteRule ^$ /shop [R=302,L]`. For an [R] (external) redirect with a
+  relative substitution, Apache itself builds the absolute Location header
+  via ap_construct_url() -- and Apache has no idea Traefik is terminating
+  TLS in front of it, since it only ever serves plain HTTP on :8080. It
+  defaulted to scheme http and appended its own listen port. Never caught
+  locally because Compose/kubectl port-forward testing has no
+  TLS-terminating proxy in front of Apache, so the (coincidentally
+  correct-looking) http://host:8080/shop redirect always matched the
+  request's real host:port there.
+  Fixed by building the redirect as a fully-qualified URL from
+  %{HTTP_HOST} (the client-facing Host header, already portless for a
+  default port) and a scheme detected from X-Forwarded-Proto (Traefik's
+  default header for TLS-terminated requests) or a directly-terminated
+  HTTPS connection -- two RewriteRules (an https-branch guarded by
+  RewriteCond, falling through to an http-branch) instead of one relative
+  substitution.
+  File changed: src/apache-php/config/vhost.conf (picked up automatically
+  by the Helm ConfigMap via its existing files/vhost.conf symlink -- no
+  separate chart edit needed), CLAUDE.md.
+  Verified against the real apache-php image (docker run with the edited
+  vhost.conf bind-mounted over the baked-in copy): `apache2ctl configtest`
+  passes; curl with X-Forwarded-Proto: https set produces
+  `Location: https://<host>/shop`; the same request without it (matching
+  Compose's no-proxy setup) still produces the original
+  `http://<host>:<port>/shop` behavior unchanged.
+
+------------------------------------------------------------------------------
+2026-07-09 @ 20:10 - [Feat - traffic-generator deployed via Helm, on a separate node from the app]:
+  The traffic-generator previously only existed as a Docker Compose service
+  (docker-compose.yml's `traffic:`); it had no Kubernetes/Helm equivalent.
+  Added helm/php-demo/templates/traffic-deployment.yaml: a plain Deployment
+  (not StatefulSet -- no persistent identity/storage needs), gated by the new
+  trafficGenerator.enabled value (default false in values.yaml; deploy.sh
+  always sets it true, mirroring how compose.sh always includes the
+  standalone traffic service). Reuses the existing ServiceAccount for
+  registry-pull access; TARGET_URL points at the in-cluster Service DNS name
+  (http://<fullname>:<service.port>). Container env vars mirror the
+  TRAFFIC_*/plain-name split generator.py actually reads (MIN_ACTION_DELAY_SECS,
+  LOG_LEVEL unprefixed; TRAFFIC_ANONYMOUS_RATIO, TRAFFIC_CONCURRENT_SESSIONS,
+  TRAFFIC_SLOWDOWN_* prefixed) -- same split already used by
+  docker-compose.yml's traffic: service.
+    - Not in the same pod as the app: separate Deployment/container/pod
+      identity entirely, never in the StatefulSet's pod.
+    - Different node than the app: podAntiAffinity
+      (trafficGenerator.antiAffinity) targets the app pod's new
+      app.kubernetes.io/component: app label with
+      topologyKey: kubernetes.io/hostname. antiAffinity.required (default
+      true) is a hard requiredDuringSchedulingIgnoredDuringExecution
+      constraint; set to false for a soft preferred* rule on single-node
+      clusters (kind/minikube/demo VM), where a hard constraint would leave
+      the pod permanently Pending.
+    - Label-selector landmine: Kubernetes matchLabels is subset/superset
+      matching, not exact-equality, so a selector on just the common
+      name+instance labels also matches ANY other workload sharing those
+      two labels (both workloads get them via the shared php-demo.labels
+      helper). Applied the fix -- an explicit app.kubernetes.io/component
+      label ("app" on the StatefulSet's pod template, "traffic-generator"
+      on the new Deployment's pods) -- to the Deployment's own selector and
+      its anti-affinity labelSelector, but initially missed that
+      templates/service.yaml and templates/service-headless.yaml carry the
+      exact same selector, unfixed.
+  Files changed (first pass): helm/php-demo/templates/traffic-deployment.yaml
+  (new), helm/php-demo/templates/statefulset.yaml (added the component: app
+  pod label), helm/php-demo/templates/_helpers.tpl (added
+  php-demo.trafficFullname), helm/php-demo/values.yaml (added
+  image.trafficGenerator and the trafficGenerator block),
+  build-scripts/deploy.sh (generate_values() now emits
+  image.trafficGenerator + trafficGenerator.env.* from the existing
+  TRAFFIC_* .config variables, and always sets trafficGenerator.enabled:
+  true), CLAUDE.md, README.md.
+  Verified via `helm lint` and `helm template` (no live cluster in this
+  sandbox): the Deployment rendered with the correct anti-affinity block
+  (both required and preferred modes), the StatefulSet's selector/pod
+  identity was unaffected by the additive label, and a full render with
+  deploy.sh's generated values.local.yaml (simulated via a test harness
+  sourcing generate_values() with fake .config values) succeeded end to end.
+
+  **Bug fixed same day, found on the user's real deploy:** first live
+  deploy on a 2-node k3s cluster returned intermittent 502 Bad Gateway
+  from Traefik. `kubectl get endpoints php-demo-php-demo` showed TWO
+  endpoints -- the real app pod and the traffic-generator pod -- because
+  the main ClusterIP Service's selector (templates/service.yaml) matches
+  on name+instance only, the exact landmine above, just a third
+  independent matchLabels block that needed the same fix. Traefik/kube-proxy
+  round-robins between the two Service endpoints; roughly half of requests
+  landed on the traffic-generator pod, which listens on nothing at port
+  8080 (it's an outbound-only Python script) -- connection refused,
+  surfaced as 502. Fixed by adding app.kubernetes.io/component: app to
+  both templates/service.yaml's and templates/service-headless.yaml's
+  selectors. Re-verified via helm template that both Services now select
+  only the app pod's labels. Files changed (second pass):
+  helm/php-demo/templates/service.yaml, service-headless.yaml, CLAUDE.md.
+
+------------------------------------------------------------------------------
 2026-07-09 @ 19:05 - [Fix - Helm ConfigMap's vhost.conf had drifted years out of sync]:
   User testing the Helm chart deployment reported the browser-agent
   per-page-wrapper fix "wasn't reflected in the Ingress configuration (or

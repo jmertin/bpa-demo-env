@@ -1,0 +1,91 @@
+{{- if .Values.trafficGenerator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "php-demo.trafficFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "php-demo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: traffic-generator
+spec:
+  # Plain Deployment, not StatefulSet: this workload has no persistent
+  # identity/storage needs, unlike the main app pod.
+  replicas: {{ .Values.trafficGenerator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "php-demo.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: traffic-generator
+  template:
+    metadata:
+      labels:
+        {{- include "php-demo.labels" . | nindent 8 }}
+        app.kubernetes.io/component: traffic-generator
+    spec:
+      # Reuses the main ServiceAccount for its registry-pull secret; the
+      # traffic generator needs no Kubernetes API access of its own
+      # (automountServiceAccountToken: false already applies).
+      serviceAccountName: {{ include "php-demo.fullname" . }}
+      {{- if .Values.trafficGenerator.antiAffinity.enabled }}
+      affinity:
+        podAntiAffinity:
+          # Keeps this pod off the same node as the main app pod (labelled
+          # app.kubernetes.io/component: app on the StatefulSet), so
+          # synthetic traffic load never competes with the app for the same
+          # node's resources. See values.yaml for the required-vs-preferred
+          # trade-off on single-node clusters.
+          {{- if .Values.trafficGenerator.antiAffinity.required }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  {{- include "php-demo.selectorLabels" . | nindent 18 }}
+                  app.kubernetes.io/component: app
+              topologyKey: "kubernetes.io/hostname"
+          {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "php-demo.selectorLabels" . | nindent 20 }}
+                    app.kubernetes.io/component: app
+                topologyKey: "kubernetes.io/hostname"
+          {{- end }}
+      {{- end }}
+      containers:
+        - name: traffic-generator
+          image: "{{ .Values.image.trafficGenerator.repository }}:{{ .Values.image.trafficGenerator.tag }}"
+          imagePullPolicy: {{ .Values.image.trafficGenerator.pullPolicy }}
+          env:
+            - name: TRAFFIC_ENABLED
+              value: {{ .Values.trafficGenerator.env.enabled | quote }}
+            # Cluster-internal Service DNS name; resolves within the same
+            # namespace without the fully-qualified <svc>.<ns>.svc form.
+            - name: TARGET_URL
+              value: "http://{{ include "php-demo.fullname" . }}:{{ .Values.service.port }}"
+            - name: MIN_ACTION_DELAY_SECS
+              value: {{ .Values.trafficGenerator.env.minActionDelaySecs | quote }}
+            - name: MAX_ACTION_DELAY_SECS
+              value: {{ .Values.trafficGenerator.env.maxActionDelaySecs | quote }}
+            - name: MIN_SESSION_DELAY_SECS
+              value: {{ .Values.trafficGenerator.env.minSessionDelaySecs | quote }}
+            - name: MAX_SESSION_DELAY_SECS
+              value: {{ .Values.trafficGenerator.env.maxSessionDelaySecs | quote }}
+            - name: TRAFFIC_ANONYMOUS_RATIO
+              value: {{ .Values.trafficGenerator.env.anonymousRatio | quote }}
+            - name: TRAFFIC_CONCURRENT_SESSIONS
+              value: {{ .Values.trafficGenerator.env.concurrentSessions | quote }}
+            - name: TRAFFIC_SLOWDOWN_PROBABILITY
+              value: {{ .Values.trafficGenerator.env.slowdownProbability | quote }}
+            - name: TRAFFIC_SLOWDOWN_MIN_SECS
+              value: {{ .Values.trafficGenerator.env.slowdownMinSecs | quote }}
+            - name: TRAFFIC_SLOWDOWN_MAX_SECS
+              value: {{ .Values.trafficGenerator.env.slowdownMaxSecs | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.trafficGenerator.env.logLevel | quote }}
+          {{- with .Values.trafficGenerator.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+{{- end }}
