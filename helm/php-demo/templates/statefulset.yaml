@@ -23,6 +23,12 @@ spec:
     metadata:
       labels:
         {{- include "php-demo.labels" . | nindent 8 }}
+        # Distinguishes this pod from the traffic-generator Deployment's pods,
+        # which share the same name+instance labels via the common labels
+        # helper. Needed so the traffic-generator's podAntiAffinity selector
+        # (see traffic-deployment.yaml) can target only this pod and not
+        # accidentally match its own replicas too.
+        app.kubernetes.io/component: app
       annotations:
         # Force pod recreation when the ConfigMap changes.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}

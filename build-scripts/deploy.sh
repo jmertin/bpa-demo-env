@@ -25,7 +25,12 @@
 #              Optional: HELM_CHART_PATH (defaults to helm/php-demo),
 #              APMIA_EM_HOST, APMIA_EM_PORT, APMIA_AGENT_NAME, APMIA_APP_NAME,
 #              APMIA_LOG_LEVEL, APMIA_PHP_COLLECTOR_HOST, APMIA_PHP_COLLECTOR_PORT,
-#              APMIA_BTL_HOST, APMIA_BTL_PORT.
+#              APMIA_BTL_HOST, APMIA_BTL_PORT, TRAFFIC_ENABLED,
+#              TRAFFIC_MIN_ACTION_DELAY_SECS, TRAFFIC_MAX_ACTION_DELAY_SECS,
+#              TRAFFIC_MIN_SESSION_DELAY_SECS, TRAFFIC_MAX_SESSION_DELAY_SECS,
+#              TRAFFIC_ANONYMOUS_RATIO, TRAFFIC_CONCURRENT_SESSIONS,
+#              TRAFFIC_SLOWDOWN_PROBABILITY, TRAFFIC_SLOWDOWN_MIN_SECS,
+#              TRAFFIC_SLOWDOWN_MAX_SECS, TRAFFIC_LOG_LEVEL.
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -128,6 +133,19 @@ generate_values() {
     local mysql_monitor="${MYSQL_MONITOR:-true}"
     local mariadb_database="${MARIADB_DATABASE:-phpapp}"
 
+    # Traffic generator – mirrors build-scripts/compose.sh's TRAFFIC_* defaults.
+    local traffic_enabled="${TRAFFIC_ENABLED:-true}"
+    local traffic_min_action_delay="${TRAFFIC_MIN_ACTION_DELAY_SECS:-1}"
+    local traffic_max_action_delay="${TRAFFIC_MAX_ACTION_DELAY_SECS:-4}"
+    local traffic_min_session_delay="${TRAFFIC_MIN_SESSION_DELAY_SECS:-2}"
+    local traffic_max_session_delay="${TRAFFIC_MAX_SESSION_DELAY_SECS:-8}"
+    local traffic_anonymous_ratio="${TRAFFIC_ANONYMOUS_RATIO:-0.8}"
+    local traffic_concurrent_sessions="${TRAFFIC_CONCURRENT_SESSIONS:-3}"
+    local traffic_slowdown_probability="${TRAFFIC_SLOWDOWN_PROBABILITY:-0.12}"
+    local traffic_slowdown_min_secs="${TRAFFIC_SLOWDOWN_MIN_SECS:-3}"
+    local traffic_slowdown_max_secs="${TRAFFIC_SLOWDOWN_MAX_SECS:-12}"
+    local traffic_log_level="${TRAFFIC_LOG_LEVEL:-INFO}"
+
     info "Generating transient Helm values override: ${out}"
     cat > "${out}" <<EOF
 # Auto-generated from .config by deploy.sh – do NOT commit.
@@ -137,6 +155,9 @@ image:
     tag: "${IMAGE_TAG}"
   dxo2:
     repository: ${REGISTRY}/${IMAGE_PREFIX}/dx-o2-agents
+    tag: "${IMAGE_TAG}"
+  trafficGenerator:
+    repository: ${REGISTRY}/${IMAGE_PREFIX}/traffic-generator
     tag: "${IMAGE_TAG}"
 
 ingress:
@@ -185,6 +206,25 @@ dxo2:
   dbMonitor:
     enabled: ${mysql_monitor}
     instanceName: "${mariadb_database}"
+
+trafficGenerator:
+  # deploy.sh always deploys the traffic-generator Deployment, matching how
+  # compose.sh always includes the traffic container – TRAFFIC_ENABLED below
+  # gates whether it actively generates traffic or sits idle, same as
+  # APMIA_DEPLOY does for the dx-o2-agent sidecar.
+  enabled: true
+  env:
+    enabled: "${traffic_enabled}"
+    minActionDelaySecs: "${traffic_min_action_delay}"
+    maxActionDelaySecs: "${traffic_max_action_delay}"
+    minSessionDelaySecs: "${traffic_min_session_delay}"
+    maxSessionDelaySecs: "${traffic_max_session_delay}"
+    anonymousRatio: "${traffic_anonymous_ratio}"
+    concurrentSessions: "${traffic_concurrent_sessions}"
+    slowdownProbability: "${traffic_slowdown_probability}"
+    slowdownMinSecs: "${traffic_slowdown_min_secs}"
+    slowdownMaxSecs: "${traffic_slowdown_max_secs}"
+    logLevel: "${traffic_log_level}"
 EOF
     info "Values file generated."
 }

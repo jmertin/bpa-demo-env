@@ -81,6 +81,7 @@ indent, K&R braces, PHPDoc on every function, single quotes).
         └── templates/
             ├── _helpers.tpl
             ├── statefulset.yaml        # pod: apache-php + mariadb (+ dx-o2 sidecar + init)
+            ├── traffic-deployment.yaml # separate Deployment, node-anti-affined away from the app pod
             ├── serviceaccount.yaml     # automountServiceAccountToken: false
             ├── registry-secret.yaml    # kubernetes.io/dockerconfigjson pull secret
             ├── db-init-configmap.yaml  # embeds schema.sql + seed.sql for MariaDB init
@@ -141,6 +142,16 @@ pin the pod's IP address -- Kubernetes assigns that fresh from the
 cluster's CNI on every pod (re)creation regardless of workload kind; only
 `hostNetwork: true` (not used here) or a CNI-specific static-IP annotation
 can do that.
+
+The traffic generator runs as a **separate Deployment** (`trafficGenerator.enabled`,
+gated off by default in `values.yaml`; `deploy.sh` always turns it on), not
+inside the StatefulSet's pod. It is scheduled onto a **different node** than
+the app pod via `podAntiAffinity` matching the app pod's
+`app.kubernetes.io/component: app` label (`topologyKey: kubernetes.io/hostname`).
+`trafficGenerator.antiAffinity.required` defaults to `true` (hard constraint,
+`requiredDuringSchedulingIgnoredDuringExecution`) — set it to `false` on a
+single-node cluster (kind/minikube/demo VM), where a hard constraint would
+leave the pod permanently `Pending`.
 
 ### Docker Compose (local development)
 
@@ -465,6 +476,9 @@ Chart: `helm/php-demo` — version **0.2.0**
 | `dxo2.browserSnippet` | `''` | Browser agent snippet — use YAML single quotes (snippet contains HTML double-quotes); empty = disabled |
 | `dxo2.resources.requests.memory` | `792Mi` | Scheduler reservation — sized to observed IA+BTL idle baseline (~757 MiB) |
 | `dxo2.resources.limits.memory` | `4Gi` | Hard ceiling — APMIA JVM grows under APM load; 512 Mi causes OOMKilled |
+| `trafficGenerator.enabled` | `false` | Deploy the traffic-generator Deployment (`deploy.sh` always sets this `true`) |
+| `trafficGenerator.antiAffinity.required` | `true` | Hard node anti-affinity vs. the app pod; set `false` on single-node clusters |
+| `trafficGenerator.env.*` | see `values.yaml` | Mirrors the `TRAFFIC_*` `.config`/Compose variables — see *Traffic generator* section above |
 
 ### Kubernetes probes
 

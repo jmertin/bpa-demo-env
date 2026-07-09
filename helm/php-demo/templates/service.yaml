@@ -9,6 +9,12 @@ spec:
   type: {{ .Values.service.type }}
   selector:
     {{- include "php-demo.selectorLabels" . | nindent 4 }}
+    # Without this, matchLabels' subset/superset semantics would also
+    # select the traffic-generator Deployment's pods (they share the same
+    # name+instance labels) -- routing real traffic to a pod with nothing
+    # listening on 8080 and causing intermittent 502s. See
+    # traffic-deployment.yaml's matching app.kubernetes.io/component label.
+    app.kubernetes.io/component: app
   ports:
     - name: http
       port: {{ .Values.service.port }}
