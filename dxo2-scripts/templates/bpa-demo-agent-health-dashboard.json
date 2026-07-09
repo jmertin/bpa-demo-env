@@ -21,13 +21,13 @@
         "id": 1,
         "title": "",
         "gridPos": {
-          "h": 3,
+          "h": 4,
           "w": 24,
           "x": 0,
           "y": 0
         },
         "options": {
-          "content": "**BPA-Demo Agent Health** \u2014 one traffic light per deployed agent (green = all its alerts OK, orange = warning, red = critical, grey = no data yet), followed by each agent's basic metrics.",
+          "content": "**BPA-Demo Agent Health** \u2014 one traffic light per deployed agent (green = all its alerts OK, orange = warning, red = critical, grey = no data yet), followed by each agent's basic metrics. Four distinct telemetry sources feed this dashboard: the **Infrastructure Agent** (host + MySQL DB, via the DB Monitor extension), the **PHP Probe** (inside the PHP process), the **Browser Agent** (inside real visitors' browsers -- client-perceived timing), and the **BPA WebServer Plugin** (inside our Apache server -- server-side per-transaction timing). The Browser Agent and BPA WebServer Plugin observe the *same* requests from two different vantage points; comparing them is how the Network + Overhead section below approximates time spent outside the server.",
           "mode": "markdown"
         },
         "transparent": true
@@ -40,7 +40,7 @@
           "h": 1,
           "w": 24,
           "x": 0,
-          "y": 3
+          "y": 4
         },
         "collapsed": false,
         "panels": []
@@ -49,9 +49,10 @@
         "id": 3,
         "type": "grafana-polystat-panel",
         "title": "Infrastructure Agent (DB Monitor)",
+        "description": "Source: Infrastructure Agent's DB Monitor extension, querying MariaDB directly (host + MySQL DB details) -- not derived from application traffic. This light rolls up every Infra Agent alert to its worst current severity.",
         "gridPos": {
           "x": 0,
-          "y": 4,
+          "y": 5,
           "w": 8,
           "h": 8
         },
@@ -230,9 +231,10 @@
         "id": 4,
         "type": "grafana-polystat-panel",
         "title": "PHP Probe Agent (Application)",
+        "description": "Source: PHP Probe agent, instrumented inside the PHP process itself on the application server. Server-side, code-level timing. This light rolls up every PHP Probe alert (plus the Trouble User alert) to its worst current severity.",
         "gridPos": {
           "x": 8,
-          "y": 4,
+          "y": 5,
           "w": 8,
           "h": 8
         },
@@ -410,10 +412,11 @@
       {
         "id": 5,
         "type": "grafana-polystat-panel",
-        "title": "BPA WebServer Agent (Browser/RUM)",
+        "title": "Browser Agent (RUM)",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. This light rolls up every Browser RUM alert to its worst current severity.",
         "gridPos": {
           "x": 16,
-          "y": 4,
+          "y": 5,
           "w": 8,
           "h": 8
         },
@@ -591,12 +594,12 @@
       {
         "type": "row",
         "id": 6,
-        "title": "Infrastructure Agent -- DB Monitor",
+        "title": "Infrastructure Agent -- Host + MySQL DB (DB Monitor extension)",
         "gridPos": {
           "h": 1,
           "w": 24,
           "x": 0,
-          "y": 12
+          "y": 13
         },
         "collapsed": false,
         "panels": []
@@ -605,12 +608,13 @@
         "type": "stat",
         "id": 7,
         "title": "DB Availability",
+        "description": "Source: Infrastructure Agent's DB Monitor extension, querying MariaDB directly (host + MySQL DB details) -- not derived from application traffic. 1 = MariaDB is reachable and responding; 0 = the DB Monitor extension cannot reach it.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 0,
-          "y": 13
+          "y": 14
         },
         "targets": [
           {
@@ -746,12 +750,13 @@
         "type": "graph",
         "id": 8,
         "title": "Connection Refusal Rate",
+        "description": "Source: Infrastructure Agent's DB Monitor extension, querying MariaDB directly (host + MySQL DB details) -- not derived from application traffic. Rate of MariaDB connection attempts refused (e.g. connection limit reached). Normally 0.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 6,
-          "y": 13
+          "y": 14
         },
         "targets": [
           {
@@ -908,12 +913,13 @@
         "type": "graph",
         "id": 9,
         "title": "Buffer Pool Cache Hit Rate (%)",
+        "description": "Source: Infrastructure Agent's DB Monitor extension, querying MariaDB directly (host + MySQL DB details) -- not derived from application traffic. InnoDB buffer pool cache hit rate. A drop below ~95% suggests the buffer pool is undersized for the working set.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 12,
-          "y": 13
+          "y": 14
         },
         "targets": [
           {
@@ -1070,12 +1076,13 @@
         "type": "graph",
         "id": 10,
         "title": "Slow Query Rate (%)",
+        "description": "Source: Infrastructure Agent's DB Monitor extension, querying MariaDB directly (host + MySQL DB details) -- not derived from application traffic. Percentage of queries flagged as slow by MariaDB's slow-query log. Normally 0%.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 18,
-          "y": 13
+          "y": 14
         },
         "targets": [
           {
@@ -1231,12 +1238,12 @@
       {
         "type": "row",
         "id": 11,
-        "title": "PHP Probe Agent -- Application",
+        "title": "PHP Probe Agent -- Inside the PHP Process",
         "gridPos": {
           "h": 1,
           "w": 24,
           "x": 0,
-          "y": 21
+          "y": 22
         },
         "collapsed": false,
         "panels": []
@@ -1245,12 +1252,13 @@
         "type": "graph",
         "id": 12,
         "title": "App Response Time (ms)",
+        "description": "Source: PHP Probe agent, instrumented inside the PHP process itself on the application server. Server-side, code-level timing. Average server-side response time across every tracked frontend URL. The `trouble` demo use case (5000 sequential DB reads) shows up as a sustained spike here.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 0,
-          "y": 22
+          "y": 23
         },
         "targets": [
           {
@@ -1407,12 +1415,13 @@
         "type": "graph",
         "id": 13,
         "title": "App Error Rate (per interval)",
+        "description": "Source: PHP Probe agent, instrumented inside the PHP process itself on the application server. Server-side, code-level timing. Application-level errors reported by the PHP probe per measurement interval.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 6,
-          "y": 22
+          "y": 23
         },
         "targets": [
           {
@@ -1569,12 +1578,13 @@
         "type": "graph",
         "id": 14,
         "title": "App Concurrency",
+        "description": "Source: PHP Probe agent, instrumented inside the PHP process itself on the application server. Server-side, code-level timing. Number of requests the PHP probe sees executing at the same instant. Baseline is near 0 on this low-traffic demo.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 12,
-          "y": 22
+          "y": 23
         },
         "targets": [
           {
@@ -1731,12 +1741,13 @@
         "type": "graph",
         "id": 15,
         "title": "DB Backend Response Time (ms)",
+        "description": "Source: PHP Probe agent, instrumented inside the PHP process itself on the application server. Server-side, code-level timing. Average response time of the PHP app's own calls to the MariaDB backend, as timed from inside the PHP process (not the DB server's own view -- compare against the Infrastructure Agent section above for that).",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
           "w": 6,
           "x": 18,
-          "y": 22
+          "y": 23
         },
         "targets": [
           {
@@ -1892,12 +1903,12 @@
       {
         "type": "row",
         "id": 16,
-        "title": "BPA WebServer Agent -- Browser/RUM",
+        "title": "Browser Agent -- Real User Monitoring (client-side, as seen by the browser)",
         "gridPos": {
           "h": 1,
           "w": 24,
           "x": 0,
-          "y": 30
+          "y": 31
         },
         "collapsed": false,
         "panels": []
@@ -1906,12 +1917,13 @@
         "type": "graph",
         "id": 17,
         "title": "Page Load Time (ms)",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. Full page load time per tracked URL, as timed by the browser (navigation start to load complete) -- includes network transit and rendering, not just server response.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
-          "w": 12,
+          "w": 8,
           "x": 0,
-          "y": 31
+          "y": 32
         },
         "targets": [
           {
@@ -1945,7 +1957,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|BPA Demo\\|.*:Average Page Load Time \\(ms\\)$"
+                    "pattern": "Business Segment\\|BPA Demo\\|[^|]+:Average Page Load Time \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
@@ -2068,12 +2080,13 @@
         "type": "graph",
         "id": 18,
         "title": "Page Hits (per interval)",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. Real-browser page views per tracked URL per interval -- a direct count of actual RUM-instrumented page loads, distinct from the PHP Probe's server-side request count.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 31
+          "w": 8,
+          "x": 8,
+          "y": 32
         },
         "targets": [
           {
@@ -2107,7 +2120,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|BPA Demo\\|.*:Page Hits Per Interval$"
+                    "pattern": "Business Segment\\|BPA Demo\\|[^|]+:Page Hits Per Interval$"
                   }
                 ],
                 "isNot": false,
@@ -2214,6 +2227,1103 @@
           },
           {
             "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 19,
+        "title": "Resource Time To First Byte (ms)",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. Time-to-first-byte for individual page sub-resources (CSS, images, third-party scripts) as measured by the browser's own Resource Timing API -- the closest real \"time to first response\" signal the Browser Agent reports; it's per-resource, not per-page.",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 32
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|BPA Demo\\|.*:Average Time To First Byte \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "row",
+        "id": 20,
+        "title": "BPA WebServer Plugin -- Inside Our Apache Server (server-side, as seen by the application)",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 40
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "type": "graph",
+        "id": 21,
+        "title": "Response Time (ms)",
+        "description": "Source: BPA WebServer Plugin, running inside our own Apache server (mod_caplugin). Server-side, per-business-transaction timing as seen at the web server tier -- distinct from the Browser Agent's client-side view of the same requests. Total time the BPA module measures for the request, per business transaction. Compare against Backend Server Time (next panel) -- the gap is roughly network + plugin overhead time.",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 41
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Response Time \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 22,
+        "title": "Backend Server Time (ms)",
+        "description": "Source: BPA WebServer Plugin, running inside our own Apache server (mod_caplugin). Server-side, per-business-transaction timing as seen at the web server tier -- distinct from the Browser Agent's client-side view of the same requests. The portion of Response Time (previous panel) actually spent in backend/application processing, as measured by the BPA module.",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 41
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Backend Server Time \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 23,
+        "title": "Responses Per Interval",
+        "description": "Source: BPA WebServer Plugin, running inside our own Apache server (mod_caplugin). Server-side, per-business-transaction timing as seen at the web server tier -- distinct from the Browser Agent's client-side view of the same requests. Count of responses per business transaction per interval, as seen at the web server tier.",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 41
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Responses Per Interval$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 24,
+        "title": "Errors Per Interval",
+        "description": "Source: BPA WebServer Plugin, running inside our own Apache server (mod_caplugin). Server-side, per-business-transaction timing as seen at the web server tier -- distinct from the Browser Agent's client-side view of the same requests. Count of error responses per business transaction per interval, as seen at the web server tier.",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 41
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Errors Per Interval$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "row",
+        "id": 25,
+        "title": "Network + Overhead Time (Browser Agent vs BPA WebServer Plugin)",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 49
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "type": "graph",
+        "id": 26,
+        "title": "BPA Plugin: Response Time vs Backend Server Time (gap ~= network + overhead)",
+        "description": "Both lines are from the BPA WebServer Plugin (server-side), for the same business transactions: total Response Time and the Backend Server Time portion of it. The visual gap between them approximates time spent outside backend processing -- network transit, plugin overhead, and response transmission. This is a real-data comparison, not a computed single series: a true subtracted \"network time\" metric would need a Grafana calculateField transform whose exact behavior on this dx-do build's AIOps NASS datasource plugin couldn't be visually verified (no dashboard-render available here) -- treat this panel as the verified starting point and add that transform via the console's own panel editor, where the actual field names are visible, if you want a single computed series instead of two lines to eyeball.",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 9,
+          "w": 24,
+          "x": 0,
+          "y": 50
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "3",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Response Time \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          },
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "3",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Backend Server Time \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "SuperDomain\\|Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "B",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "ms",
             "label": null,
             "logBase": 1,
             "max": null,

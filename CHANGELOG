@@ -5,6 +5,67 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-09 @ 18:20 - [Feat - agent health dashboard: 4-source split, panel descriptions, network-time comparison]:
+  User asked for two changes: (1) add a hover description to every graph
+  ("i" icon, top-left), and (2) correctly reflect that there are 4
+  distinct telemetry sources, not 3 -- the original "BPA WebServer Agent
+  (Browser/RUM)" section conflated the Browser Agent (client-side, inside
+  a real visitor's browser) with the BPA WebServer Plugin (server-side,
+  inside our own Apache process) just because both publish under the
+  same Logstash-APM-Plugin agent identity.
+  Confirmed the real metric path shapes via `dx-do nass query`
+  FROM_METADATA probes before building anything: Browser Agent metrics
+  live at Business Segment|BPA Demo|<url>[|Resources|HTML|<host>|<path>]:
+  <leaf> (page-level: Average Page Load Time (ms), Page Hits Per
+  Interval; resource-level: Average Resource Load Time (ms), Average
+  Time To First Byte (ms), Average Response Download Time (ms)). BPA
+  WebServer Plugin metrics live at Business Segment|[BPA Demo]<ip>:
+  <port>|<X-Page-ID>:<leaf> (Average Response Time (ms), Average Backend
+  Server Time (ms), Responses/Errors Per Interval) -- the [BPA Demo]<ip>
+  segment identifies which Apache instance reported it; confirmed stale
+  172.19.0.x entries from before the static-IP fix still exist in the
+  catalog alongside fresh 172.28.0.12 ones, harmlessly, since the new
+  patterns wildcard the IP/port.
+  Split the dashboard into 4 real sections (Infrastructure Agent, PHP
+  Probe, Browser Agent, BPA WebServer Plugin) plus a new "Network +
+  Overhead Time" section. Added the Browser Agent's real per-resource
+  Average Time To First Byte (ms) panel -- confirmed via nass query to
+  have genuine non-zero historical data (from earlier manual browser
+  testing), addressing the user's "time to first response... exists"
+  question directly. Added a new BPA WebServer Plugin section (4
+  panels). Added every panel's `description` field (19 data panels) so
+  the source distinction is visible in the console itself, not just in
+  docs.
+  For "network time": considered a true computed difference (Response
+  Time - Backend Server Time) via a Grafana calculateField transform,
+  but this dx-do build has no dashboard-render to visually confirm how
+  the AIOps NASS datasource plugin names its output fields -- shipping
+  an unverified transform risked silently doing nothing. Shipped the
+  verified alternative: both metrics as two lines on one graph (verified
+  real data on both), so the gap -- approximately network transit +
+  plugin overhead -- is visible by eye. Documented the transform as a
+  reasonable follow-up once it can be checked in the console's own panel
+  editor.
+  Verified every one of the 18 unique source/attribute pattern
+  combinations individually via `nass query` before redeploying,
+  including confirming the new page-level Page Load Time/Page Hits
+  patterns ([^|]+ single-segment) correctly exclude the nested
+  Resources|HTML|... sub-paths. Redeployed via
+  bpa-demo-agent-health-dashboard.sh create (upserted in place, same
+  uid, version 2 -> 3, no duplicate). Confirmed via a fresh
+  dashboard-export that all 26 panels and all 19 descriptions persisted
+  on the live tenant copy.
+  Also noted, not yet actioned: found the numeric-order-id X-Page-ID
+  cardinality bug (fixed 2026-07-08 for the app's own header) has a
+  second leak at the BPA WebServer Plugin tier via the HTML <title> tag
+  ("BPA-Demo - Order #NNN Confirmed-ORDER-CONFIRM-SUCCESS" business
+  segment labels) -- flagged to the user as a separate follow-up, not
+  fixed in this change.
+  dxo2-scripts/README.md, CLAUDE.md: documented the 4-source split, the
+  description additions, and the network-time panel's verification
+  limits.
+
+------------------------------------------------------------------------------
 2026-07-09 @ 17:05 - [Fix - agent health dashboard panels all rendered empty]:
   User reported all panels on "BPA-Demo * Agent Health" (added 16:10 today)
   were empty. Root cause: `dx-do metric data`'s `agentExpression` regime

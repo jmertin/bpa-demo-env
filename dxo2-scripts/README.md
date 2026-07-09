@@ -135,15 +135,21 @@ may not exist in someone else's tenant.
 
 `bpa-demo-agent-health-dashboard.sh` creates `"BPA-Demo · Agent Health"` in
 the existing `"BPA-Demo"` dashboard folder (a dashboard's title can't equal
-its containing folder's title, hence the `· Agent Health` suffix). Three
-sections:
+its containing folder's title, hence the `· Agent Health` suffix). Every
+data panel carries a `description` (Grafana's "i" hover icon, top-left of
+the panel) naming its real telemetry source. Six sections, covering **four
+distinct telemetry sources** -- it's easy to conflate the last two, since
+both are published under the same `Logstash-APM-Plugin` agent identity, but
+they observe the same requests from opposite ends:
 
-| Section | Panels |
-|---|---|
-| Agent Status (row) | 3 `grafana-polystat-panel` traffic-light circles -- Infrastructure Agent, PHP Probe Agent, BPA WebServer Agent |
-| Infrastructure Agent -- DB Monitor | DB Availability (stat), Connection Refusal Rate, Buffer Pool Cache Hit Rate, Slow Query Rate (graphs) |
-| PHP Probe Agent -- Application | App Response Time, App Error Rate, App Concurrency, DB Backend Response Time (graphs) |
-| BPA WebServer Agent -- Browser/RUM | Page Load Time, Page Hits (graphs) -- these will likely show 0/no-data under the traffic generator alone, since it drives plain HTTP requests, not a real browser executing the BA snippet's JS |
+| Section | Source | Panels |
+|---|---|---|
+| Agent Status (row) | -- | 3 `grafana-polystat-panel` traffic-light circles -- Infrastructure Agent, PHP Probe Agent, Browser Agent |
+| Infrastructure Agent -- Host + MySQL DB | DB Monitor extension, querying MariaDB directly | DB Availability (stat), Connection Refusal Rate, Buffer Pool Cache Hit Rate, Slow Query Rate (graphs) |
+| PHP Probe Agent -- Inside the PHP Process | PHP probe, instrumented in the PHP process itself | App Response Time, App Error Rate, App Concurrency, DB Backend Response Time (graphs) |
+| Browser Agent -- Real User Monitoring | BA JavaScript snippet, executed in a real visitor's **browser** -- client-perceived timing (network + render included) | Page Load Time, Page Hits, Resource Time To First Byte (graphs) -- the first two will likely show 0/no-data under the traffic generator alone (plain HTTP requests, no real browser); the third has real historical data from earlier manual browser testing |
+| BPA WebServer Plugin -- Inside Our Apache Server | `mod_caplugin`, running in **our own Apache server** -- server-side per-business-transaction timing of the *same* requests | Response Time, Backend Server Time, Responses Per Interval, Errors Per Interval (graphs) |
+| Network + Overhead Time | (comparison of the two sections above) | One graph overlaying the BPA plugin's Response Time and Backend Server Time -- the visual gap approximates time spent outside backend processing (network transit + plugin overhead) |
 
 Each traffic light queries the reserved `Custom Metric Agent (Virtual)`
 alert-status metric (`Alerts|BPA-Demo:<alert name>`, published by the EM for
@@ -179,6 +185,34 @@ against the raw `nass query` API before redeploying. **`dx-do metric
 data` is not a valid stand-in for verifying a dashboard's own NASS query
 shape** -- verify `sourceNameSpecifier` patterns with `dx-do nass query`
 instead.
+
+**2026-07-09: split into 4 real sources, added descriptions, added a
+network-time comparison.** The original build's "Browser/RUM" section
+conflated two genuinely distinct telemetry sources that happen to publish
+under the same `Logstash-APM-Plugin` agent identity: the **Browser
+Agent** (client-side, `Business Segment|BPA Demo|<url>:...`) and the
+**BPA WebServer Plugin** (server-side, `Business Segment|[BPA Demo]<ip
+running Apache>/<port>|<X-Page-ID>:...` -- the `[BPA Demo]<ip>:<port>`
+segment identifies which Apache instance reported it; stale entries from
+before the `172.28.0.0/24` static-IP fix are still visible in the
+catalog and harmless, since the section's patterns wildcard the IP).
+Split into their own sections, added a dedicated **BPA WebServer
+Plugin** section (Response Time, Backend Server Time, Responses/Errors
+Per Interval, all wildcarded across business transactions and IPs), and
+added the Browser Agent's real per-resource `Average Time To First Byte
+(ms)` metric -- confirmed via `nass query` to have genuine non-zero
+historical data (from earlier manual browser testing), unlike the
+page-level Page Load Time/Page Hits metrics which stay at 0 under the
+traffic generator alone.
+For the requested "network time" panel: looked into a true computed
+difference (`Response Time - Backend Server Time`) via Grafana's
+`calculateField` transform, but this dx-do build has no `dashboard-render`
+to visually confirm how the AIOps NASS datasource plugin actually names
+its output fields -- shipping an unverifiable transform risked silently
+doing nothing. Shipped the verified alternative instead: both metrics as
+separate lines on one graph, so the gap is visible by eye. The transform
+is a reasonable follow-up once it can be checked in the console's own
+panel editor (where the real field names are visible).
 
 **Landmines found on this dx-do build, none of which match some dx-do
 documentation written for newer builds:**
