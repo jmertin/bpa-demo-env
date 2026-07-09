@@ -5,6 +5,71 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-09 @ 16:10 - [Feat - dxo2-scripts/bpa-demo-agent-health-dashboard.sh: agent status dashboard]:
+  Added "BPA-Demo · Agent Health" dashboard to the pre-existing "BPA-Demo"
+  dashboard folder (found a folder and a dashboard,
+  "BPA-Demo PHP Probe · Overview", already there from earlier work,
+  neither created by any tracked script -- left both untouched and added
+  this as a complementary, agent-scoped overview).
+  Three sections: an "Agent Status" row of 3 grafana-polystat-panel
+  traffic-light circles (Infrastructure Agent, PHP Probe Agent, BPA
+  WebServer Agent), then each agent's basic metrics (Infra: DB
+  Availability/Connection Refusals/Cache Hit Rate/Slow Query Rate; PHP:
+  App Response Time/Error Rate/Concurrency/DB Backend Response Time;
+  Browser: Page Load Time/Page Hits).
+  Each traffic light queries the reserved "Custom Metric Agent (Virtual)"
+  alert-status metric (Alerts|BPA-Demo:<alert name>, published by the EM
+  for every alert on an active Management Module -- confirmed via
+  `dx-do metric data`, a discrete 0=no-data/1=ok/2=warning/3=critical
+  severity scale) with a regex matching every alert belonging to that
+  agent's tier, rolled up to the WORST severity among them via a
+  polystat composite (globalOperatorName: "max") -- green only if every
+  alert for that agent is currently OK. Reuses the alerts
+  bpa-demo-management-module.sh/bpa-demo-agent-alerts.sh already
+  created; no new alert.
+  Verified live before wiring anything in, not guessed: every
+  alert-status regex and every metric-graph pattern was checked against
+  real `metric data` output first, including confirming the lights show
+  a genuine mix of severities (values 1/2/3 across different alerts) --
+  at verification time the PHP Probe Agent light was legitimately red
+  from a leftover elevated error-rate alert from earlier fault-injection
+  testing (see the 14:35 entry above), not a dashboard bug.
+  This dx-do build's `dashboard` command group turned out to be missing
+  dashboard-create, dashboard-delete, validate-layout, and
+  dashboard-render entirely -- a smaller surface than some dx-do
+  documentation describes for newer builds. Adapted:
+  (1) dashboard-export/import/update all take dashboardExportFile=, not
+  dashboardFile= as documented.
+  (2) dashboard-import's preserveUid=true overwrite=true upsert doesn't
+  work here -- overwrite= is silently ignored (request body always
+  shows "overwrite":false), which omits the version field Grafana
+  requires and fails with HTTP 412 version-mismatch.
+  (3) dashboard-update does NOT resolve a numeric id from a bare uid on
+  this build either (fails "Export dashboard does not have an id!" even
+  with uid set) -- contrary to some documentation for newer builds. The
+  classic export -> edit -> update workflow (real numeric id +
+  meta.folderId from a fresh export, splice in the regenerated panels,
+  push back via dashboard-update) is what actually works, and is what
+  `create`'s self-heal path does.
+  (4) No dashboard-delete exists at all -- `delete` prints manual
+  console-removal instructions instead of pretending a CLI command
+  exists.
+  (5) No dashboard-render exists either, so no PNG self-check was
+  possible; verification relied on dashboard-export/check (panel
+  count/types/titles) plus the live metric data checks above, and
+  hand-checked 24-column grid geometry (no local validate-layout
+  available to lint it).
+  Verified idempotent: re-ran create twice, confirmed dashboard-search
+  shows exactly one dashboard (uid unchanged, version incremented 1->2),
+  and confirmed check still reports all 18 panels correctly both times.
+  New: dxo2-scripts/bpa-demo-agent-health-dashboard.sh (create/check/
+  delete, same convention as every other script in this directory),
+  dxo2-scripts/templates/bpa-demo-agent-health-dashboard.json (the
+  dashboard JSON).
+  dxo2-scripts/README.md, CLAUDE.md: documented the dashboard and every
+  landmine found on this dx-do build.
+
+------------------------------------------------------------------------------
 2026-07-09 @ 14:35 - [Docs - Situations never form from BPA-Demo's alarms, investigated and documented]:
   User asked to create "situation alarms" for the existing alarms/metrics.
   Found dx-do situation has no create command -- Situations are entirely

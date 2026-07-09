@@ -1,0 +1,2231 @@
+{
+  "dashboard": {
+    "title": "BPA-Demo \u00b7 Agent Health",
+    "uid": null,
+    "id": null,
+    "schemaVersion": 27,
+    "style": "dark",
+    "editable": true,
+    "graphTooltip": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "tags": [
+      "bpa-demo"
+    ],
+    "panels": [
+      {
+        "type": "text",
+        "id": 1,
+        "title": "",
+        "gridPos": {
+          "h": 3,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "options": {
+          "content": "**BPA-Demo Agent Health** \u2014 one traffic light per deployed agent (green = all its alerts OK, orange = warning, red = critical, grey = no data yet), followed by each agent's basic metrics.",
+          "mode": "markdown"
+        },
+        "transparent": true
+      },
+      {
+        "type": "row",
+        "id": 2,
+        "title": "Agent Status",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 3
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 3,
+        "type": "grafana-polystat-panel",
+        "title": "Infrastructure Agent (DB Monitor)",
+        "gridPos": {
+          "x": 0,
+          "y": 4,
+          "w": 8,
+          "h": 8
+        },
+        "datasource": "AIOps_Metrics",
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Source",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "20",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Alerts\\|BPA-Demo:Infra Agent \\- .*"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "colors": [
+          "#9ca3af",
+          "#299c46",
+          "#ED8128",
+          "#d44a3a"
+        ],
+        "polystat": {
+          "shape": "circle",
+          "fontAutoScale": true,
+          "fontAutoColor": true,
+          "polygonBorderSize": 2,
+          "polygonBorderColor": "#000000",
+          "polygonGlobalFillColor": "#0a55a1",
+          "globalUnitFormat": "none",
+          "globalDecimals": 0,
+          "globalDisplayMode": "all",
+          "globalOperatorName": "max",
+          "displayLimit": 1,
+          "maxMetrics": 1,
+          "columnAutoSize": true,
+          "rowAutoSize": true,
+          "radiusAutoSize": true,
+          "valueEnabled": false,
+          "tooltipEnabled": false,
+          "gradientEnabled": true,
+          "animationSpeed": 2500,
+          "globalThresholds": [
+            {
+              "value": 0,
+              "state": 0,
+              "color": "#9ca3af"
+            },
+            {
+              "value": 1,
+              "state": 1,
+              "color": "#299c46"
+            },
+            {
+              "value": 2,
+              "state": 2,
+              "color": "#ED8128"
+            },
+            {
+              "value": 3,
+              "state": 3,
+              "color": "#d44a3a"
+            }
+          ]
+        },
+        "savedComposites": [
+          {
+            "compositeName": ".*",
+            "displayName": "",
+            "members": [
+              {
+                "seriesName": ".*"
+              }
+            ],
+            "enabled": true,
+            "hideMembers": true,
+            "showName": false,
+            "showValue": false,
+            "animateMode": "all",
+            "thresholdLevel": 0,
+            "clickThrough": "",
+            "newTabEnabled": false,
+            "sanitizeURLEnabled": false,
+            "sanitizedURL": "",
+            "label": "Light",
+            "isTemplated": false,
+            "templatedName": ""
+          }
+        ],
+        "savedOverrides": []
+      },
+      {
+        "id": 4,
+        "type": "grafana-polystat-panel",
+        "title": "PHP Probe Agent (Application)",
+        "gridPos": {
+          "x": 8,
+          "y": 4,
+          "w": 8,
+          "h": 8
+        },
+        "datasource": "AIOps_Metrics",
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Source",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "20",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Alerts\\|BPA-Demo:(Trouble User \\- High Response Time|PHP Probe \\- .*)"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "colors": [
+          "#9ca3af",
+          "#299c46",
+          "#ED8128",
+          "#d44a3a"
+        ],
+        "polystat": {
+          "shape": "circle",
+          "fontAutoScale": true,
+          "fontAutoColor": true,
+          "polygonBorderSize": 2,
+          "polygonBorderColor": "#000000",
+          "polygonGlobalFillColor": "#0a55a1",
+          "globalUnitFormat": "none",
+          "globalDecimals": 0,
+          "globalDisplayMode": "all",
+          "globalOperatorName": "max",
+          "displayLimit": 1,
+          "maxMetrics": 1,
+          "columnAutoSize": true,
+          "rowAutoSize": true,
+          "radiusAutoSize": true,
+          "valueEnabled": false,
+          "tooltipEnabled": false,
+          "gradientEnabled": true,
+          "animationSpeed": 2500,
+          "globalThresholds": [
+            {
+              "value": 0,
+              "state": 0,
+              "color": "#9ca3af"
+            },
+            {
+              "value": 1,
+              "state": 1,
+              "color": "#299c46"
+            },
+            {
+              "value": 2,
+              "state": 2,
+              "color": "#ED8128"
+            },
+            {
+              "value": 3,
+              "state": 3,
+              "color": "#d44a3a"
+            }
+          ]
+        },
+        "savedComposites": [
+          {
+            "compositeName": ".*",
+            "displayName": "",
+            "members": [
+              {
+                "seriesName": ".*"
+              }
+            ],
+            "enabled": true,
+            "hideMembers": true,
+            "showName": false,
+            "showValue": false,
+            "animateMode": "all",
+            "thresholdLevel": 0,
+            "clickThrough": "",
+            "newTabEnabled": false,
+            "sanitizeURLEnabled": false,
+            "sanitizedURL": "",
+            "label": "Light",
+            "isTemplated": false,
+            "templatedName": ""
+          }
+        ],
+        "savedOverrides": []
+      },
+      {
+        "id": 5,
+        "type": "grafana-polystat-panel",
+        "title": "BPA WebServer Agent (Browser/RUM)",
+        "gridPos": {
+          "x": 16,
+          "y": 4,
+          "w": 8,
+          "h": 8
+        },
+        "datasource": "AIOps_Metrics",
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Source",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "20",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Alerts\\|BPA-Demo:Browser RUM \\- .*"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Custom Metric Host \\(Virtual\\)\\|Custom Metric Process \\(Virtual\\)\\|Custom Metric Agent \\(Virtual\\)"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "colors": [
+          "#9ca3af",
+          "#299c46",
+          "#ED8128",
+          "#d44a3a"
+        ],
+        "polystat": {
+          "shape": "circle",
+          "fontAutoScale": true,
+          "fontAutoColor": true,
+          "polygonBorderSize": 2,
+          "polygonBorderColor": "#000000",
+          "polygonGlobalFillColor": "#0a55a1",
+          "globalUnitFormat": "none",
+          "globalDecimals": 0,
+          "globalDisplayMode": "all",
+          "globalOperatorName": "max",
+          "displayLimit": 1,
+          "maxMetrics": 1,
+          "columnAutoSize": true,
+          "rowAutoSize": true,
+          "radiusAutoSize": true,
+          "valueEnabled": false,
+          "tooltipEnabled": false,
+          "gradientEnabled": true,
+          "animationSpeed": 2500,
+          "globalThresholds": [
+            {
+              "value": 0,
+              "state": 0,
+              "color": "#9ca3af"
+            },
+            {
+              "value": 1,
+              "state": 1,
+              "color": "#299c46"
+            },
+            {
+              "value": 2,
+              "state": 2,
+              "color": "#ED8128"
+            },
+            {
+              "value": 3,
+              "state": 3,
+              "color": "#d44a3a"
+            }
+          ]
+        },
+        "savedComposites": [
+          {
+            "compositeName": ".*",
+            "displayName": "",
+            "members": [
+              {
+                "seriesName": ".*"
+              }
+            ],
+            "enabled": true,
+            "hideMembers": true,
+            "showName": false,
+            "showValue": false,
+            "animateMode": "all",
+            "thresholdLevel": 0,
+            "clickThrough": "",
+            "newTabEnabled": false,
+            "sanitizeURLEnabled": false,
+            "sanitizedURL": "",
+            "label": "Light",
+            "isTemplated": false,
+            "templatedName": ""
+          }
+        ],
+        "savedOverrides": []
+      },
+      {
+        "type": "row",
+        "id": 6,
+        "title": "Infrastructure Agent -- DB Monitor",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 12
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "type": "stat",
+        "id": 7,
+        "title": "DB Availability",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 13
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "1",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "MySQL Databases\\|mariadb\\|phpapp:Availability$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "calcs": [
+              "lastNotNull"
+            ],
+            "fields": "",
+            "values": false
+          },
+          "textMode": "auto"
+        }
+      },
+      {
+        "type": "graph",
+        "id": 8,
+        "title": "Connection Refusal Rate",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 13
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "MySQL Databases\\|mariadb\\|phpapp\\|Connections:Connection Refusal Rate$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 9,
+        "title": "Buffer Pool Cache Hit Rate (%)",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 13
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "MySQL Databases\\|mariadb\\|phpapp\\|InnoDB:Cache Hit Rate \\(%\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "percent",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 10,
+        "title": "Slow Query Rate (%)",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 13
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "MySQL Databases\\|mariadb\\|phpapp\\|Efficiency\\|Query:Slow query rate \\(%\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-host\\|bpa-demo\\|bpa-demo-infra-agent$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "percent",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "row",
+        "id": 11,
+        "title": "PHP Probe Agent -- Application",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 21
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "type": "graph",
+        "id": 12,
+        "title": "App Response Time (ms)",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 22
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Frontends\\|Apps\\|BPA-Demo:Average Response Time \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 13,
+        "title": "App Error Rate (per interval)",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 22
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Frontends\\|Apps\\|BPA-Demo:Errors Per Interval$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 14,
+        "title": "App Concurrency",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 22
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Frontends\\|Apps\\|BPA-Demo:Concurrent Invocations$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 15,
+        "title": "DB Backend Response Time (ms)",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 22
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Backends\\|phpapp on mariadb-3306 \\(MySQL DB\\):Average Response Time \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "bpa-demo-php-probe\\|php-probes\\|bpa-demo-infra-agent\\(/usr/sbin/apache2\\)$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "row",
+        "id": 16,
+        "title": "BPA WebServer Agent -- Browser/RUM",
+        "gridPos": {
+          "h": 1,
+          "w": 24,
+          "x": 0,
+          "y": 30
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "type": "graph",
+        "id": 17,
+        "title": "Page Load Time (ms)",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 31
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|BPA Demo\\|.*:Average Page Load Time \\(ms\\)$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "ms",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      },
+      {
+        "type": "graph",
+        "id": 18,
+        "title": "Page Hits (per interval)",
+        "datasource": "AIOps_Metrics",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 31
+        },
+        "targets": [
+          {
+            "additionalParams": {
+              "alias": "",
+              "clampSize": 100,
+              "frequency": "auto",
+              "legendMetricCustomValues": [
+                ""
+              ],
+              "legendMetricField": "Metric",
+              "plotCategories": [
+                "value"
+              ]
+            },
+            "advanceQuery": false,
+            "aggregations": {
+              "aggregateBy": "",
+              "aggregationCatergory": "None",
+              "displayTimeSeries": true,
+              "enableAggregation": true,
+              "limit": "5",
+              "order": "TOP",
+              "resultFormat": "Time Series"
+            },
+            "basicFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Business Segment\\|BPA Demo\\|.*:Page Hits Per Interval$"
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": "Experience Collector Host\\|DxC Agent\\|Logstash-APM-Plugin$"
+                  }
+                ]
+              }
+            ],
+            "datasource": "AIOps_Metrics",
+            "datasourceType": "AIops_NASS",
+            "isRawQuery": false,
+            "nassAggregations": {
+              "aggregationsRawQuery": "",
+              "nassAggModeValues": {
+                "seriesName": [
+                  ""
+                ],
+                "xaxis": "",
+                "yaxis": [
+                  ""
+                ]
+              },
+              "nassAggregationMode": "Table",
+              "nassAggregationsEnabled": false
+            },
+            "querytFilters": [
+              {
+                "attributeNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ],
+                "isNot": false,
+                "logicalOperator": "AND",
+                "op": "SPEC",
+                "sourceNameSpecifier": [
+                  {
+                    "ignoreCase": false,
+                    "isNot": false,
+                    "logicalOperator": "AND",
+                    "op": "REGEX",
+                    "pattern": ""
+                  }
+                ]
+              }
+            ],
+            "rawQuery": "",
+            "refId": "A",
+            "tenantId": ""
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short"
+          },
+          "overrides": []
+        },
+        "options": {
+          "alertThreshold": true
+        },
+        "legend": {
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true,
+          "min": false,
+          "rightSide": true,
+          "show": true,
+          "total": false,
+          "values": true
+        },
+        "lines": true,
+        "linewidth": 1,
+        "points": false,
+        "pointradius": 2,
+        "fill": 1,
+        "stack": false,
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "transformations": null,
+        "hideTimeOverride": null,
+        "timeFrom": null,
+        "timeShift": null
+      }
+    ]
+  }
+}

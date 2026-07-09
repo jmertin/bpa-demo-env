@@ -53,6 +53,7 @@ command and remove them manually (each script's header comment says which).
 | `bpa-demo-universe.sh` | The `"BPA Demo universe"` **APM Universe** (`dx-do apm-universe` -- see `bpa-demo-services-universe.sh` for the other, separate universe type the tenant also needs) -- a topology/metric-data scope populated with 3 explicit metric-source agent paths, covering all 4 of the app's named telemetry identities: the Infrastructure Agent, the PHP probe agent, and the BPA WebServer Agent (which covers both the "BPA agent" and the "Browser agent" -- see the Alerts section above for why there's no fourth, independent Browser Agent entity). Unlike a Service, a Universe has no content-query membership mechanism over the CLI -- sources are added one at a time via `apm-universe add-metric-source`, and `create` self-heals by adding any of the 3 that are missing. `apm-universe create` does not honor `dry-run` (silently ignored, creates for real immediately) -- see the script's header comment for this and other CLI landmines found while writing it. **Known limitation:** the Triage/Topology console view is driven by a different, legacy-shaped filter (`views.tas`) that `add-metric-source` never touches -- see `BUGS` for the full writeup; fixing it needs a manual console step. |
 | `bpa-demo-services-universe.sh` | The `"BPA Demo"` **O2/Platform Universe** (`dx-do o2-universe` -- a.k.a. "Services Universe" in the console; a different resource from the APM Universe above, with its own id space) -- created because the tenant needs both universe types until the product merges them. `o2-universe create` accepts no scoping parameters at all (extras are silently ignored), so a CLI-created Universe is always unscoped (`{"filter": {"op": "ALL"}}` on both its `tas` and `nass` views) -- **confirmed to crash the console's edit UI** when opened in that state (2026-07-07; see `dx-do-o2-universe-issue.md`). There is no `update`/`add-view` command to narrow it afterward either, so this script deliberately does **not** fall back to `o2-universe create` when its state file is missing/stale -- it fails with instructions for manual console creation instead (pick a Service scope in the console's own creation wizard, which avoids the crash entirely). The currently-tracked instance (`VIEW618`) was created that way. `delete` still uses `apm-universe delete`, which works across both universe types since `o2-universe` has no `delete` command of its own. |
 | `bpa-demo-sli.sh` | The `"BPA-Demo Frontend Response Time"` **SLI** (Service Level Indicator, `dx-do sli` -- see the SLIs section below) bound to the `"BPA-Demo"` Service. `sli` has no native create/delete: `create` runs `sli import` against a tracked JSON template (`templates/bpa-demo-response-time-sli.json`), and `delete` runs `sli exclude-service` (unbinds the service; the SLI definition itself is never deleted -- there is no command for that). Raw SLI only for now, no SLO/error-budget/alert layer -- see the script's header comment for why. |
+| `bpa-demo-agent-health-dashboard.sh` | The `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder: one traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert; `dashboard-import`'s documented `preserveUid=true overwrite=true` upsert doesn't work on this build -- `overwrite=` is silently ignored), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
 
 ## Alerts
 
@@ -129,3 +130,54 @@ substitutes it at runtime from `DXO2_TENANT_USER_EMAIL` in `.config` (see
 `.config.example`) -- required so a different tenant user running this
 script gets their own login attributed, since the original author's login
 may not exist in someone else's tenant.
+
+## Dashboards
+
+`bpa-demo-agent-health-dashboard.sh` creates `"BPA-Demo · Agent Health"` in
+the existing `"BPA-Demo"` dashboard folder (a dashboard's title can't equal
+its containing folder's title, hence the `· Agent Health` suffix). Three
+sections:
+
+| Section | Panels |
+|---|---|
+| Agent Status (row) | 3 `grafana-polystat-panel` traffic-light circles -- Infrastructure Agent, PHP Probe Agent, BPA WebServer Agent |
+| Infrastructure Agent -- DB Monitor | DB Availability (stat), Connection Refusal Rate, Buffer Pool Cache Hit Rate, Slow Query Rate (graphs) |
+| PHP Probe Agent -- Application | App Response Time, App Error Rate, App Concurrency, DB Backend Response Time (graphs) |
+| BPA WebServer Agent -- Browser/RUM | Page Load Time, Page Hits (graphs) -- these will likely show 0/no-data under the traffic generator alone, since it drives plain HTTP requests, not a real browser executing the BA snippet's JS |
+
+Each traffic light queries the reserved `Custom Metric Agent (Virtual)`
+alert-status metric (`Alerts|BPA-Demo:<alert name>`, published by the EM for
+every alert on an active Management Module) with a regex matching every
+alert belonging to that agent's tier, and rolls up to the *worst* (`max`)
+severity among them via a polystat composite -- green only if every alert
+for that agent is currently OK. This reuses the alerts already created by
+`bpa-demo-management-module.sh`/`bpa-demo-agent-alerts.sh`; it creates no new
+alert. All query patterns (the alert-status regexes and the metric graphs)
+were verified live against real `dx-do metric data` output before being
+wired into the dashboard JSON, including confirming the lights show a real
+mix of ok/warning/critical rather than being trivially all-green.
+
+**Landmines found on this dx-do build, none of which match some dx-do
+documentation written for newer builds:**
+- `dashboard-export`/`dashboard-import`/`dashboard-update` all take
+  `dashboardExportFile=`, not `dashboardFile=`.
+- `dashboard-import`'s `overwrite=` parameter is silently ignored (no
+  "ignoring extra args" warning for `overwrite` itself, but the request
+  body always shows `"overwrite":false` regardless of what's passed) --
+  attempting the documented `preserveUid=true overwrite=true` upsert
+  fails with HTTP 412 `version-mismatch` because the payload is missing
+  the `version` field Grafana requires for a plain non-overwrite save.
+- `dashboard-update` does **not** resolve a numeric id from a bare
+  `dashboard.uid` on this build -- it fails with `Export dashboard does
+  not have an id!` even when `uid` is set and live. The classic export
+  -> edit -> update workflow (get the real numeric `id` + `meta.folderId`
+  via `dashboard-export`, splice in the regenerated panels, then
+  `dashboard-update`) is what actually works, and is what `create`'s
+  self-heal path does.
+- There is no `dashboard-create`, `dashboard-delete`, `validate-layout`,
+  or `dashboard-render` command at all in this build's `dashboard` group
+  -- geometry was hand-verified (24-column grid, no overlaps) instead of
+  linted, and there's no way to screenshot the result for a visual
+  self-check; verification instead relied on `dashboard-export`/`check`
+  (correct panel count/types/titles) and direct `metric data` queries
+  confirming every panel's underlying query returns real data.
