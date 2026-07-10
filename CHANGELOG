@@ -5,6 +5,58 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 09:40 - [Fix - agent health dashboard split into 4 real sources, add descriptions]:
+  User reported the Agent Health dashboard's DB Monitor and PHP Probe
+  panels empty again despite the Helm deployment running all night and
+  Compose coming back up that morning. Root cause was operational, not an
+  authoring bug this time: both deployments default to identical DX O2
+  agent identity strings, and running them concurrently makes DX O2
+  suffix the second connection's identity with %1 to disambiguate
+  (confirmed live via `nass query`: bpa-demo-infra-agent, DB Monitor
+  hostname 127.0.0.1 = Kubernetes' same-pod access; bpa-demo-infra-agent%1,
+  hostname mariadb = Compose's separate-container access). The
+  dashboard's exact $-anchored patterns matched neither once the
+  collision started.
+  Independently, found and fixed a real authoring bug while investigating:
+  4 DB-Monitor panels and 1 PHP-probe-backend panel hardcoded the literal
+  hostname segment "mariadb"/"mariadb-3306", which only ever matched
+  Compose's naming -- Kubernetes' 127.0.0.1-based paths never matched
+  even without any identity collision.
+  User is adding a distinct identity to the Helm-deployed side going
+  forward, and asked that each APMIA agent (Infra Agent + PHP Probe) be
+  identifiable by source in the dashboard, since the Browser
+  Agent/BPA WebServer Plugin's shared DxC Agent identity has no
+  per-deployment knob to differentiate.
+  Fixed in dxo2-scripts/templates/bpa-demo-agent-health-dashboard.json,
+  pushed live via the script's own `create` self-heal path (dashboard
+  version 3 -> 4, uid sj8FvVLvz unchanged):
+    - Wildcarded the 5 hardcoded mariadb/mariadb-3306 literals to
+      [^|]+/[^|]+-3306 so DB Monitor and PHP-probe-backend panels match
+      either deployment's real metric paths.
+    - Made the 8 bpa-demo-infra-agent sourceNameSpecifiers tolerate an
+      optional (%\d+)? collision suffix, so a transient identity
+      collision doesn't leave the dashboard fully blank.
+    - Switched legendMetricField from "Metric" to "Source" on all 8
+      DB-Monitor/PHP-Probe panels -- confirmed via a pre-existing
+      hand-built dashboard in this tenant ("BPA-Demo PHP Probe ·
+      Overview") that "Source" is this tenant's established convention
+      for labeling multi-source series by which agent produced them.
+      Deliberately left the Browser-Agent/BPA-WebServer-Plugin panels
+      alone -- those ride the shared DxC Agent identity with no
+      per-deployment differentiation available.
+  Verified live against the real tenant via `nass query` (the same NASS
+  API the dashboard itself queries, not `metric data` -- see this
+  project's established lesson that `metric data` normalizes away
+  exactly the prefix the dashboard's own query needs) before and after
+  the fix, and re-exported the live dashboard post-push to confirm all 8
+  panels carry the new patterns and legend field.
+  Still open, not fixed: one side's PHP-probe frontend metrics report
+  under the literal fallback name UnknownAgent instead of any
+  bpa-demo-infra-agent variant -- real data, but not safely wildcardable
+  since that name isn't scoped to this app. Flagged for re-check once the
+  identity collision is resolved.
+
+------------------------------------------------------------------------------
 2026-07-09 @ 21:15 - [Note - both fixes below confirmed live in production]:
   The root-redirect fix (20:55 entry) initially appeared not to take
   effect on the user's production k3s host (nuc1) even after the source
