@@ -25,11 +25,41 @@
 #   - the mysql backend database -- both the php-probe's inferred DATABASE
 #     dependency and the DB Monitor extension's own richer CI
 #
+# Bug fixed 2026-07-10: three of the four content groups used an exact-match
+# `agent`/`applicationName EQUALS` on the pre-DEPLOYMENT_NAME/
+# DEPLOYMENT_POSTFIX identity literals (bpa-demo-host/bpa-demo-infra-agent/
+# bpa-demo-php-probe/BPA-Demo -- see CLAUDE.md's "Deployment identity"
+# section), all now dead. `create`'s self-heal only ever checked for the
+# fourth (BPA WebServer Agent) group, so re-running it after the identity
+# change did nothing for the other three. Fixed both the identity mismatch
+# and the self-heal gap:
+#   - Switched all three from `EQUALS` (exact match on one literal) to
+#     `MATCHES` (regex) with a wildcarded `bpa-demo-.*` segment, so the
+#     Service covers any deployment's real identity, present or future,
+#     instead of one specific literal that a future identity change could
+#     break again. Confirmed `MATCHES` is a real, working operator on this
+#     API via a `service add-content ... dry-run=true` probe before
+#     committing anything -- its preview correctly matched both
+#     bpa-demo-k8s and bpa-demo-docker's live agent vertices.
+#   - `create` now uses `service set-content` (a full replace of all four
+#     groups) instead of `service add-content` (checks for and adds only
+#     one specific group) for its self-heal path, so re-running it always
+#     brings the live content query back in sync with the four groups
+#     declared in this script, rather than leaving stale groups from an
+#     earlier identity scheme sitting alongside new ones forever.
+#   - Live content query confirmed via `service detail` immediately after
+#     applying: all four groups present, `MATCHES`-based ones showing the
+#     corrected regex, DxC group unchanged.
+#
 # Usage:
-#   dxo2-scripts/bpa-demo-service.sh create        - create the Service.
-#                                                     Safe to re-run: warns
-#                                                     instead of failing if
-#                                                     it already exists.
+#   dxo2-scripts/bpa-demo-service.sh create        - create the Service, or
+#                                                     if it already exists,
+#                                                     set its content query
+#                                                     to the current four
+#                                                     groups (idempotent,
+#                                                     self-heals any stale
+#                                                     group left over from a
+#                                                     prior identity scheme).
 #   dxo2-scripts/bpa-demo-service.sh check         - print whether the
 #                                                     Service exists and its
 #                                                     current definition.
@@ -59,6 +89,9 @@ readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly SERVICE_NAME="BPA-Demo"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly BPA_WEBSERVER_AGENT="Experience Collector Host|DxC Agent|Logstash-APM-Plugin"
+readonly APP_NAME_PATTERN='^bpa-demo-.*$'
+readonly INFRA_AGENT_PATTERN='^bpa-demo-.*\|bpa-demo-.*\|bpa-demo-.*$'
+readonly PHP_PROBE_AGENT_PATTERN='^bpa-demo-.*\|php-probes\|bpa-demo-.*\(/usr/sbin/apache2\)$'
 
 ## Print usage information.
 usage() {
@@ -111,34 +144,34 @@ run_dx_do() {
     "${DX_DO_BIN}" "$@" 2>&1 | grep -v -e '^ℹ' -e '^☒' -e '^…' -e '^☐' -e 'Authorization'
 }
 
-## Create the BPA-Demo Service. Safe to re-run: if it already exists, adds
-## any content groups declared above that are missing from the live
-## definition (e.g. the BPA WebServer Agent group, added 2026-07-06 to a
-## Service that already existed) instead of just no-op'ing.
+## Create the BPA-Demo Service, or bring an existing one's content query up
+## to date. Safe to re-run: uses `service set-content` (a full replace, not
+## an incremental add) so the four groups declared above always match
+## exactly what's live -- no stale groups left behind from a prior identity
+## scheme (see "Bug fixed 2026-07-10" in this script's header).
 cmd_create() {
-    local detail_json
-    if detail_json=$("${DX_DO_BIN}" service detail serviceName="${SERVICE_NAME}" output.format=json 2>/dev/null); then
-        info "Service '${SERVICE_NAME}' already exists -- checking for missing content groups."
-        if printf '%s' "${detail_json}" | grep -qF "${BPA_WEBSERVER_AGENT}"; then
-            info "BPA WebServer Agent content group already present -- nothing to do."
-        else
-            info "Adding missing BPA WebServer Agent content group..."
-            run_dx_do service add-content serviceName="${SERVICE_NAME}" \
-                content.g4.agent.EQUALS="${BPA_WEBSERVER_AGENT}" \
-                dry-run=false
-        fi
-        info "Run '${SCRIPT_NAME} check' to see its current definition."
+    if "${DX_DO_BIN}" service detail serviceName="${SERVICE_NAME}" output.format=json >/dev/null 2>&1; then
+        info "Service '${SERVICE_NAME}' already exists -- setting its content query to the current four groups (idempotent if already correct)."
+    else
+        info "Creating Service '${SERVICE_NAME}'..."
+        run_dx_do service create name="${SERVICE_NAME}" \
+            content.g1.applicationName.MATCHES="${APP_NAME_PATTERN}" \
+            content.g2.agent.MATCHES="${INFRA_AGENT_PATTERN}" \
+            content.g3.agent.MATCHES="${PHP_PROBE_AGENT_PATTERN}" \
+            content.g4.agent.EQUALS="${BPA_WEBSERVER_AGENT}" \
+            dry-run=false
+        info "Done. Allow ~30 seconds for the Service to become visible in the console."
         return 0
     fi
 
-    info "Creating Service '${SERVICE_NAME}'..."
-    run_dx_do service create name="${SERVICE_NAME}" \
-        content.g1.applicationName.EQUALS="${SERVICE_NAME}" \
-        content.g2.agent.EQUALS="bpa-demo-host|bpa-demo|bpa-demo-infra-agent" \
-        content.g3.agent.EQUALS="bpa-demo-php-probe|php-probes|bpa-demo-infra-agent(/usr/sbin/apache2)" \
+    run_dx_do service set-content serviceName="${SERVICE_NAME}" \
+        content.g1.applicationName.MATCHES="${APP_NAME_PATTERN}" \
+        content.g2.agent.MATCHES="${INFRA_AGENT_PATTERN}" \
+        content.g3.agent.MATCHES="${PHP_PROBE_AGENT_PATTERN}" \
         content.g4.agent.EQUALS="${BPA_WEBSERVER_AGENT}" \
         dry-run=false
-    info "Done. Allow ~30 seconds for the Service to become visible in the console."
+    info "Done. Allow ~30 seconds for the change to become visible in the console."
+    info "Run '${SCRIPT_NAME} check' to see its current definition."
 }
 
 ## Print whether the Service exists and its current definition.
