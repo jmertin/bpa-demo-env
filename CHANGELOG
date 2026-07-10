@@ -5,6 +5,38 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 14:45 - [Fix - BPA-Demo Service content query pointed at dead identity literals]:
+  User asked for the Service definition to be rebuilt first, before fixing
+  the SLI by hand. Found 3 of its 4 content groups used exact-match `agent`/
+  `applicationName EQUALS` on the pre-DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX
+  identity literals (bpa-demo-host/bpa-demo-infra-agent/bpa-demo-php-probe/
+  BPA-Demo), all dead since today's identity fix. dxo2-scripts/
+  bpa-demo-service.sh's create self-heal only ever checked for the 4th
+  (DxC/BPA WebServer Agent) group, so re-running it did nothing for the
+  other three.
+  Confirmed `MATCHES` is a real, working regex operator for `service`
+  content queries via a `service add-content ... dry-run=true` probe
+  (default dry-run, same as `service create`) before committing anything --
+  its stderr preview correctly matched both bpa-demo-k8s's and
+  bpa-demo-docker's live agent vertices with a wildcarded
+  ^bpa-demo-.*\|bpa-demo-.*\|bpa-demo-.*$ pattern. Fixed all 3 affected
+  groups to MATCHES with a wildcarded bpa-demo-.* segment instead of a
+  specific literal.
+  Also switched create's self-heal from `service add-content` (appends one
+  specific group, leaves any stale ones behind) to `service set-content` (a
+  full replace of all four groups, idempotent when already correct) -- the
+  add-content check would never have caught groups 1-3 being wrong even
+  with the patterns fixed, since it only ever looked for group 4.
+  Applied live via set-content (dry-run preview first, then dry-run=false);
+  confirmed via `service detail serviceName=BPA-Demo` immediately after:
+  all four groups present, the three MATCHES ones showing the corrected
+  regex, the DxC group unchanged. Preview showed ~100 matched entities
+  (capped), including both live agent identities and their MySQL DB
+  dependencies, plus historical/stale topology nodes from before the
+  identity change (expected, harmless).
+  Files changed: dxo2-scripts/bpa-demo-service.sh, CLAUDE.md.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 14:20 - [Fix - Management Module, Agent Alerts, dashboard app-name gap fixed; SLI confirmed unfixable via CLI]:
   User reported the Management Module and SLI stopped working after
   today's DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX identity fix. Investigation
