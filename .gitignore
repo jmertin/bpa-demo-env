@@ -1,5 +1,6 @@
 # Secret configuration and local build state - never commit
 .config
+.config-*
 .build_number
 
 # Generated app archives
