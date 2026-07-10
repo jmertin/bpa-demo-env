@@ -31,6 +31,22 @@
 # metric data (`dx-do metric data`) before being wired into the
 # dashboard -- see this repo's CHANGELOG for the verification transcript.
 #
+# 2026-07-10: added a "Deployment" dashboard variable (custom type,
+# options docker/k8s, includeAll, defaults to "All") so the Infrastructure
+# Agent and PHP Probe panels can be scoped to one deployment or show both
+# together -- their identity is DEPLOYMENT_NAME-DEPLOYMENT_POSTFIX from
+# .config (e.g. bpa-demo-docker / bpa-demo-k8s, see CLAUDE.md's
+# "Deployment identity" section). Interpolated into each panel's
+# sourceNameSpecifier pattern as ${deployment:regex} (Grafana's built-in
+# multi-value-to-regex format, e.g. "(docker|k8s)" when "All" is
+# selected). Does NOT affect the Browser Agent / BPA WebServer Plugin
+# panels -- those ride a shared DxC Agent identity with no per-deployment
+# distinction available. IMPORTANT: the self-heal upsert path below only
+# merged panels/title/tags from the template into the live export --
+# templating was silently dropped on the first push of this variable
+# (dashboard version bumped but the variable never appeared) until fixed
+# to also merge dashboard.templating.
+#
 # dx-do's `dashboard` command group on this CLI build has NO
 # dashboard-create, dashboard-delete, validate-layout, or
 # dashboard-render command (a smaller surface than some dx-do
@@ -259,6 +275,7 @@ with open('${TEMPLATE_FILE}') as f:
 live['dashboard']['panels'] = fresh['dashboard']['panels']
 live['dashboard']['title'] = fresh['dashboard']['title']
 live['dashboard']['tags'] = fresh['dashboard']['tags']
+live['dashboard']['templating'] = fresh['dashboard'].get('templating', {'list': []})
 with open('${rendered_file}', 'w') as f:
     json.dump(live, f)
 "

@@ -5,6 +5,45 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 11:05 - [Feat - agent health dashboard gets a Deployment selector; fix a dashboard self-heal bug]:
+  Once DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX went live (previous entry), the
+  old identity literals (bpa-demo-host, bpa-demo-infra-agent,
+  bpa-demo-php-probe) genuinely stopped existing -- confirmed via
+  `nass query` GROUP BY metric.source COUNT: new sources are
+  SuperDomain|bpa-demo-docker|bpa-demo-docker|bpa-demo-docker and
+  SuperDomain|bpa-demo-k8s|bpa-demo-k8s|bpa-demo-k8s.
+  Added a Grafana "custom" template variable (deployment; options
+  docker,k8s; includeAll; default "All"; single-select) to
+  dxo2-scripts/templates/bpa-demo-agent-health-dashboard.json and
+  interpolated ${deployment:regex} (Grafana's built-in multi-value-to-regex
+  format) into all 8 DB-Monitor/PHP-Probe sourceNameSpecifier patterns,
+  replacing the dead literals. Left the Browser-Agent/BPA-WebServer-Plugin
+  panels and the 3 polystat alert-status panels untouched -- polystats
+  query a separate alert-status source that isn't deployment-scoped.
+  Bug found while pushing: bpa-demo-agent-health-dashboard.sh's self-heal
+  upsert (export live -> merge fresh template's fields -> dashboard-update)
+  only ever merged panels/title/tags -- never templating. First push
+  bumped the dashboard version but dashboard-variables-list showed zero
+  variables. Fixed by adding dashboard.templating to the script's python
+  merge step; re-pushed (dashboard version 4 -> 5 -> 6) and confirmed via
+  dashboard-variables-list that the variable now persists, and via
+  dashboard-export that all 8 panels carry the ${deployment:regex} tokens.
+  Also confirmed, not yet explained: giving each deployment a distinct
+  identity did not fully resolve the earlier %N-suffix/UnknownAgent
+  symptoms -- Kubernetes' own PHP probe still reports under UnknownAgent
+  instead of bpa-demo-k8s (a separate, still-unresolved self-association
+  issue), while Docker's own PHP probe resolved correctly to
+  bpa-demo-docker once its identity was fixed.
+  Verification caveat: nass query cannot validate Grafana template-variable
+  interpolation at all (bypasses Grafana's substitution layer entirely).
+  Verified structurally only -- dashboard-variables-list confirms the
+  variable definition persisted; dashboard-export confirms the
+  ${deployment:regex} tokens are present in every panel's pattern. Whether
+  the live NASS datasource plugin actually performs the substitution
+  before querying could not be visually confirmed -- no dashboard-render
+  on this build.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 10:15 - [Feat - DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX give every APMIA agent a distinguishable identity]:
   Root cause of the dashboard identity collision investigated this morning:
   build-scripts/compose.sh and build-scripts/deploy.sh both defaulted every
