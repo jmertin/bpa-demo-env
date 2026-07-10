@@ -132,3 +132,43 @@ filter-group question above is resolved and the specifier is verified
 correct, update that template file by hand to match, so a fresh SLI created
 elsewhere starts from the corrected definition instead of the original
 dead-literal one.
+
+---
+
+## SLIs: Error Rate + Client-Side Page Load Time (sliId 2768, 2769)
+
+Two new SLIs, added 2026-07-10 as starting points for the user to fine-tune
+in the console (the same reason `bpa-demo-response-time-sli.json` isn't kept
+in sync with 2767's live edits — a script here would go stale the moment
+console tuning starts):
+
+- **`"BPA-Demo Frontend Error Rate"`** (`sliId 2768`) —
+  `dxo2-scripts/templates/bpa-demo-error-rate-sli.json`. PHP probe agent,
+  `Frontends|Apps|<app>:Errors Per Interval` (app-level aggregate).
+  `sli_type: "Errors"`.
+- **`"BPA-Demo Client-Side Page Load Time"`** (`sliId 2769`) —
+  `dxo2-scripts/templates/bpa-demo-page-load-time-sli.json`. Browser Agent
+  (`Experience Collector Host|DxC Agent|Logstash-APM-Plugin`),
+  `Business Segment|BPA Demo|<url>:Average Page Load Time (ms)`. This is
+  real client-side/End-User Experience data (measured in an actual
+  visitor's browser), not the classic server-side APM path — it just
+  happens to surface through the same NASS metric catalog as everything
+  else. `sli_type: "Latency"`. Reads `totalMetrics: 0` right now — expected,
+  since the traffic generator only drives plain HTTP requests with no real
+  browser executing the BA snippet.
+
+Both templates were verified against real data via `nass query` *before*
+import this time, specifically to avoid repeating 2767's over-matching
+mistake (see the section above). Imported cleanly as new resources — no
+name collision, since `sli import`'s refusal only triggers on an existing
+name.
+
+**Landmine found while checking these:** `sli list`'s `totalMetrics` field
+is not a match-count for the specifier. `sliId 2768` showed `totalMetrics:
+78` despite matching exactly one real source (confirmed via `nass query`);
+it appears to count aggregated time-series intervals computed over time,
+not "how many sources matched" (`sliId 2767` also shows `78`, for an
+unrelated reason — coincidence, not a shared bug). `sliId 2769` correctly
+showed `0`, consistent with genuinely no data flowing yet. Use `nass query`
+to verify a specifier's match set; don't infer correctness from
+`totalMetrics`.

@@ -5,6 +5,48 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 16:05 - [Feat - two new SLIs: Error Rate (APM) and Client-Side Page Load Time (AXA/End-User)]:
+  User asked for two simple SLI starting points to fine-tune in the
+  console: an Errors Per Interval SLI on the classic APM path, and a
+  Client-Side Page Load Time SLI on the End-User/Digital Experience
+  (Browser Agent) path.
+  Checked the tenant's own pre-existing "CEmperf DB Errors" SLI (sliId
+  873) first to get a real, confirmed sli_type value for an error-type
+  SLI ("Errors") rather than guessing.
+  Created dxo2-scripts/templates/bpa-demo-error-rate-sli.json
+  ("BPA-Demo Frontend Error Rate"): PHP probe agent (same wildcarded
+  source pattern as the corrected response-time template),
+  Frontends|Apps|bpa-demo-[^|]+:Errors Per Interval$ (app-level
+  aggregate, matching the same verified pattern already used by
+  bpa-demo-agent-alerts.sh's php-error-rate alert).
+  Created dxo2-scripts/templates/bpa-demo-page-load-time-sli.json
+  ("BPA-Demo Client-Side Page Load Time"): Browser Agent identity
+  (Experience Collector Host|DxC Agent|Logstash-APM-Plugin, unchanged by
+  the deployment-identity work since it's a separate telemetry source),
+  Business Segment|BPA Demo|[^|]+:Average Page Load Time (ms)$ -- real
+  client-side/End-User Experience data, not the classic server-side APM
+  path, though it surfaces through the same NASS metric catalog.
+  Verified both patterns via nass query against real data BEFORE
+  importing anything, specifically to avoid repeating the response-time
+  SLI's over-matching mistake: error rate matches exactly one live
+  source with no nested-backend variant possible; page load matches
+  multiple real per-page entries cleanly.
+  Imported both as one-off `sli import` calls (sliId 2768, 2769) rather
+  than building a self-healing script yet, since the user plans to
+  fine-tune both in the console -- a script would go stale immediately,
+  the same trap the first SLI's own template fell into.
+  Landmine found while checking: `sli list`'s totalMetrics field is not
+  a match-count for the specifier -- sliId 2768 showed totalMetrics: 78
+  despite matching exactly one real source via nass query; it appears to
+  count aggregated time-series intervals over time, not source-match
+  count. sliId 2769 correctly showed 0 (no real browser traffic yet,
+  traffic generator is plain HTTP only). Use nass query to verify
+  specifier correctness, not totalMetrics.
+  Files changed: dxo2-scripts/templates/bpa-demo-error-rate-sli.json
+  (new), dxo2-scripts/templates/bpa-demo-page-load-time-sli.json (new),
+  DX-O2_MANUAL_CONFIGURATION.md, CLAUDE.md.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 15:30 - [Docs - add DX-O2_MANUAL_CONFIGURATION.md for console-only steps]:
   User manually fixed the SLI's dead filter via the console's own SLI
   editor (structured Source/Metric conditions -- contains/starts_with/
