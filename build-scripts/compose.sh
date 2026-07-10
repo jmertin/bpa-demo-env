@@ -74,12 +74,21 @@ load_config() {
     export APMIA_EM_HOST="${APMIA_EM_HOST:-}"
     export APMIA_EM_PORT="${APMIA_EM_PORT:-8443}"
     export APMIA_DEPLOY="${APMIA_DEPLOY:-true}"
-    export APMIA_AGENT_NAME="${APMIA_AGENT_NAME:-bpa-demo-agent}"
-    export APMIA_APP_NAME="${APMIA_APP_NAME:-bpa-demo}"
-    export APMIA_HOST_NAME="${APMIA_HOST_NAME:-bpa-demo-host}"
-    export APMIA_PROCESS_NAME="${APMIA_PROCESS_NAME:-bpa-demo}"
-    export APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
-    export APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
+    # DEPLOYMENT_NAME + DEPLOYMENT_POSTFIX ("bpa-demo" + "docker" by default)
+    # form the shared identity default for every APMIA-based agent below, so
+    # this Compose deployment never collides with a Helm/Kubernetes one
+    # (default postfix "k8s", see deploy.sh) reporting to the same DX O2
+    # tenant -- see .config.example for the full explanation. Any of the six
+    # APMIA_* vars can still be set explicitly to override just that agent.
+    local deployment_name="${DEPLOYMENT_NAME:-bpa-demo}"
+    local deployment_postfix="${DEPLOYMENT_POSTFIX:-docker}"
+    local deployment_id="${deployment_name}-${deployment_postfix}"
+    export APMIA_AGENT_NAME="${APMIA_AGENT_NAME:-${deployment_id}}"
+    export APMIA_APP_NAME="${APMIA_APP_NAME:-${deployment_id}}"
+    export APMIA_HOST_NAME="${APMIA_HOST_NAME:-${deployment_id}}"
+    export APMIA_PROCESS_NAME="${APMIA_PROCESS_NAME:-${deployment_id}}"
+    export APMIA_PHP_AGENT_NAME="${APMIA_PHP_AGENT_NAME:-${deployment_id}}"
+    export APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-${deployment_id}}"
     export APMIA_LOG_LEVEL="${APMIA_LOG_LEVEL:-INFO}"
     export APMIA_PHP_COLLECTOR_HOST="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"
     export APMIA_PHP_COLLECTOR_PORT="${APMIA_PHP_COLLECTOR_PORT:-5005}"

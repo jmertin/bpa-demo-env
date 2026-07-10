@@ -38,10 +38,14 @@ services:
       # Agent identity – native APMIA Docker container mechanism.
       # The APMIA agent startup script reads APMENV_* vars directly and overrides
       # the corresponding introscope.* profile properties without any file patching.
-      APMENV_INTROSCOPE_AGENT_AGENTNAME:         ${APMIA_AGENT_NAME:-bpa-demo-agent}
-      APMENV_INTROSCOPE_AGENT_APPLICATION_NAME:  ${APMIA_APP_NAME:-bpa-demo}
-      APMENV_INTROSCOPE_AGENT_HOSTNAME:          ${APMIA_HOST_NAME:-bpa-demo-host}
-      APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME: ${APMIA_PROCESS_NAME:-bpa-demo}
+      # compose.sh always exports these first from DEPLOYMENT_NAME + DEPLOYMENT_POSTFIX
+      # ("bpa-demo" + "docker" by default, see .config.example) -- the literal
+      # fallbacks below only apply if docker compose is invoked directly, bypassing
+      # compose.sh's own defaulting.
+      APMENV_INTROSCOPE_AGENT_AGENTNAME:         ${APMIA_AGENT_NAME:-bpa-demo-docker}
+      APMENV_INTROSCOPE_AGENT_APPLICATION_NAME:  ${APMIA_APP_NAME:-bpa-demo-docker}
+      APMENV_INTROSCOPE_AGENT_HOSTNAME:          ${APMIA_HOST_NAME:-bpa-demo-docker}
+      APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME: ${APMIA_PROCESS_NAME:-bpa-demo-docker}
       # Log level: log4j logger spec – level and appender name.
       APMENV_LOG4J_LOGGER_INTROSCOPEAGENT: "${APMIA_LOG_LEVEL:-INFO}, logfile"
       # URL group clamp: limits distinct frontend URL groups tracked by the agent.
@@ -115,7 +119,7 @@ services:
     # Set a human-readable hostname so the PHP probe and BPA Apache module
     # report under this name in the DX O2 metric path instead of the
     # auto-generated Docker container ID.
-    hostname: ${APMIA_HOST_NAME:-bpa-demo-host}
+    hostname: ${APMIA_HOST_NAME:-bpa-demo-docker}
     ports:
       - "8080:8080"
     environment:

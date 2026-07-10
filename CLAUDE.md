@@ -208,6 +208,18 @@ The APMIA DB Monitor extension for MySQL/MariaDB is installed from a separate ar
 - **MariaDB schema compatibility (`version` property):** even with correct grants, the extension's *default* query set targets MySQL 5.7+ and queries `performance_schema.global_variables`/`global_status`, tables MariaDB does not implement (`ERROR 1146: Table 'performance_schema.global_variables' doesn't exist`). The extension bundles an alternate query set for this — `config/schema5_6x.json` — that queries `information_schema.global_variables`/`global_status` instead, which MariaDB does implement. Selecting it is a `bundle.properties` property, not a code change: `introscope.agent.dbmonitor.mysql.profiles.<profile>.version=5_6x`, sourced from `APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_<PROFILE>_VERSION` (docker-compose.yml hardcodes `"5_6x"`; Helm reads `dxo2.dbMonitor.schemaVersion`, default `"5_6x"`). Despite the "5_6x" (MySQL 5.6.x) name, this is the correct/only working setting for MariaDB, not a version match.
 - **Stale calculated-metric term (`_patch_schema5_6x_calc()` in `entrypoint.sh`):** `schema5_6x.json`'s "Resource Utilization:Total Size of Shared Buffers(KB)" metric sums five MySQL variables via `show global variables`, including `innodb_additional_mem_pool_size` — removed from MySQL since 5.6.3 and never implemented in MariaDB. Since the query returns no row for it, the JSONPath filter for that term is emitted unresolved into the calculation string and the Nashorn expression evaluator fails to parse it (`javax.script.ScriptException: Expected an operand but found ?`), logged as an `[ERROR] [IntroscopeAgent.DBMonitor]` every query interval. `_patch_schema5_6x_calc()` removes just that `+ $.resultSet[?(@.VARIABLE_NAME == 'innodb_additional_mem_pool_size')].VARIABLE_VALUE` term from `config/schema5_6x.json` (same tar.gz + already-deployed-directory double-patch pattern as `_patch_bundle_props()`) so the remaining four variables still sum correctly. Verified via `python3 -m json.tool` that the patched file remains valid JSON.
 
+### Deployment identity (`DEPLOYMENT_NAME` / `DEPLOYMENT_POSTFIX`)
+
+**Bug found live 2026-07-10:** the Docker Compose deployment and the Helm/Kubernetes deployment defaulted to identical DX O2 agent identity strings (`APMIA_AGENT_NAME`, `APMIA_APP_NAME`, `APMIA_HOST_NAME`, `APMIA_PROCESS_NAME`, `APMIA_PHP_AGENT_NAME`, `APMIA_WEB_AGENT_NAME` all shared the same hardcoded `bpa-demo*` defaults across both `build-scripts/compose.sh` and `build-scripts/deploy.sh`). Running both against the same tenant made DX O2 disambiguate the second connection by appending a `%1` suffix to its identity — confirmed via `nass query`: `bpa-demo-infra-agent` (Kubernetes, DB Monitor hostname `127.0.0.1`, same-pod access) vs `bpa-demo-infra-agent%1` (Compose, DB Monitor hostname `mariadb`, separate-container access — whichever connected *second* got suffixed). This silently broke every dashboard/alert/metric-grouping query written against the plain (unsuffixed) name, since neither currently-reporting identity matched it exactly.
+
+Fixed by introducing two new `.config` variables that combine as `"${DEPLOYMENT_NAME}-${DEPLOYMENT_POSTFIX}"` into the shared default for all six APMIA identity variables above:
+- `DEPLOYMENT_NAME` — the logical application name, default `bpa-demo`.
+- `DEPLOYMENT_POSTFIX` — left empty in `.config.example`; `compose.sh` defaults it to `docker`, `deploy.sh` defaults it to `k8s`, so the two deployment mechanisms never collide out of the box. Override explicitly for a third distinct value (e.g. two separate Kubernetes clusters).
+
+`build-scripts/compose.sh`'s and `build-scripts/deploy.sh`'s `load_config()`/`generate_values()` each compute `deployment_id="${DEPLOYMENT_NAME}-${DEPLOYMENT_POSTFIX}"` and use it as the fallback (`${APMIA_AGENT_NAME:-${deployment_id}}`, etc.) for all six identity vars — any one can still be set explicitly in `.config` to override just that agent while the rest fall back to the shared `deployment_id`. `helm/php-demo/values.yaml`'s own standalone chart defaults (for a bare `helm install` without `deploy.sh`) were updated to `bpa-demo-k8s` to match. `docker-compose.yml`'s inline `${VAR:-default}` fallback literals (only reachable if `docker compose` is invoked directly, bypassing `compose.sh`'s own exports) were updated to `bpa-demo-docker` for consistency.
+
+Deliberately does **not** touch the DB Monitor's `profileName` (`bpadb`) — confirmed via `nass query` that the profile name never appears in the actual reported metric *source* path at all (it's purely an internal APMIA-extension config key, invisible in the console); DB Monitor metrics report under the same Infrastructure Agent identity (`APMIA_HOST_NAME`/`APMIA_AGENT_NAME`/`APMIA_APP_NAME`) that this mechanism already covers. Also does not touch the DB Monitor's connection `hostname` property (`127.0.0.1` in Kubernetes vs `mariadb` in Compose) or the app's `MARIADB_HOST` — those are real connectivity requirements dictated by each deployment's container topology, not identity labels.
+
 ### APMENV_* identity mechanism
 
 Agent identity is configured via `APMENV_*` environment variables — the native APMIA Docker mechanism. These override `introscope.*` profile properties at startup without touching the profile file. **Never patch or overwrite `core/config/IntroscopeAgent.profile`** — it contains the tenant JWT and WSS EM URL from the DX O2 installer.
@@ -226,7 +238,7 @@ Agent identity is configured via `APMENV_*` environment variables — the native
 
 `APMENV_INTROSCOPE_AGENT_HOSTNAME` only affects the IA (Java). The BPA module reads the OS `gethostname()`. The PHP probe uses `wily_php_agent.hostname` (set to `APMIA_PHP_AGENT_NAME` by the entrypoint). To prevent auto-generated IDs in the metric path:
 - **Kubernetes:** `spec.hostname: {{ .Values.dxo2.hostName }}` in the pod template (covers IA + BPA).
-- **Compose:** `hostname: ${APMIA_HOST_NAME:-bpa-demo-host}` on the `apachephp` service (covers IA + BPA).
+- **Compose:** `hostname: ${APMIA_HOST_NAME:-bpa-demo-docker}` on the `apachephp` service (covers IA + BPA).
 - **PHP probe:** `wily_php_agent.hostname` is always patched to `APMIA_PHP_AGENT_NAME` regardless of deployment mode.
 
 ### APMIA_DEPLOY flag
@@ -406,7 +418,15 @@ APMIA_DEPLOY             # true (default) = run IA+BTL; false = passive volume
 APMIA_EM_HOST            # non-empty → dxo2.enabled=true; value is informational only
 APMIA_EM_PORT            # default 8443
 
+# DX O2 – deployment identity (see "Deployment identity" section below)
+DEPLOYMENT_NAME          # default "bpa-demo" – logical application name
+DEPLOYMENT_POSTFIX       # default "docker" (compose.sh) / "k8s" (deploy.sh) –
+                         # combines as "<name>-<postfix>" into the shared
+                         # default for every APMIA_* identity var below
+
 # DX O2 – identity (exposed as APMENV_* to dx-o2-agent container)
+# Each defaults to "${DEPLOYMENT_NAME}-${DEPLOYMENT_POSTFIX}" when left
+# empty; set any one explicitly to override just that agent.
 APMIA_AGENT_NAME         # → APMENV_INTROSCOPE_AGENT_AGENTNAME
 APMIA_APP_NAME           # → APMENV_INTROSCOPE_AGENT_APPLICATION_NAME
 APMIA_HOST_NAME          # → APMENV_INTROSCOPE_AGENT_HOSTNAME + OS hostname

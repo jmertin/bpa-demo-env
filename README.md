@@ -428,10 +428,14 @@ These pages are available even when DX O2 is not deployed — all probes will re
 
 ```bash
 # 1. Download four packages from your DX O2 interface and place in installers/
-# 2. Configure agent identity in .config:
-APMIA_AGENT_NAME="bpa-demo-agent"
-APMIA_APP_NAME="bpa-demo"
-APMIA_HOST_NAME="bpa-demo-host"
+# 2. Configure agent identity in .config -- leave the six APMIA_* identity
+#    vars empty to use the DEPLOYMENT_NAME-DEPLOYMENT_POSTFIX default
+#    (e.g. "bpa-demo-k8s"), which keeps this deployment's agents distinct
+#    from a Compose deployment reporting to the same tenant (default
+#    "bpa-demo-docker" there) -- see .config.example and CLAUDE.md's
+#    "Deployment identity" section:
+DEPLOYMENT_NAME="bpa-demo"
+DEPLOYMENT_POSTFIX="k8s"
 APMIA_EM_HOST="placeholder"   # non-empty triggers dxo2.enabled=true
 
 # 3. Build (dx-o2-agents image is built when installers are present)
@@ -467,9 +471,9 @@ Chart: `helm/php-demo` — version **0.2.0**
 | `persistence.size` | `1Gi` | PVC capacity for MariaDB data |
 | `dxo2.enabled` | `false` | Enable DX O2 agent sidecar and probe injection |
 | `dxo2.deploy` | `"true"` | `"false"` = passive volume only (seed without starting IA) |
-| `dxo2.agentName` | `bpa-demo-agent` | Agent name in the DX O2 console (APMENV_*) |
-| `dxo2.appName` | `bpa-demo` | Application name for metric grouping (APMENV_*) |
-| `dxo2.hostName` | `bpa-demo-host` | Pod hostname + APMENV_INTROSCOPE_AGENT_HOSTNAME |
+| `dxo2.agentName` | `bpa-demo-k8s` | Agent name in the DX O2 console (APMENV_*) — `deploy.sh` overrides from `.config`'s `DEPLOYMENT_NAME`-`DEPLOYMENT_POSTFIX` |
+| `dxo2.appName` | `bpa-demo-k8s` | Application name for metric grouping (APMENV_*) — same override |
+| `dxo2.hostName` | `bpa-demo-k8s` | Pod hostname + APMENV_INTROSCOPE_AGENT_HOSTNAME — same override |
 | `dxo2.logLevel` | `INFO` | APMENV_LOG4J_LOGGER_INTROSCOPEAGENT level |
 | `dxo2.dbMonitor.enabled` | `true` | Enable APMIA DB Monitor for MariaDB |
 | `dxo2.dbMonitor.schemaVersion` | `5_6x` | Selects the extension's information_schema-based query set (MariaDB doesn't implement the default MySQL 5.7+ performance_schema tables); not a MySQL version match |

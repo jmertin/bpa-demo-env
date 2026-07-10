@@ -32,6 +32,32 @@ KUBECONFIG="${HOME}/.kube/config"
 # project root when this variable is absent or empty.
 HELM_CHART_PATH=""
 
+# ── Deployment identity ───────────────────────────────────────────────────────
+# DEPLOYMENT_NAME + DEPLOYMENT_POSTFIX combine as "<name>-<postfix>" to form
+# the default identity for every APMIA-based agent below (Infrastructure
+# Agent, PHP probe, BPA WebServer plugin) -- e.g. "bpa-demo-k8s" or
+# "bpa-demo-docker". This exists so running the Docker Compose deployment
+# and the Helm/Kubernetes deployment against the SAME DX O2 tenant never
+# collide: without a distinguishing postfix, both default to identical
+# agent identity strings, and DX O2 disambiguates the second one to connect
+# by appending a "%1" suffix -- which silently breaks any dashboard, alert,
+# or metric-grouping query written against the plain (unsuffixed) name.
+#
+# DEPLOYMENT_NAME:     the logical application name (default "bpa-demo").
+# DEPLOYMENT_POSTFIX:  leave empty to accept the per-script default --
+#   build-scripts/compose.sh defaults to "docker", build-scripts/deploy.sh
+#   defaults to "k8s". Override explicitly if you run more than one instance
+#   of the same deployment mechanism (e.g. two Kubernetes clusters) and need
+#   a third, distinct value.
+#
+# Every APMIA_* identity variable below (APMIA_AGENT_NAME, APMIA_APP_NAME,
+# APMIA_HOST_NAME, APMIA_PROCESS_NAME, APMIA_PHP_AGENT_NAME,
+# APMIA_WEB_AGENT_NAME) defaults to "${DEPLOYMENT_NAME}-${DEPLOYMENT_POSTFIX}"
+# when left empty -- set any one of them explicitly to override just that
+# agent's identity while leaving the others on the shared default.
+DEPLOYMENT_NAME="bpa-demo"
+DEPLOYMENT_POSTFIX=""
+
 # ── Broadcom DX O2 Agent (APMIA) ─────────────────────────────────────────────
 # These variables configure the Broadcom Infrastructure Agent container
 # (dx-o2-agents image) and are also forwarded to the PHP-FPM and NGINX
@@ -50,8 +76,11 @@ HELM_CHART_PATH=""
 # APMIA_EM_HOST / APMIA_EM_PORT: Optional override for the EM connection.
 #   When using the DX O2 installer these are pre-configured in the agent
 #   profile and do NOT need to be set here.  Leave APMIA_EM_HOST empty.
-# APMIA_AGENT_NAME: Logical agent name shown in the EM console.
-# APMIA_APP_NAME:   Application name used to group metrics in the console.
+# APMIA_AGENT_NAME / APMIA_APP_NAME / APMIA_HOST_NAME / APMIA_PROCESS_NAME /
+# APMIA_PHP_AGENT_NAME / APMIA_WEB_AGENT_NAME: per-agent identity shown in the
+#   EM console. Leave empty (as below) to use the DEPLOYMENT_NAME +
+#   DEPLOYMENT_POSTFIX default above; set any one explicitly to override just
+#   that agent.
 # APMIA_LOG_LEVEL:  Agent log verbosity: DEBUG, INFO, WARN, or ERROR.
 #   Maps to APMENV_LOG4J_LOGGER_INTROSCOPEAGENT="<level>, logfile".
 #
@@ -78,8 +107,12 @@ HELM_CHART_PATH=""
 APMIA_DEPLOY="true"
 APMIA_EM_HOST=""
 APMIA_EM_PORT="8443"
-APMIA_AGENT_NAME="bpa-demo-agent"
-APMIA_APP_NAME="BPA-Demo"
+APMIA_AGENT_NAME=""
+APMIA_APP_NAME=""
+APMIA_HOST_NAME=""
+APMIA_PROCESS_NAME=""
+APMIA_PHP_AGENT_NAME=""
+APMIA_WEB_AGENT_NAME=""
 APMIA_LOG_LEVEL="INFO"
 # PHP probe log level (wily_php_agent.logLevel).  Controls verbosity of the
 # PHP probe log written to /var/log/php-probe/.

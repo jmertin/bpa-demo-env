@@ -23,7 +23,12 @@
 #              MARIADB_ROOT_PASSWORD, MARIADB_DATABASE, MARIADB_USER,
 #              MARIADB_PASSWORD.
 #              Optional: HELM_CHART_PATH (defaults to helm/php-demo),
-#              APMIA_EM_HOST, APMIA_EM_PORT, APMIA_AGENT_NAME, APMIA_APP_NAME,
+#              DEPLOYMENT_NAME, DEPLOYMENT_POSTFIX (default "bpa-demo"/"k8s" –
+#              shared identity default for every APMIA-based agent, so this
+#              deployment never collides with a Compose one on the same
+#              tenant), APMIA_EM_HOST, APMIA_EM_PORT, APMIA_AGENT_NAME,
+#              APMIA_APP_NAME, APMIA_HOST_NAME, APMIA_PROCESS_NAME,
+#              APMIA_PHP_AGENT_NAME, APMIA_WEB_AGENT_NAME,
 #              APMIA_LOG_LEVEL, APMIA_PHP_COLLECTOR_HOST, APMIA_PHP_COLLECTOR_PORT,
 #              APMIA_BTL_HOST, APMIA_BTL_PORT, TRAFFIC_ENABLED,
 #              TRAFFIC_MIN_ACTION_DELAY_SECS, TRAFFIC_MAX_ACTION_DELAY_SECS,
@@ -114,12 +119,21 @@ generate_values() {
     local apmia_em_host="${APMIA_EM_HOST:-}"
     local apmia_em_port="${APMIA_EM_PORT:-8443}"
     local apmia_deploy="${APMIA_DEPLOY:-true}"
-    local apmia_agent_name="${APMIA_AGENT_NAME:-bpa-demo-agent}"
-    local apmia_app_name="${APMIA_APP_NAME:-bpa-demo}"
-    local apmia_host_name="${APMIA_HOST_NAME:-bpa-demo-host}"
-    local apmia_process_name="${APMIA_PROCESS_NAME:-bpa-demo}"
-    local apmia_php_agent_name="${APMIA_PHP_AGENT_NAME:-bpa-demo-php-probe}"
-    local apmia_web_agent_name="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
+    # DEPLOYMENT_NAME + DEPLOYMENT_POSTFIX ("bpa-demo" + "k8s" by default) form
+    # the shared identity default for every APMIA-based agent below, so this
+    # Helm/Kubernetes deployment never collides with a Compose deployment
+    # (default postfix "docker", see compose.sh) reporting to the same DX O2
+    # tenant -- see .config.example for the full explanation. Any of the six
+    # APMIA_* vars can still be set explicitly to override just that agent.
+    local deployment_name="${DEPLOYMENT_NAME:-bpa-demo}"
+    local deployment_postfix="${DEPLOYMENT_POSTFIX:-k8s}"
+    local deployment_id="${deployment_name}-${deployment_postfix}"
+    local apmia_agent_name="${APMIA_AGENT_NAME:-${deployment_id}}"
+    local apmia_app_name="${APMIA_APP_NAME:-${deployment_id}}"
+    local apmia_host_name="${APMIA_HOST_NAME:-${deployment_id}}"
+    local apmia_process_name="${APMIA_PROCESS_NAME:-${deployment_id}}"
+    local apmia_php_agent_name="${APMIA_PHP_AGENT_NAME:-${deployment_id}}"
+    local apmia_web_agent_name="${APMIA_WEB_AGENT_NAME:-${deployment_id}}"
     # The browser snippet contains double-quotes (HTML src="..." attributes).
     # Embed it as a YAML single-quoted string so those double-quotes are safe.
     # Escape any literal single-quote in the value as '' per YAML spec.
