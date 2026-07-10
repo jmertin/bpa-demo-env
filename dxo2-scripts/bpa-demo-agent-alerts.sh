@@ -73,11 +73,31 @@
 #     evaluation. Page Hits Per Interval peaked at 11 (on /shop) with
 #     everything else at 0-4; warn=10/err=20 sits just above that peak.
 #
+# Bug fixed 2026-07-10: the infra/php AGENT_SOURCE_PATTERN entries hardcoded
+# the pre-DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX identity literals
+# (bpa-demo-host/bpa-demo-infra-agent/bpa-demo-php-probe), and 7 of the 10
+# infra+php ALERT_ATTR_PATTERN entries hardcoded either the DB hostname
+# literal "mariadb" (only ever true for Compose, never Kubernetes'
+# 127.0.0.1-based paths, collision or not) or the application name literal
+# "BPA-Demo" (which APMIA_APP_NAME no longer defaults to -- see CLAUDE.md's
+# "Deployment identity" section). All 10 non-browser alerts had zero live
+# matches as a result. Fixed by wildcarding every hardcoded segment
+# ([^|]+ / bpa-demo-[^|]+) so these patterns match any deployment's real
+# paths, present or future, instead of a specific literal that a future
+# identity change could break again. `create` now self-heals: if an alert
+# key is already recorded in the state file, it checks the live metric
+# grouping's match count via `metricgrouping list-metrics` and re-applies
+# the current attributeNamePattern/sourceNamePattern via `metricgrouping
+# update` if it finds zero, instead of unconditionally skipping it (the
+# prior behavior, which is why re-running `create` after the identity
+# change did not pick up this fix on its own).
+#
 # Usage:
 #   dxo2-scripts/bpa-demo-agent-alerts.sh create   - create the 12 metric
 #                                            groupings + alerts. Safe to
-#                                            re-run: warns instead of
-#                                            failing if already created.
+#                                            re-run: self-heals any
+#                                            already-created metric grouping
+#                                            with zero live matches.
 #   dxo2-scripts/bpa-demo-agent-alerts.sh check    - print whether each
 #                                            exists and its current
 #                                            definition.
@@ -186,16 +206,16 @@ declare -rA ALERT_NAME_MAP=(
 )
 
 declare -rA ALERT_ATTR_PATTERN=(
-    [infra-availability]='MySQL Databases\|mariadb\|phpapp:Availability$'
-    [infra-conn-refused]='MySQL Databases\|mariadb\|phpapp\|Connections:Connection Refusal Rate$'
-    [infra-conn-pressure]='MySQL Databases\|mariadb\|phpapp\|Resource Utilization:Connection Usage Rate \(%\)$'
-    [infra-cache-hit]='MySQL Databases\|mariadb\|phpapp\|InnoDB:Cache Hit Rate \(%\)$'
-    [infra-slow-query]='MySQL Databases\|mariadb\|phpapp\|Efficiency\|Query:Slow query rate \(%\)$'
-    [php-resp-time]='Frontends\|Apps\|BPA-Demo:Average Response Time \(ms\)$'
-    [php-error-rate]='Frontends\|Apps\|BPA-Demo:Errors Per Interval$'
-    [php-concurrency]='Frontends\|Apps\|BPA-Demo:Concurrent Invocations$'
-    [php-db-resp-time]='Backends\|phpapp on mariadb-3306 \(MySQL DB\):Average Response Time \(ms\)$'
-    [php-db-query-storm]='Backends\|phpapp on mariadb-3306 \(MySQL DB\):Responses Per Interval$'
+    [infra-availability]='MySQL Databases\|[^|]+\|phpapp:Availability$'
+    [infra-conn-refused]='MySQL Databases\|[^|]+\|phpapp\|Connections:Connection Refusal Rate$'
+    [infra-conn-pressure]='MySQL Databases\|[^|]+\|phpapp\|Resource Utilization:Connection Usage Rate \(%\)$'
+    [infra-cache-hit]='MySQL Databases\|[^|]+\|phpapp\|InnoDB:Cache Hit Rate \(%\)$'
+    [infra-slow-query]='MySQL Databases\|[^|]+\|phpapp\|Efficiency\|Query:Slow query rate \(%\)$'
+    [php-resp-time]='Frontends\|Apps\|bpa-demo-[^|]+:Average Response Time \(ms\)$'
+    [php-error-rate]='Frontends\|Apps\|bpa-demo-[^|]+:Errors Per Interval$'
+    [php-concurrency]='Frontends\|Apps\|bpa-demo-[^|]+:Concurrent Invocations$'
+    [php-db-resp-time]='Backends\|phpapp on [^|]+-3306 \(MySQL DB\):Average Response Time \(ms\)$'
+    [php-db-query-storm]='Backends\|phpapp on [^|]+-3306 \(MySQL DB\):Responses Per Interval$'
     [browser-page-load]='Business Segment\|BPA Demo\|.*:Average Page Load Time \(ms\)$'
     [browser-page-hits]='Business Segment\|BPA Demo\|.*:Page Hits Per Interval$'
 )
@@ -252,8 +272,8 @@ declare -rA ALERT_ERROR=(
 # comment) -- its metrics are real, just attributed to a different
 # 4-segment identity than the two agents `agent list` shows.
 declare -rA AGENT_SOURCE_PATTERN=(
-    [infra]='SuperDomain\|bpa-demo-host\|bpa-demo\|bpa-demo-infra-agent$'
-    [php]='SuperDomain\|bpa-demo-php-probe\|php-probes\|bpa-demo-infra-agent\(/usr/sbin/apache2\)$'
+    [infra]='SuperDomain\|bpa-demo-[^|]+\|bpa-demo-[^|]+\|bpa-demo-[^|]+(%\d+)?$'
+    [php]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?\(/usr/sbin/apache2\)$'
     [browser]='SuperDomain\|Experience Collector Host\|DxC Agent\|Logstash-APM-Plugin$'
 )
 
@@ -392,13 +412,50 @@ create_one() {
     info "Alert created: ${alert_id}"
 }
 
-## Create all 12 metric groupings + alerts. Safe to re-run.
+## Re-apply the current attributeNamePattern/sourceNamePattern to an
+## already-created metric grouping that has zero live matches (e.g. after a
+## deployment identity change broke a previously-working pattern -- see "Bug
+## fixed 2026-07-10" in this script's header).
+#
+# @param string $1
+#   The alert key (an entry of ALERT_KEYS).
+heal_one() {
+    local -r key="$1"
+    local -r agent="${ALERT_AGENT[${key}]}"
+    local -r mg_id="${MG_IDS[${key}]}"
+
+    local metrics_json
+    metrics_json=$("${DX_DO_BIN}" metricgrouping list-metrics metricGroupingId="${mg_id}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null || true)
+    local match_count
+    match_count=$(printf '%s' "${metrics_json}" | grep -c '"SuperDomain|' || true)
+    if [[ "${match_count}" -gt 0 ]]; then
+        info "'${key}' (${mg_id}) has ${match_count} live matches -- nothing to do."
+        return 0
+    fi
+
+    info "'${key}' (${mg_id}) has ZERO live matches -- self-healing with the current attributeNamePattern/sourceNamePattern."
+    run_dx_do metricgrouping update \
+        metricGroupingId="${mg_id}" \
+        managementModuleId="${MM_ID}" \
+        attributeNamePattern="${ALERT_ATTR_PATTERN[${key}]}" \
+        sourceNamePattern="${AGENT_SOURCE_PATTERN[${agent}]}" \
+        useManagementModuleAgentExpression=false \
+        dry-run=false
+}
+
+## Create all 12 metric groupings + alerts. Safe to re-run: self-heals any
+## already-created metric grouping with zero live matches instead of just
+## skipping it.
 cmd_create() {
     load_mm_id
     load_state
 
     if [[ "${#MG_IDS[@]}" -eq "${#ALERT_KEYS[@]}" ]]; then
-        info "All ${#ALERT_KEYS[@]} alerts already created -- nothing to do."
+        info "All ${#ALERT_KEYS[@]} alerts already created -- checking each metric grouping actually matches something."
+        local key
+        for key in "${ALERT_KEYS[@]}"; do
+            heal_one "${key}"
+        done
         info "Run '${SCRIPT_NAME} check' to see their current definitions."
         return 0
     fi
@@ -406,7 +463,7 @@ cmd_create() {
     local key
     for key in "${ALERT_KEYS[@]}"; do
         if [[ -n "${MG_IDS[${key}]:-}" ]]; then
-            info "'${key}' already created (${MG_IDS[${key}]} / ${ALERT_IDS[${key}]:-?}) -- skipping."
+            heal_one "${key}"
             continue
         fi
         create_one "${key}"

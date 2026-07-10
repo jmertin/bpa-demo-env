@@ -1292,7 +1292,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Frontends\\|Apps\\|BPA-Demo:Average Response Time \\(ms\\)$"
+                    "pattern": "Frontends\\|Apps\\|bpa-demo-${deployment:regex}:Average Response Time \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
@@ -1455,7 +1455,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Frontends\\|Apps\\|BPA-Demo:Errors Per Interval$"
+                    "pattern": "Frontends\\|Apps\\|bpa-demo-${deployment:regex}:Errors Per Interval$"
                   }
                 ],
                 "isNot": false,
@@ -1618,7 +1618,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Frontends\\|Apps\\|BPA-Demo:Concurrent Invocations$"
+                    "pattern": "Frontends\\|Apps\\|bpa-demo-${deployment:regex}:Concurrent Invocations$"
                   }
                 ],
                 "isNot": false,
