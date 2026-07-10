@@ -5,6 +5,43 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 13:10 - [Docs - swept all documentation for staleness against today's identity/dashboard/entrypoint fixes]:
+  User asked to update all documentation after a run of related fixes
+  today (traffic-generator on Helm, Service-selector 502, root-redirect
+  scheme/port, DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX, agent-health dashboard
+  Deployment selector + "All"-option fix, PHP-probe UnknownAgent race).
+  CLAUDE.md and the main CHANGELOG entries were already kept current
+  incrementally as each fix landed; this pass found and fixed stale
+  references in the remaining docs that hadn't been touched yet:
+    - DX-O2-AGENT-SETUP.md: the .config example in section 7.1 still
+      showed the old hardcoded APMIA_AGENT_NAME="bpa-demo-agent" /
+      APMIA_HOST_NAME="bpa-demo-host" literals -- replaced with the
+      DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX pattern and the six identity
+      vars left empty. Two troubleshooting code comments still showed
+      "bpa-demo-php-probe"/"bpa-demo-host" as the "expected" value --
+      updated to "bpa-demo-k8s". Added a new troubleshooting entry for
+      the UnknownAgent symptom (cause, fix, and the note that it needs
+      an image rebuild, not just a config change). Updated the
+      end-to-end checklist's identity-configuration step to reference
+      the new variables.
+    - QUICKSTART.md: the "add these for DX O2 monitoring" snippet still
+      listed the three old APMIA_* vars directly -- replaced with
+      DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX.
+    - dxo2-scripts/README.md: added a "2026-07-10" narrative entry to
+      the Dashboards section covering the identity collision, the
+      Deployment dropdown addition, the two bugs found shipping it
+      (self-heal script dropping templating; "All" option not
+      persisting in the stored options array), and the UnknownAgent
+      root-cause/fix -- matching the existing dated-entry style for
+      this dashboard's prior bugs. Added a one-line mention of the new
+      dropdown to the dashboard's quick-glance summary table row.
+  Confirmed via grep that no other tracked doc/config/manifest file
+  still references the dead bpa-demo-agent/bpa-demo-host/
+  bpa-demo-php-probe/bpa-demo-web-plugin literals as if they were live
+  identities. COMPATIBILITY.md and traffic-generator/README.md had no
+  relevant references and needed no changes.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 12:35 - [Fix - PHP probe race against Infrastructure Agent readiness causes UnknownAgent (hypothesis-driven, pending live confirmation)]:
   User asked to check Broadcom's PHP agent naming docs against the
   UnknownAgent symptom in Kubernetes' PHP probe metric path
