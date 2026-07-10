@@ -5,6 +5,48 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 10:15 - [Feat - DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX give every APMIA agent a distinguishable identity]:
+  Root cause of the dashboard identity collision investigated this morning:
+  build-scripts/compose.sh and build-scripts/deploy.sh both defaulted every
+  APMIA identity var (APMIA_AGENT_NAME, APMIA_APP_NAME, APMIA_HOST_NAME,
+  APMIA_PROCESS_NAME, APMIA_PHP_AGENT_NAME, APMIA_WEB_AGENT_NAME) to the
+  same hardcoded bpa-demo* strings regardless of deployment mechanism, so
+  running Compose and Helm concurrently against the same tenant always
+  collided.
+  Added two new .config variables: DEPLOYMENT_NAME (default "bpa-demo") and
+  DEPLOYMENT_POSTFIX (left empty in .config.example; compose.sh defaults it
+  to "docker", deploy.sh defaults it to "k8s"). Both scripts now compute
+  deployment_id="${DEPLOYMENT_NAME}-${DEPLOYMENT_POSTFIX}" and use it as the
+  fallback for all six identity vars -- any one can still be set explicitly
+  to override just that agent while the rest share the default.
+  Files changed: .config.example (new Deployment identity section + the six
+  identity vars now shown explicitly, left empty), build-scripts/compose.sh
+  (load_config() computes deployment_id, default postfix "docker"),
+  build-scripts/deploy.sh (generate_values() computes deployment_id, default
+  postfix "k8s"), helm/php-demo/values.yaml (standalone chart defaults
+  updated to "bpa-demo-k8s" for a bare `helm install` without deploy.sh),
+  docker-compose.yml (inline ${VAR:-default} fallback literals updated to
+  "bpa-demo-docker" -- only reachable if docker compose is invoked directly,
+  bypassing compose.sh's own exports), CLAUDE.md (new "Deployment identity"
+  section documenting the bug and fix).
+  Deliberately left untouched: DB Monitor's profileName ("bpadb") -- confirmed
+  via nass query that it never appears in the actual reported metric source
+  path, so renaming it wouldn't affect console distinguishability; DB
+  Monitor's connection hostname property (127.0.0.1 in Kubernetes vs mariadb
+  in Compose) and the app's MARIADB_HOST -- both are real connectivity
+  requirements dictated by container topology, not identity labels.
+  Verified: sourced load_config()/generate_values() from both scripts with
+  a test harness -- compose.sh's default (no DEPLOYMENT_POSTFIX set) computes
+  all six vars to "bpa-demo-docker"; deploy.sh's default computes all six to
+  "bpa-demo-k8s"; `helm lint`/`helm template` confirm the chart's own
+  standalone defaults also render "bpa-demo-k8s" for all six APMENV_*/
+  APMIA_PHP_AGENT_NAME/APMIA_WEB_AGENT_NAME fields. This sandbox's own local
+  .config (Docker Compose) updated to DEPLOYMENT_POSTFIX="docker" and the six
+  identity vars cleared to pick up the shared default -- not committed
+  (.config is git-ignored). User is setting DEPLOYMENT_POSTFIX="k8s" (or
+  relying on deploy.sh's default) on the separate nuc1 Helm deployment host.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 09:40 - [Fix - agent health dashboard split into 4 real sources, add descriptions]:
   User reported the Agent Health dashboard's DB Monitor and PHP Probe
   panels empty again despite the Helm deployment running all night and
