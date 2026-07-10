@@ -172,3 +172,36 @@ unrelated reason — coincidence, not a shared bug). `sliId 2769` correctly
 showed `0`, consistent with genuinely no data flowing yet. Use `nass query`
 to verify a specifier's match set; don't infer correctness from
 `totalMetrics`.
+
+### SLO layer — modeled on 2767's now-confirmed-working structure, not yet pushed
+
+`sli export sliId=2767` (re-pulled fresh at the user's request) showed the
+user had since added a real, working `sloDefinition` to it via the console:
+a 3-function pipeline —
+
+1. `comparator`: is the raw SLI value `LE 200` (ms)? (5-minute window)
+2. `percentage`: rolling 1-day % of windows that passed the comparator
+3. `errorbudget`: is that rolling percentage `GE 98`%? (rolling 1-day)
+
+This resolves this project's earlier "attributeType codes and errorbudget
+units aren't documented" uncertainty (see `bpa-demo-sli.sh`'s "Why no SLO
+yet" header comment) — we now have a real, confirmed-working example to
+copy exactly (`attributeType: 258` for the threshold output, `4097` for the
+percentage, `2` for the error budget) instead of guessing.
+
+Added the identical 3-function structure to both new templates, with
+thresholds matching this project's own already-measured alert baselines
+(`bpa-demo-agent-alerts.sh`'s WARNING thresholds, not guessed):
+
+- **Error Rate**: comparator `LE 2` (errors/interval) — matches
+  `ALERT_WARNING[php-error-rate]=2`.
+- **Page Load Time**: comparator `LE 300` (ms) — matches
+  `ALERT_WARNING[browser-page-load]=300`.
+- Both: error budget `GE 98`%, rolling 1 day — same as 2767.
+
+**Confirmed via a `sli import` dry-run that this can't be pushed to the
+live 2768/2769 either** — same collision refusal as the filter fix, since
+both SLIs now exist. Adding the SLO layer to the live resources needs the
+console's own SLO editor, using the three values above. Worth checking
+first whether that editor is also a structured builder (like the SLI
+filter one) rather than a raw-JSON paste.
