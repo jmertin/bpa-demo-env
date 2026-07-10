@@ -1,0 +1,131 @@
+{
+  "groupName": "BPA-Demo Client-Side Page Load Time",
+  "groupId": 0,
+  "filters": [
+    {
+      "fieldDescription": "Source",
+      "field": "sourceName",
+      "value": "Logstash-APM-Plugin",
+      "condition": "contains"
+    },
+    {
+      "fieldDescription": "Metric",
+      "field": "attributeName",
+      "value": "Average Page Load Time (ms)",
+      "condition": "contains"
+    }
+  ],
+  "description": "Average client-side page load time across all tracked frontend URLs, as measured by the Browser Agent (BA snippet) in real visitor browsers -- includes network + render time, not just server response time (Business Segment|BPA Demo|<url>:Average Page Load Time (ms)). Reads 0/no-data under the traffic generator alone (plain HTTP, no real browser); needs actual browser traffic to populate.",
+  "creationTime": 0,
+  "lastModifiedTime": 0,
+  "createdBy": "__DXO2_TENANT_USER_EMAIL__",
+  "lastUpdatedBy": "__DXO2_TENANT_USER_EMAIL__",
+  "totalMetrics": 0,
+  "breached": false,
+  "product": null,
+  "serviceNames": [],
+  "enabled": false,
+  "sliStatusCode": 4,
+  "sliStatusMessage": "No active service associated with the SLI.",
+  "fixRequired": true,
+  "mgId": null,
+  "sliDefinition": {
+    "functions": [
+      {
+        "op": "average",
+        "input": {
+          "source": "data",
+          "filter": {
+            "specifier": {
+              "op": "SPEC",
+              "sourceNameSpecifier": {
+                "op": "EXACT",
+                "names": [
+                  "SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin"
+                ]
+              },
+              "attributeNameSpecifier": {
+                "op": "REGEX",
+                "pattern": "^Business Segment\\|BPA Demo\\|[^|]+:Average Page Load Time \\(ms\\)$"
+              }
+            },
+            "names": null
+          },
+          "uiFilter": [
+            {
+              "fieldDescription": "Source",
+              "field": "sourceName",
+              "value": "Logstash-APM-Plugin",
+              "condition": "contains"
+            },
+            {
+              "fieldDescription": "Metric",
+              "field": "attributeName",
+              "value": "Average Page Load Time (ms)",
+              "condition": "contains"
+            }
+          ]
+        },
+        "aggregationInterval": {
+          "value": "5",
+          "unit": "minutes"
+        },
+        "aggregationType": null,
+        "output": {
+          "as": "bpa_demo_client_page_load_time",
+          "derivedMetrics": {
+            "sourceName": "OI|SA|SERVICES|ALL",
+            "attributeName": "{serviceVertex.attr.id}:BPA-Demo Client-Side Page Load Time",
+            "attributeType": 1,
+            "attributes": [
+              {
+                "name": "external_ids",
+                "associationType": "AUTOMATIC_SERVICE",
+                "values": [
+                  "external_ids"
+                ],
+                "limit": 10
+              },
+              {
+                "name": "sli_type",
+                "associationType": "PROVIDED",
+                "values": "Latency"
+              },
+              {
+                "name": "is_sli",
+                "associationType": "PROVIDED",
+                "values": "true"
+              },
+              {
+                "name": "service_name",
+                "associationType": "AUTOMATIC_SERVICE"
+              },
+              {
+                "name": "metric_name",
+                "associationType": "PROVIDED",
+                "values": "BPA-Demo Client-Side Page Load Time"
+              },
+              {
+                "name": "created_by",
+                "associationType": "PROVIDED",
+                "values": "__DXO2_TENANT_USER_EMAIL__"
+              }
+            ]
+          },
+          "outputMetrics": true
+        },
+        "skew": 60,
+        "customParams": null,
+        "sliCreationTime": 0
+      }
+    ]
+  },
+  "sloDefinition": {
+    "functions": []
+  },
+  "pipelineErrors": [],
+  "alertDefinition": [
+    []
+  ],
+  "defaultGroup": false
+}
