@@ -196,6 +196,36 @@ else
     rm -f /etc/apache2/conf-enabled/bpa.conf
 fi
 
+# == Wait for the PHP collector before serving traffic =========================
+# The PHP probe's very first registration attempt resolves {collector} (the
+# Infrastructure Agent's own introscope.agent.agentName) into the agent-name
+# segment of its metric path -- see Broadcom's PHP agent naming docs. If that
+# first attempt races ahead of the Infrastructure Agent actually being up
+# (dx-o2-agent is a separate sidecar container with no guaranteed start order
+# relative to this one, and its JVM cold-start + EM handshake can take longer
+# than Apache's own startup, especially under a tight CPU limit), the probe
+# falls back to a generic placeholder agent name that then persists for the
+# life of this Apache process -- confirmed live: Kubernetes' PHP probe
+# reported under "UnknownAgent" instead of its real agent identity while
+# Docker Compose's own PHP probe (lighter startup, less likely to race)
+# resolved correctly. Waiting here for the collector port to accept
+# connections keeps the probe's first registration from racing the
+# Infrastructure Agent's readiness. Skipped entirely when the probe itself
+# isn't active (DX O2 not deployed) so this never adds startup latency to a
+# vanilla deployment.
+if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
+    echo "[entrypoint] Waiting for PHP collector ${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT} to accept connections..."
+    _collector_wait_deadline=$((SECONDS + 60))
+    until (: < "/dev/tcp/${APMIA_PHP_COLLECTOR_HOST}/${APMIA_PHP_COLLECTOR_PORT}") 2>/dev/null; do
+        if (( SECONDS >= _collector_wait_deadline )); then
+            echo "[entrypoint] WARNING: PHP collector not reachable after 60s - starting anyway." >&2
+            break
+        fi
+        sleep 1
+    done
+    echo "[entrypoint] PHP collector reachable (or wait timed out) - continuing startup."
+fi
+
 # == Start cron for daily security updates ====================================
 service cron start
 

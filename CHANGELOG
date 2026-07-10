@@ -5,6 +5,45 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 12:35 - [Fix - PHP probe race against Infrastructure Agent readiness causes UnknownAgent (hypothesis-driven, pending live confirmation)]:
+  User asked to check Broadcom's PHP agent naming docs against the
+  UnknownAgent symptom in Kubernetes' PHP probe metric path
+  (SuperDomain|bpa-demo-k8s|php-probes|UnknownAgent(/usr/sbin/apache2)).
+  Fetched https://techdocs.broadcom.com/.../php-agent-naming-ca-digital-
+  experience-insights.html: the metric path's agent-name segment is the
+  {collector} variable, "Name of Infrastructure Agent," resolved from
+  introscope.agent.agentName at the moment the PHP probe first registers
+  with the Infrastructure Agent's PHP-collector socket.
+  Root cause: src/apache-php/entrypoint.sh starts Apache immediately with
+  no wait for the dx-o2-agent sidecar's collector socket to be listening.
+  In Kubernetes, apache-php and dx-o2-agent are separate containers in
+  the same pod with no guaranteed start order, and the sidecar's JVM
+  cold-start + WSS handshake to the SaaS EM (under a 500m CPU limit) can
+  outlast Apache's own startup -- so the PHP probe's first registration
+  attempt can race ahead of the Infrastructure Agent resolving its own
+  identity and permanently fall back to the generic UnknownAgent
+  placeholder for the life of that Apache process. Docker Compose's
+  lighter, unconstrained startup profile made it unlikely to lose this
+  race, explaining why only Docker resolved correctly (bpa-demo-docker)
+  without any fix, confirmed via nass query.
+  Fixed by adding a wait loop to src/apache-php/entrypoint.sh before
+  Apache starts: polls APMIA_PHP_COLLECTOR_HOST:APMIA_PHP_COLLECTOR_PORT
+  via a bash /dev/tcp connect-check every second, up to 60s, warns and
+  starts anyway on timeout. Skipped entirely when the probe volume isn't
+  mounted (DX O2 not deployed), so a vanilla deployment's startup time is
+  unaffected.
+  Verified: the exact wait-loop logic in isolation (immediate return on
+  success at 0s; warning + continue at exactly the 60s/5s test deadline
+  on failure), and inside the real apache-php image (confirmed it
+  correctly blocks Apache from starting while the collector port is
+  unreachable, and is a complete no-op when the probe volume is absent).
+  NOT yet verified against the live effect: this requires rebuilding the
+  apache-php image, pushing, redeploying to the Kubernetes cluster (no
+  cluster access from this sandbox), and observing whether new PHP-probe
+  metrics resolve to bpa-demo-k8s going forward instead of UnknownAgent.
+  Files changed: src/apache-php/entrypoint.sh, CLAUDE.md.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 11:20 - [Fix - Deployment dropdown's "All" option disappeared after picking a specific value]:
   User reported the new Deployment variable showed "All" as the initial
   label but it vanished from the open dropdown list once "docker" or
