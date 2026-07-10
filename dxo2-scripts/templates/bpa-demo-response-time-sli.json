@@ -5,7 +5,7 @@
     {
       "fieldDescription": "Source",
       "field": "sourceName",
-      "value": "bpa-demo-php-probe",
+      "value": "bpa-demo-",
       "condition": "contains"
     },
     {
@@ -39,14 +39,12 @@
             "specifier": {
               "op": "SPEC",
               "sourceNameSpecifier": {
-                "op": "EXACT",
-                "names": [
-                  "SuperDomain|bpa-demo-php-probe|php-probes|bpa-demo-infra-agent(/usr/sbin/apache2)"
-                ]
+                "op": "REGEX",
+                "pattern": "^SuperDomain\\|bpa-demo-[^|]+\\|php-probes\\|bpa-demo-[^|]+(%\\d+)?\\(/usr/sbin/apache2\\)$"
               },
               "attributeNameSpecifier": {
                 "op": "REGEX",
-                "pattern": "^Frontends\\|Apps\\|BPA-Demo\\|URLs\\|[^|]+:Average Response Time \\(ms\\)$"
+                "pattern": "^Frontends\\|Apps\\|bpa-demo-[^|]+\\|URLs\\|[^|]+:Average Response Time \\(ms\\)$"
               }
             },
             "names": null
@@ -55,7 +53,7 @@
             {
               "fieldDescription": "Source",
               "field": "sourceName",
-              "value": "bpa-demo-php-probe",
+              "value": "bpa-demo-",
               "condition": "contains"
             },
             {

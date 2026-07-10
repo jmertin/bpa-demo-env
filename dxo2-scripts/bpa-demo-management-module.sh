@@ -7,8 +7,9 @@
 #     agentExpressions: SuperDomain\|.*bpa-demo.*  (matches both the
 #       Infrastructure Agent and the PHP probe agent)
 #     Metric Grouping "BPA-Demo Frontend Response Time"
-#       attributeNamePattern: Frontends|Apps|BPA-Demo|URLs|.*:Average
-#       Response Time (ms)  (matches every tracked frontend URL)
+#       attributeNamePattern: Frontends|Apps|bpa-demo-[^|]*|URLs|.*:Average
+#       Response Time (ms)  (matches every tracked frontend URL, across
+#       any deployment postfix -- see "Bug fixed 2026-07-10" below)
 #       sourceNamePattern: SuperDomain\|.*bpa-demo.*, with
 #       useManagementModuleAgentExpression=false -- the MG carries its own
 #       explicit copy of the MM's agent scope rather than inheriting it.
@@ -36,6 +37,21 @@
 # correctly-anchored sourceNamePattern instead of inheriting the MM's
 # (also corrected, for consistency, even though nothing currently depends
 # on the MM-level value now that the MG no longer inherits it).
+# Bug fixed 2026-07-10: the Metric Grouping's attributeNamePattern hardcoded
+# the literal application name "BPA-Demo" (Frontends|Apps|BPA-Demo|URLs|...).
+# Adding DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX to .config (see CLAUDE.md's
+# "Deployment identity" section) made APMIA_APP_NAME -- which becomes this
+# exact attribute-path segment via the PHP probe's wily_php_agent.application.name
+# INI property -- default to the deployment id ("bpa-demo-k8s"/"bpa-demo-docker")
+# instead of a fixed "BPA-Demo", so the literal segment stopped matching
+# anything (confirmed live via `nass query`: the real attribute prefix is now
+# Frontends|Apps|bpa-demo-k8s|... and Frontends|Apps|bpa-demo-docker|...).
+# Fixed by wildcarding that segment to bpa-demo-[^|]* so the grouping matches
+# any deployment's app name, present or future, rather than hardcoding a
+# specific literal that a future identity change could break again. The
+# self-heal path (above) now also re-applies attributeNamePattern, not just
+# sourceNamePattern, since it was previously missing from that update call.
+#
 # Only `trouble` has a real, currently-observable APM signal. `empty_basket`
 # (basket total always 0) and `locked` (blocks login) do not currently
 # produce any performance or error-rate anomaly -- see CLAUDE.md's "Demo
@@ -90,7 +106,7 @@ readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly MODULE_NAME="BPA-Demo"
 readonly METRIC_GROUPING_NAME="BPA-Demo Frontend Response Time"
 readonly ALERT_NAME="Trouble User - High Response Time"
-readonly ATTRIBUTE_NAME_PATTERN='Frontends\|Apps\|BPA-Demo\|URLs\|.*:Average Response Time \(ms\)'
+readonly ATTRIBUTE_NAME_PATTERN='Frontends\|Apps\|bpa-demo-[^|]*\|URLs\|.*:Average Response Time \(ms\)'
 readonly AGENT_EXPRESSION='SuperDomain\|.*bpa-demo.*'
 readonly WARNING_THRESHOLD_MS="100"
 readonly ERROR_THRESHOLD_MS="250"
@@ -187,10 +203,11 @@ cmd_create() {
         if [[ "${match_count}" -gt 0 ]]; then
             info "Metric Grouping (${MG_ID}) has live matches -- nothing to do."
         else
-            info "Metric Grouping (${MG_ID}) has ZERO live matches -- self-healing with an explicit sourceNamePattern (see 'Bug fixed 2026-07-06' in this script's header)."
+            info "Metric Grouping (${MG_ID}) has ZERO live matches -- self-healing with the current sourceNamePattern/attributeNamePattern (see 'Bug fixed 2026-07-06' and 'Bug fixed 2026-07-10' in this script's header)."
             run_dx_do metricgrouping update \
                 metricGroupingId="${MG_ID}" \
                 managementModuleId="${MM_ID}" \
+                attributeNamePattern="${ATTRIBUTE_NAME_PATTERN}" \
                 sourceNamePattern="${AGENT_EXPRESSION}" \
                 useManagementModuleAgentExpression=false \
                 dry-run=false

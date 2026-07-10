@@ -5,6 +5,69 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 14:20 - [Fix - Management Module, Agent Alerts, dashboard app-name gap fixed; SLI confirmed unfixable via CLI]:
+  User reported the Management Module and SLI stopped working after
+  today's DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX identity fix. Investigation
+  found the blast radius was wider than source identity alone: the
+  DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX change also made APMIA_APP_NAME
+  default to the deployment id, changing the metric ATTRIBUTE path
+  (Frontends|Apps|<appName>|...) from a fixed "BPA-Demo" to
+  "bpa-demo-k8s"/"bpa-demo-docker" -- confirmed live via nass query.
+  Fixed three resources, could not fix a fourth:
+  - bpa-demo-management-module.sh: ATTRIBUTE_NAME_PATTERN hardcoded
+    "BPA-Demo" -- wildcarded to bpa-demo-[^|]*. Its self-heal update call
+    was also missing attributeNamePattern (only re-applied
+    sourceNamePattern) -- fixed to re-apply both. Re-verified: 108 live
+    matches after re-running create.
+  - bpa-demo-agent-alerts.sh: 10 of 12 alerts broken -- infra/php
+    AGENT_SOURCE_PATTERN hardcoded the now-dead pre-fix identity
+    literals, and 7 of 10 ALERT_ATTR_PATTERN entries hardcoded either
+    "mariadb"/"mariadb-3306" (DB-hostname literal, same bug class as the
+    dashboard's original mariadb bug) or "BPA-Demo". Wildcarded every
+    hardcoded segment. This script had NO self-heal at all -- an
+    already-recorded alert key was unconditionally skipped on re-run.
+    Added heal_one(): checks each metric grouping's live-match count via
+    metricgrouping list-metrics, re-applies both patterns via
+    metricgrouping update if zero. Re-verified: all 10 fixed (1-2 matches
+    each); the 2 browser alerts were unaffected throughout (10 each).
+  - dxo2-scripts/templates/bpa-demo-agent-health-dashboard.json: found
+    while fixing the above that this dashboard's own PHP-tier panels
+    (App Response Time/Error Rate/Concurrency) still hardcoded "BPA-Demo"
+    in their attributeNameSpecifier -- the earlier ${deployment:regex}
+    fix only touched the source side of these 3 panels, not the
+    attribute side. Applied the same variable to the attribute pattern's
+    app-name segment. Pushed live (dashboard version 8), re-verified via
+    nass query.
+  - bpa-demo-sli.sh / templates/bpa-demo-response-time-sli.json: fixed
+    the template (EXACT sourceNameSpecifier -> wildcarded REGEX;
+    "BPA-Demo" attribute literal -> wildcarded), but CONFIRMED THIS
+    CANNOT BE PUSHED to the live SLI (sliId 2767, totalMetrics: 0) via
+    this CLI. `sli` has only exclude-service/export/import/
+    include-service/list -- no update. `sli import` with the real
+    existing groupId refuses outright on a name collision ("Refusing to
+    import: an SLI named '...' already exists"), even with
+    dry-run=false and undocumented overwrite=true/force=true (both
+    silently ignored) -- contradicting the script's original design
+    comment that assumed a real groupId would upsert in place. Excluding
+    the service first doesn't free the name either (persists across
+    unbind, same state the tenant's 3 pre-existing example SLIs are
+    already in). Verified no side effects from the attempt (still
+    exactly 4 SLIs tenant-wide, sliId 2767 unchanged, totalMetrics still
+    0). Documented as a permanent CLI limitation in the script's header,
+    not a TODO -- fixing the live SLI needs a manual console edit of its
+    filter using the corrected patterns now in the template.
+  Files changed: dxo2-scripts/bpa-demo-management-module.sh,
+  dxo2-scripts/bpa-demo-agent-alerts.sh, dxo2-scripts/bpa-demo-sli.sh,
+  dxo2-scripts/templates/bpa-demo-agent-health-dashboard.json,
+  dxo2-scripts/templates/bpa-demo-response-time-sli.json, CLAUDE.md.
+  Lesson recorded in memory: a config knob change (APMIA_APP_NAME) that
+  looks purely identity-related can silently change a metric ATTRIBUTE
+  path, not just its SOURCE path -- these are two different dimensions
+  of the same metric, and a fix that only re-verifies source-side
+  matching can miss attribute-side breakage entirely across every other
+  tenant resource that references either.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 13:10 - [Docs - swept all documentation for staleness against today's identity/dashboard/entrypoint fixes]:
   User asked to update all documentation after a run of related fixes
   today (traffic-generator on Helm, Service-selector 502, root-redirect

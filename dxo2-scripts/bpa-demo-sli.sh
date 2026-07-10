@@ -25,6 +25,32 @@
 # the unbound-template state the tenant's other 3 pre-existing SLIs are
 # already in; the SLI definition itself is not deleted from the tenant).
 #
+# Bug found 2026-07-10, CONFIRMED UNFIXABLE VIA THIS CLI: the template's
+# sourceNameSpecifier hardcoded the pre-DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX
+# identity (SuperDomain|bpa-demo-php-probe|php-probes|bpa-demo-infra-agent
+# (/usr/sbin/apache2)) and its attributeNameSpecifier hardcoded the
+# application name literal "BPA-Demo" (APMIA_APP_NAME no longer defaults to
+# that -- see CLAUDE.md's "Deployment identity" section); the live SLI
+# (sliId 2767) dropped to totalMetrics=0 as a result. The template's own
+# specifiers are fixed (both now REGEX-based, wildcarding the deployment
+# segment), but **there is no way to push that fix to the existing SLI via
+# this CLI**: `sli` has only exclude-service/export/import/include-service/
+# list -- no update. `sli import` refuses outright on a name collision
+# (confirmed live: "Refusing to import: an SLI named '...' already exists
+# (sliId 2767)", even with dry-run=false and undocumented overwrite=true/
+# force=true params, both silently ignored -- "ignoring extra args"). The
+# script's original design comment assumed importing with the real groupId
+# would update in place; that assumption does not hold on this build.
+# Excluding the service first doesn't help either -- the sliName persists
+# even when unbound (that's the exact state the tenant's other 3 example
+# SLIs are already in), so it still collides on any re-import under the
+# same name. **Fixing the live SLI requires a manual console edit**: open
+# "BPA-Demo Frontend Response Time" (sliId 2767) in the console's SLI
+# editor and replace its source/attribute filter with the corrected REGEX
+# patterns now in templates/bpa-demo-response-time-sli.json. `create`
+# cannot self-heal this one the way bpa-demo-management-module.sh and
+# bpa-demo-agent-alerts.sh do for their own metric groupings.
+#
 # Why no SLO yet: the tenant's two SLI examples with a full SLO/error-budget
 # pipeline (sliId 813, 873) use `attributeType` numeric codes and an
 # `errorbudget` threshold whose exact units/semantics are not documented and
@@ -236,7 +262,7 @@ for row in data:
             info "SLI exists but is not bound to '${SERVICE_NAME}' -- self-healing with 'sli include-service'."
             run_dx_do sli include-service sliId="${SLI_ID}" serviceName="${SERVICE_NAME}" dry-run=false
         elif [[ "${total}" -eq 0 ]]; then
-            info "WARNING: SLI is bound to '${SERVICE_NAME}' but reports zero live metrics -- the underlying PHP probe frontend metrics may not be flowing. Check with '${SCRIPT_NAME} check'."
+            info "WARNING: SLI is bound to '${SERVICE_NAME}' but reports zero live metrics. If the underlying metrics ARE flowing (check 'dx-do nass query' against the pattern in ${TEMPLATE_FILE}), this cannot be self-healed by this script -- 'sli import' refuses on a name collision and there is no 'sli update' on this CLI build. See this script's 'Bug found 2026-07-10' header comment: the fix requires a manual console edit of this SLI's filter."
         else
             info "Bound with ${total} live metrics -- nothing to do."
         fi
