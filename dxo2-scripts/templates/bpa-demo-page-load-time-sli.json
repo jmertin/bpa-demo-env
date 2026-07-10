@@ -121,7 +121,184 @@
     ]
   },
   "sloDefinition": {
-    "functions": []
+    "functions": [
+      {
+        "op": "comparator",
+        "input": {
+          "source": "data",
+          "filter": {
+            "specifier": {
+              "op": "SPEC",
+              "sourceNameSpecifier": {
+                "op": "EXACT",
+                "names": [
+                  "OI|SA|SERVICES|ALL"
+                ]
+              },
+              "attributeNameSpecifier": {
+                "op": "REGEX",
+                "pattern": ".*:BPA-Demo Client-Side Page Load Time"
+              }
+            },
+            "names": null
+          },
+          "uiFilter": null
+        },
+        "aggregationInterval": {
+          "value": "5",
+          "unit": "minutes"
+        },
+        "aggregationType": "WINDOW",
+        "output": {
+          "as": "bpa_demo_client_page_load_timeSLOThreshold",
+          "derivedMetrics": {
+            "sourceName": "OI|SA|SERVICES|ALL",
+            "attributeName": "{serviceVertex.attr.id}:BPA-Demo Client-Side Page Load Time Threshold",
+            "attributeType": 258,
+            "attributes": [
+              {
+                "name": "external_ids",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "sli_type",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "service_name",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "metric_name",
+                "associationType": "PROVIDED",
+                "values": "BPA-Demo Client-Side Page Load Time Threshold"
+              }
+            ]
+          },
+          "outputMetrics": true
+        },
+        "skew": 0,
+        "customParams": {
+          "threshold": {
+            "comparator": "LE",
+            "value": 300
+          }
+        },
+        "sliCreationTime": 0
+      },
+      {
+        "op": "percentage",
+        "input": {
+          "source": "pipeline",
+          "filter": {
+            "specifier": null,
+            "names": [
+              "bpa_demo_client_page_load_timeSLOThreshold"
+            ]
+          },
+          "uiFilter": null
+        },
+        "aggregationInterval": {
+          "value": "1",
+          "unit": "DAYS"
+        },
+        "aggregationType": "Rolling",
+        "output": {
+          "as": "bpa_demo_client_page_load_timeSLOPercentage",
+          "derivedMetrics": {
+            "sourceName": "OI|SA|SERVICES|ALL",
+            "attributeName": "{serviceVertex.attr.id}:BPA-Demo Client-Side Page Load Time Percentage",
+            "attributeType": 4097,
+            "attributes": [
+              {
+                "name": "external_ids",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "sli_type",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "service_name",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "metric_name",
+                "associationType": "PROVIDED",
+                "values": "BPA-Demo Client-Side Page Load Time Percentage"
+              }
+            ]
+          },
+          "outputMetrics": true
+        },
+        "skew": 0,
+        "customParams": {
+          "sliInterval": {
+            "value": "5",
+            "unit": "minutes"
+          }
+        },
+        "sliCreationTime": 0
+      },
+      {
+        "op": "errorbudget",
+        "input": {
+          "source": "pipeline",
+          "filter": {
+            "specifier": null,
+            "names": [
+              "bpa_demo_client_page_load_timeSLOPercentage"
+            ]
+          },
+          "uiFilter": null
+        },
+        "aggregationInterval": {
+          "value": "1",
+          "unit": "DAYS"
+        },
+        "aggregationType": "Rolling",
+        "output": {
+          "as": "bpa_demo_client_page_load_timeErrorBudget",
+          "derivedMetrics": {
+            "sourceName": "OI|SA|SERVICES|ALL",
+            "attributeName": "{serviceVertex.attr.id}:BPA-Demo Client-Side Page Load Time Error Budget",
+            "attributeType": 2,
+            "attributes": [
+              {
+                "name": "external_ids",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "sli_type",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "service_name",
+                "associationType": "AUTOMATIC"
+              },
+              {
+                "name": "metric_name",
+                "associationType": "PROVIDED",
+                "values": "BPA-Demo Client-Side Page Load Time Error Budget"
+              }
+            ]
+          },
+          "outputMetrics": true
+        },
+        "skew": 0,
+        "customParams": {
+          "threshold": {
+            "comparator": "GE",
+            "value": 98
+          },
+          "sliInterval": {
+            "value": "5",
+            "unit": "minutes"
+          }
+        },
+        "sliCreationTime": 0
+      }
+    ]
   },
   "pipelineErrors": [],
   "alertDefinition": [

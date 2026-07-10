@@ -5,6 +5,36 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 16:25 - [Feat - SLO layer added to the 2 new SLI templates, modeled on sliId 2767's console config]:
+  User asked to re-export sliId 2767 (attempted with a --config=demo-prod
+  profile that doesn't exist in this sandbox; fell back to the default
+  profile already in use all session, same tenant/resource) and adapt
+  the 2 new SLIs based on the result.
+  The fresh export showed the user had since added a real sloDefinition
+  to 2767 via the console: comparator (raw value LE 200ms, 5-min window)
+  -> percentage (rolling 1-day % passing) -> errorbudget (GE 98% rolling
+  1-day). This resolves this project's earlier "attributeType codes and
+  errorbudget units aren't documented" uncertainty (bpa-demo-sli.sh's
+  "Why no SLO yet" header) with a real confirmed example instead of a
+  guess: attributeType 258/4097/2 for threshold/percentage/error-budget.
+  Added the identical 3-function structure to both new templates
+  (dxo2-scripts/templates/bpa-demo-error-rate-sli.json,
+  bpa-demo-page-load-time-sli.json), with thresholds pulled from this
+  project's own already-measured alert baselines rather than guessed:
+  Error Rate LE 2 (matches bpa-demo-agent-alerts.sh's
+  ALERT_WARNING[php-error-rate]), Page Load Time LE 300ms (matches
+  ALERT_WARNING[browser-page-load]), both GE 98% error budget -- same
+  budget threshold as 2767 for consistency.
+  Confirmed via `sli import ... dry-run=true` that this cannot be pushed
+  to the live sliId 2768/2769 either -- same collision refusal as
+  before, since both SLIs now exist. The SLO layer needs the console's
+  own SLO editor for these too; recorded the exact values needed in
+  DX-O2_MANUAL_CONFIGURATION.md.
+  Files changed: dxo2-scripts/templates/bpa-demo-error-rate-sli.json,
+  dxo2-scripts/templates/bpa-demo-page-load-time-sli.json,
+  DX-O2_MANUAL_CONFIGURATION.md, CLAUDE.md.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 16:05 - [Feat - two new SLIs: Error Rate (APM) and Client-Side Page Load Time (AXA/End-User)]:
   User asked for two simple SLI starting points to fine-tune in the
   console: an Errors Per Interval SLI on the classic APM path, and a
