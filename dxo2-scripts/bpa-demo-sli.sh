@@ -49,7 +49,11 @@
 # editor and replace its source/attribute filter with the corrected REGEX
 # patterns now in templates/bpa-demo-response-time-sli.json. `create`
 # cannot self-heal this one the way bpa-demo-management-module.sh and
-# bpa-demo-agent-alerts.sh do for their own metric groupings.
+# bpa-demo-agent-alerts.sh do for their own metric groupings. The console's
+# own filter editor takes structured Source/Metric conditions
+# (contains/starts_with/ends_with), not raw regex -- see
+# ../DX-O2_MANUAL_CONFIGURATION.md for the exact steps taken there, the
+# resulting specifier, and an open item found while verifying it.
 #
 # Why no SLO yet: the tenant's two SLI examples with a full SLO/error-budget
 # pipeline (sliId 813, 873) use `attributeType` numeric codes and an

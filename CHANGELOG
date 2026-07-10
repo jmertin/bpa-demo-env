@@ -5,6 +5,39 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 15:30 - [Docs - add DX-O2_MANUAL_CONFIGURATION.md for console-only steps]:
+  User manually fixed the SLI's dead filter via the console's own SLI
+  editor (structured Source/Metric conditions -- contains/starts_with/
+  ends_with -- not raw regex, which is why the regex suggested earlier
+  was rejected there) and asked for the steps documented and tracked.
+  Added DX-O2_MANUAL_CONFIGURATION.md at the repo root: a new,
+  console-only-exceptions doc separate from DX-O2-AGENT-SETUP.md (which
+  covers the full scripted setup) -- scoped specifically to steps that
+  cannot be done via dx-do (either no command exists, or the command
+  that exists refuses unconditionally with no workaround).
+  First entry: the SLI's filter, with the exact two-step console
+  procedure taken (first filter: Source contains "php-probe", Metric
+  ends with "Average Response Time (ms)"; refine: Source contains
+  "bpa-demo", Metric starts with "Frontends|Apps|bpa-demo"), the
+  resulting persisted specifier (via `sli export`), and an open item
+  found while verifying it: the "refine" step appears to REPLACE the
+  first filter's condition rather than AND with it -- the persisted
+  attributeNameSpecifier only carries the second filter's pattern, with
+  no restriction to "Average Response Time (ms)" specifically. Confirmed
+  via `nass query` against the live pattern: it still matches Errors Per
+  Interval/Responses Per Interval/Stall Count/Concurrent Invocations
+  alongside Average Response Time (ms) under the same prefix -- `sli
+  list` still reports totalMetrics: 78, not the ~22 the two filters
+  together were expected to produce. Left as an open item pending
+  further console investigation (whether both condition pairs need to be
+  in the same filter group to be ANDed, rather than a filter + a
+  separate refine action).
+  Cross-referenced from CLAUDE.md's Key file paths table and
+  bpa-demo-sli.sh's own header comment.
+  Files changed: DX-O2_MANUAL_CONFIGURATION.md (new), CLAUDE.md,
+  dxo2-scripts/bpa-demo-sli.sh.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 14:45 - [Fix - BPA-Demo Service content query pointed at dead identity literals]:
   User asked for the Service definition to be rebuilt first, before fixing
   the SLI by hand. Found 3 of its 4 content groups used exact-match `agent`/
