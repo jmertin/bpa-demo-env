@@ -3352,6 +3352,11 @@
           },
           "options": [
             {
+              "selected": true,
+              "text": "All",
+              "value": "$__all"
+            },
+            {
               "selected": false,
               "text": "docker",
               "value": "docker"

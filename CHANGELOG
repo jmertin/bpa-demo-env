@@ -5,6 +5,25 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 11:20 - [Fix - Deployment dropdown's "All" option disappeared after picking a specific value]:
+  User reported the new Deployment variable showed "All" as the initial
+  label but it vanished from the open dropdown list once "docker" or
+  "k8s" was selected, with no way back short of a page reload. Root
+  cause: this Grafana build's custom-type variable dropdown renders its
+  open list directly from the stored options array, not by dynamically
+  regenerating from query + includeAll on each render. The options array
+  only ever listed docker/k8s -- "All" was never a real, re-selectable
+  list entry, just the initial current.text shown before any
+  interaction.
+  Fixed by adding an explicit {"text": "All", "value": "$__all",
+  "selected": true} entry as options[0] in
+  dxo2-scripts/templates/bpa-demo-agent-health-dashboard.json, matching
+  the shape Grafana's own UI generates when "include All option" is
+  checked by hand. Pushed live (dashboard version 6 -> 7) and confirmed
+  via dashboard-variables-list that "All" now persists as a real option
+  alongside docker/k8s.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 11:05 - [Feat - agent health dashboard gets a Deployment selector; fix a dashboard self-heal bug]:
   Once DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX went live (previous entry), the
   old identity literals (bpa-demo-host, bpa-demo-infra-agent,
