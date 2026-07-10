@@ -32,7 +32,9 @@ APP_NAMESPACE / APP_HOSTNAME / TLS_CLUSTER_ISSUER / INGRESS_CLASS_NAME / KUBECON
 Add these for DX O2 monitoring (optional):
 
 ```bash
-APMIA_AGENT_NAME / APMIA_APP_NAME / APMIA_HOST_NAME
+DEPLOYMENT_NAME / DEPLOYMENT_POSTFIX   # e.g. "bpa-demo" / "k8s" -> "bpa-demo-k8s";
+                                        # keeps this deployment's agents distinct
+                                        # from a Compose deployment on the same tenant
 APMIA_EM_HOST="placeholder"   # any non-empty value enables the agent sidecar
 ```
 

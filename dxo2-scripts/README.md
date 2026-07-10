@@ -53,7 +53,7 @@ command and remove them manually (each script's header comment says which).
 | `bpa-demo-universe.sh` | The `"BPA Demo universe"` **APM Universe** (`dx-do apm-universe` -- see `bpa-demo-services-universe.sh` for the other, separate universe type the tenant also needs) -- a topology/metric-data scope populated with 3 explicit metric-source agent paths, covering all 4 of the app's named telemetry identities: the Infrastructure Agent, the PHP probe agent, and the BPA WebServer Agent (which covers both the "BPA agent" and the "Browser agent" -- see the Alerts section above for why there's no fourth, independent Browser Agent entity). Unlike a Service, a Universe has no content-query membership mechanism over the CLI -- sources are added one at a time via `apm-universe add-metric-source`, and `create` self-heals by adding any of the 3 that are missing. `apm-universe create` does not honor `dry-run` (silently ignored, creates for real immediately) -- see the script's header comment for this and other CLI landmines found while writing it. **Known limitation:** the Triage/Topology console view is driven by a different, legacy-shaped filter (`views.tas`) that `add-metric-source` never touches -- see `BUGS` for the full writeup; fixing it needs a manual console step. |
 | `bpa-demo-services-universe.sh` | The `"BPA Demo"` **O2/Platform Universe** (`dx-do o2-universe` -- a.k.a. "Services Universe" in the console; a different resource from the APM Universe above, with its own id space) -- created because the tenant needs both universe types until the product merges them. `o2-universe create` accepts no scoping parameters at all (extras are silently ignored), so a CLI-created Universe is always unscoped (`{"filter": {"op": "ALL"}}` on both its `tas` and `nass` views) -- **confirmed to crash the console's edit UI** when opened in that state (2026-07-07; see `dx-do-o2-universe-issue.md`). There is no `update`/`add-view` command to narrow it afterward either, so this script deliberately does **not** fall back to `o2-universe create` when its state file is missing/stale -- it fails with instructions for manual console creation instead (pick a Service scope in the console's own creation wizard, which avoids the crash entirely). The currently-tracked instance (`VIEW618`) was created that way. `delete` still uses `apm-universe delete`, which works across both universe types since `o2-universe` has no `delete` command of its own. |
 | `bpa-demo-sli.sh` | The `"BPA-Demo Frontend Response Time"` **SLI** (Service Level Indicator, `dx-do sli` -- see the SLIs section below) bound to the `"BPA-Demo"` Service. `sli` has no native create/delete: `create` runs `sli import` against a tracked JSON template (`templates/bpa-demo-response-time-sli.json`), and `delete` runs `sli exclude-service` (unbinds the service; the SLI definition itself is never deleted -- there is no command for that). Raw SLI only for now, no SLO/error-budget/alert layer -- see the script's header comment for why. |
-| `bpa-demo-agent-health-dashboard.sh` | The `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder: one traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert; `dashboard-import`'s documented `preserveUid=true overwrite=true` upsert doesn't work on this build -- `overwrite=` is silently ignored), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
+| `bpa-demo-agent-health-dashboard.sh` | The `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder: one traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. Includes a "Deployment" dropdown variable (`docker`/`k8s`, defaults to "All") so the Infrastructure Agent/PHP Probe panels can be scoped to one deployment or show both together -- see "2026-07-10" below for why that's needed and two bugs found shipping it. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert; `dashboard-import`'s documented `preserveUid=true overwrite=true` upsert doesn't work on this build -- `overwrite=` is silently ignored), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
 
 ## Alerts
 
@@ -213,6 +213,61 @@ doing nothing. Shipped the verified alternative instead: both metrics as
 separate lines on one graph, so the gap is visible by eye. The transform
 is a reasonable follow-up once it can be checked in the console's own
 panel editor (where the real field names are visible).
+
+**2026-07-10: identity collision emptied the DB Monitor/PHP Probe panels
+again -- an operational cause, not an authoring bug this time.** The
+Docker Compose and Helm/Kubernetes deployments both defaulted to
+identical DX O2 agent identity strings; running them concurrently made
+DX O2 suffix the second connection's identity with `%1`, and the
+dashboard's exact-anchored patterns matched neither. Separately, 5
+panels also hardcoded the literal hostname segment `mariadb`/
+`mariadb-3306`, which only ever matched Compose's naming and never
+Kubernetes' `127.0.0.1`-based paths, collision or not. Fixed at the
+`.config` layer with two new variables, `DEPLOYMENT_NAME` +
+`DEPLOYMENT_POSTFIX` (see `CLAUDE.md`'s "Deployment identity" section),
+which give every APMIA-based agent a distinguishable identity per
+deployment (`bpa-demo-k8s` / `bpa-demo-docker`). Wildcarded the
+hardcoded literals and made the identity match tolerant of an optional
+`%N` suffix in the dashboard template.
+
+**Added a "Deployment" dropdown variable** (`docker`/`k8s`, defaults to
+"All") once the identities above were fixed, since the old plain
+`bpa-demo-host`/`bpa-demo-infra-agent`/`bpa-demo-php-probe` literals no
+longer existed at all. Interpolated via Grafana's `${deployment:regex}`
+format into all 8 DB-Monitor/PHP-Probe `sourceNameSpecifier` patterns.
+Two bugs found while shipping this:
+- The self-heal upsert script only ever merged `panels`/`title`/`tags`
+  from the template into the live export -- it silently dropped the new
+  `templating` block on the first push (version bumped, variable never
+  appeared). Fixed by also merging `dashboard.templating`.
+- The "All" option showed as the initial dropdown label but vanished
+  from the actual open list once a specific value was picked, with no
+  way back short of a page reload. This build's `custom`-type variable
+  dropdown renders its open list directly from the stored `options`
+  array rather than regenerating it from `query`+`includeAll` each
+  render -- the array only ever listed `docker`/`k8s`, so "All" was
+  never a real, re-selectable entry. Fixed by adding an explicit
+  `{"text": "All", "value": "$__all"}` entry as `options[0]`, matching
+  the shape Grafana's own UI generates when "include All option" is
+  checked by hand.
+
+**PHP probe `UnknownAgent` root cause, per Broadcom's PHP agent naming
+docs.** Kubernetes' PHP probe reported under the generic fallback
+`UnknownAgent` instead of its real identity even after the collision fix
+above. Per Broadcom's docs, the metric path's agent-name segment is the
+`{collector}` variable -- the Infrastructure Agent's own `agentName`,
+resolved at the moment the PHP probe first registers with the IA's
+PHP-collector socket. `apache-php`'s entrypoint started Apache with no
+wait for the `dx-o2-agent` sidecar's collector socket to be listening; in
+Kubernetes (separate containers, no guaranteed start order, JVM
+cold-start + EM handshake under a CPU limit) the probe's first
+registration could race ahead of the IA and permanently fall back to the
+placeholder -- Compose's lighter startup made it unlikely to lose that
+race, which is why only Kubernetes showed the symptom. Fixed with a wait
+loop in the entrypoint (polls the collector port, 60s cap, warns and
+continues on timeout); not yet confirmed against the live cluster, since
+that needs an image rebuild + redeploy with no cluster access from the
+environment that made the fix.
 
 **Landmines found on this dx-do build, none of which match some dx-do
 documentation written for newer builds:**

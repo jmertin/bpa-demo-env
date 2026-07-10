@@ -339,13 +339,29 @@ credential are already embedded in `IntroscopeAgent.profile`.  Configure
 only identity fields in `.config`:
 
 ```bash
-# Agent identity – displayed in the DX O2 console (APMENV_* vars)
-APMIA_AGENT_NAME="bpa-demo-agent"
-APMIA_APP_NAME="bpa-demo"
-APMIA_HOST_NAME="bpa-demo-host"    # pod hostname + IA hostName
-APMIA_PROCESS_NAME="bpa-demo"
-APMIA_PHP_AGENT_NAME="bpa-demo-php-probe"
-APMIA_WEB_AGENT_NAME="bpa-demo-web-plugin"
+# Deployment identity – combines as "<name>-<postfix>" into the shared
+# default for every APMIA agent below (Infrastructure Agent, PHP probe, BPA
+# WebServer plugin), so a Kubernetes deployment never collides on identity
+# with a Docker Compose deployment reporting to the same DX O2 tenant.
+# Leave DEPLOYMENT_POSTFIX empty to accept deploy.sh's own default ("k8s");
+# compose.sh defaults to "docker" instead. See CLAUDE.md's "Deployment
+# identity" section for the full explanation (this was found live: running
+# both deployments with identical hardcoded identities caused DX O2 to
+# silently suffix the second connection with "%1" and break every
+# dashboard/alert query written against the plain name).
+DEPLOYMENT_NAME="bpa-demo"
+DEPLOYMENT_POSTFIX=""
+
+# Agent identity – displayed in the DX O2 console (APMENV_* vars). Leave
+# empty (as below) to use the DEPLOYMENT_NAME-DEPLOYMENT_POSTFIX default
+# above (e.g. "bpa-demo-k8s"); set any one explicitly to override just that
+# agent's identity.
+APMIA_AGENT_NAME=""
+APMIA_APP_NAME=""
+APMIA_HOST_NAME=""
+APMIA_PROCESS_NAME=""
+APMIA_PHP_AGENT_NAME=""
+APMIA_WEB_AGENT_NAME=""
 APMIA_LOG_LEVEL="INFO"
 
 # Set to any non-empty value to trigger dxo2.enabled=true in deploy.sh.
@@ -788,12 +804,12 @@ There are two separate mechanisms — one for the PHP probe, one for the IA and 
 
 **PHP probe (`wily_php_agent.hostname`):**
 The entrypoint always sets `wily_php_agent.hostname` to `APMIA_PHP_AGENT_NAME`
-(default `bpa-demo-php-probe`). If the PHP probe still shows a random ID, verify
-the patched INI:
+(default `${DEPLOYMENT_NAME}-${DEPLOYMENT_POSTFIX}`, e.g. `bpa-demo-k8s`). If
+the PHP probe still shows a random ID, verify the patched INI:
 ```bash
 kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
   grep hostname /etc/php/8.1/mods-available/wily_php_agent.ini
-# expected: wily_php_agent.hostname="bpa-demo-php-probe"
+# expected: wily_php_agent.hostname="bpa-demo-k8s" (or your configured value)
 ```
 
 **IA + BPA module (`spec.hostname` / OS hostname):**
@@ -801,7 +817,7 @@ kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
 the OS `gethostname()`.  Confirm the pod-level hostname is set:
 ```bash
 kubectl get pod -n <APP_NAMESPACE> <pod> -o jsonpath='{.spec.hostname}'
-# expected: bpa-demo-host (or your configured value)
+# expected: bpa-demo-k8s (or your configured value)
 ```
 If empty, verify `dxo2.hostName` is set in `values.yaml` and that
 `deploy.sh` was run after updating `.config`.
@@ -851,6 +867,34 @@ BA Correlation  cookie x-apm-brtm-response-bt-page-shop set successfully
 Enable DEBUG logging (`APMIA_PHP_LOG_LEVEL=DEBUG` in `.config`, rebuild) to
 see per-request gate decisions in `/var/log/php-probe/wily_php_agent_<pid>.log`.
 
+### PHP probe reports under `UnknownAgent` instead of its real identity
+
+**Symptom:** the PHP probe's metric path shows
+`SuperDomain|<host>|php-probes|UnknownAgent(/usr/sbin/apache2)` instead of
+`SuperDomain|<host>|php-probes|<host>(/usr/sbin/apache2)`. Per
+[Broadcom's PHP agent naming docs](https://techdocs.broadcom.com/us/en/ca-enterprise-software/it-operations-management/dx-apm-agents/SaaS/php-agent/monitor-php-applications-with-ca-digital-experience-insights/php-agent-naming-ca-digital-experience-insights.html),
+that agent-name segment is the `{collector}` variable — "Name of
+Infrastructure Agent," resolved from `introscope.agent.agentName` at the
+moment the PHP probe first registers with the IA's PHP-collector socket.
+
+**Cause:** the PHP probe's first registration attempt raced ahead of the
+`dx-o2-agent` sidecar actually being up. In Kubernetes, `apache-php` and
+`dx-o2-agent` are separate containers in the same pod with no guaranteed
+start order, and the sidecar's JVM cold-start + WSS handshake to the SaaS
+EM (especially under a tight `dxo2.resources.limits.cpu`) can outlast
+Apache's own startup — the PHP probe falls back to the generic
+`UnknownAgent` placeholder and it persists for the life of that Apache
+process. Docker Compose's lighter, unconstrained startup profile is far
+less likely to lose this race.
+
+**Fix:** `apache-php/entrypoint.sh` now waits for
+`APMIA_PHP_COLLECTOR_HOST:APMIA_PHP_COLLECTOR_PORT` to accept connections
+(up to 60s, warns and starts anyway on timeout) before starting Apache, so
+the probe's first registration attempt never happens before the
+Infrastructure Agent is ready. Requires rebuilding and redeploying the
+`apache-php` image — this is baked into the entrypoint script, not
+runtime-configurable via `.config`/Helm values.
+
 ### Browser agent snippet appears in INI when not configured
 
 **Cause:** The DX O2 installer shipped `wily_php_agent.ini` with
@@ -878,7 +922,12 @@ it is empty, overriding any pre-configured INI values.
        # must show: apmia/core/config/IntroscopeAgent.profile
        tar -tf src/dx-o2-agents/installers/Infrastructure_Agent_apmia*.tar | grep 'extensions/deploy/mysql'
        # must show: apmia/extensions/deploy/mysql-*.tar.gz
-[ ] 8. Set APMIA_AGENT_NAME, APMIA_APP_NAME, APMIA_HOST_NAME in .config
+[ ] 8. Set DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX in .config (or leave
+       DEPLOYMENT_POSTFIX empty to accept deploy.sh's "k8s" default) --
+       gives this deployment's agents a distinguishable identity from a
+       Docker Compose deployment on the same tenant. Individual
+       APMIA_AGENT_NAME/APP_NAME/HOST_NAME/etc. vars can still override one
+       agent's identity if needed.
        Also set MARIADB_ROOT_PASSWORD if not already set -- required for the
        DB Monitor login verification/creation step (checklist item 17).
 [ ] 9. Set APMIA_EM_HOST to a non-empty value in .config (enables dxo2.enabled)
