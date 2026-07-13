@@ -3,11 +3,62 @@
 A full-stack PHP demo web shop selling home-assistant compatible smart devices
 (Shelly, SonOff, Tuya) containerised with **Apache 2.4 + mod_php** and **MariaDB**.
 
+The application itself is a vehicle: BPA-Demo exists to demonstrate the
+**full end-to-end monitoring capabilities of Broadcom DX O2 APM** — from a
+raw HTTP request, through the PHP runtime and the database, out to a real
+visitor's browser — under one console view, with realistic (and
+occasionally deliberately broken) traffic to observe.
+
 The application ships 300 products across three brands, a session-based shopping
 basket, fake credit-card checkout with Luhn validation, an admin panel with
 per-user use-case assignment, and monitoring HTTP headers on every response.
 All source code follows the **Backdrop CMS PHP coding standards** (2-space
 indent, K&R braces, PHPDoc on every function, single quotes).
+
+### DX O2 agents demonstrated
+
+| Agent / component | What it monitors | Where it runs |
+|---|---|---|
+| **Infrastructure Agent (IA)** | Host + process‑level agent; hosts the extensions below and reports the app's core identity to the DX O2 tenant | `dx-o2-agent` sidecar container |
+| **PHP Probe** (`wily_php_agent`) | In‑process PHP instrumentation — frontend URL response time, error rate, concurrency, and per‑SQL‑statement backend calls to MariaDB | Injected into the `apache-php` container's PHP runtime |
+| **DB Monitor extension** | MySQL/MariaDB‑specific server metrics (availability, connection pool, buffer pool cache hit rate, slow queries) | Runs inside the Infrastructure Agent, connects to the `mariadb` container |
+| **Business Transaction Listener (BTL)** | Receives payload data forwarded by the BPA WebServer Plugin | `dx-o2-agent` sidecar container |
+| **BPA WebServer Plugin** (`mod_caplugin`) | Apache‑level Business Payload Analyzer — per‑business‑transaction server‑side timing, independent of the PHP probe | Apache module injected into the `apache-php` container |
+| **Browser Agent (BA snippet)** | Real‑user monitoring (RUM) in an actual visitor's browser — page load time, resource timing, time‑to‑first‑byte | JavaScript snippet auto‑injected into every HTML response by the PHP probe |
+
+### What deploys automatically vs. what needs manual setup
+
+**Automatic** — a single `build-scripts/deploy.sh` (Kubernetes) or
+`build-scripts/compose.sh up -d` (local) run handles all of this, driven
+entirely by `.config`:
+- Building the app and pulling/copying the DX O2 agent installer archives
+  into the `dx-o2-agents` image.
+- Starting the Infrastructure Agent + BTL as a sidecar, with an identity
+  (`DEPLOYMENT_NAME`/`DEPLOYMENT_POSTFIX`) that keeps it distinct from any
+  other deployment reporting to the same tenant.
+- Injecting the PHP Probe and the BPA WebServer Plugin into the `apache-php`
+  container at startup (opportunistic — the app starts cleanly with neither
+  if the agent volume is absent).
+- Configuring the DB Monitor extension against the deployed MariaDB
+  instance, including creating its monitoring login if it doesn't exist yet.
+- Injecting the Browser Agent snippet into every HTML response, once a
+  snippet value is supplied (see below).
+
+**Manual, one-time, outside this repo's automation:**
+- **Downloading the four DX O2 agent installer archives** from your DX O2
+  tenant's own interface (not from support.broadcom.com — see
+  [DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)) and placing them in
+  `src/dx-o2-agents/installers/`. This is a licensed, tenant-specific
+  download that can't be scripted or committed to git.
+- **Copying the Browser Agent snippet** from your tenant's own console
+  (DX O2 Settings → Manage Mobile/Browser Web Monitoring → App to Monitor →
+  Web App) into `.config`'s `APMIA_BROWSER_SNIPPET`.
+- **Tenant-side console configuration** (Service, Management Module,
+  Alerts, Universes, SLIs, Dashboard) — mostly scripted via `dxo2-scripts/`
+  (see step 6 of [QUICKSTART.md](QUICKSTART.md)), but a few specific pieces
+  have no CLI path at all and must be done by hand in the console — see
+  [DX-O2_MANUAL_CONFIGURATION.md](DX-O2_MANUAL_CONFIGURATION.md) for
+  exactly which ones and why.
 
 ---
 
