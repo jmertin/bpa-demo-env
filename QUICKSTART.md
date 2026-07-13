@@ -120,19 +120,41 @@ Password for all accounts: **`demo123`**
 Once the app is deployed with DX O2 monitoring enabled (`APMIA_EM_HOST` set)
 and has taken some traffic — the `traffic` Compose service (see step 4) or
 its standalone container (`traffic-generator/`) can generate this
-automatically — set up the console-side Service and alerts with the scripts
-in `dxo2-scripts/` — no AI assistant required, just the `dx-do` CLI (see
-`dxo2-scripts/README.md` for setup):
+automatically — set up the full console-side view (Service, Management
+Module, Alerts, Universes, SLI, Dashboard) with the scripts in
+`dxo2-scripts/` — no AI assistant required, just the `dx-do` CLI (see
+`dxo2-scripts/README.md` for setup). Run them in this order:
 
 ```bash
-dxo2-scripts/bpa-demo-service.sh create           # "BPA-Demo" Service
-dxo2-scripts/bpa-demo-management-module.sh create # MM + trouble-use-case alert
-dxo2-scripts/bpa-demo-agent-alerts.sh create       # 12 more alerts (DB, PHP, browser/RUM)
+dxo2-scripts/bpa-demo-service.sh create                  # "BPA-Demo" Service
+dxo2-scripts/bpa-demo-management-module.sh create        # MM + trouble-use-case alert
+dxo2-scripts/bpa-demo-agent-alerts.sh create              # 12 more alerts (DB, PHP, browser/RUM)
+dxo2-scripts/bpa-demo-universe.sh create                  # APM Universe (topology/metric scope)
+dxo2-scripts/bpa-demo-services-universe.sh create         # O2/Platform ("Services") Universe
+dxo2-scripts/bpa-demo-sli.sh create                       # "BPA-Demo Frontend Response Time" SLI
+dxo2-scripts/bpa-demo-agent-health-dashboard.sh create    # "BPA-Demo · Agent Health" Dashboard
 ```
 
-Every script supports `create` (safe to re-run), `check`, and `delete`.
-`bpa-demo-agent-alerts.sh` depends on `bpa-demo-management-module.sh` having
-been run first.
+Every script supports `create` (safe to re-run — self-heals a
+previously-broken definition instead of just no-op'ing), `check`, and
+`delete`. `bpa-demo-agent-alerts.sh` depends on
+`bpa-demo-management-module.sh` having been run first;
+`bpa-demo-agent-health-dashboard.sh` reuses the alerts both of those create.
+
+**One exception:** `bpa-demo-services-universe.sh create` cannot create its
+Universe from nothing — `o2-universe create` always produces an unscoped
+Universe that crashes the console's own edit UI. The *first* one must be
+created by hand in the console (New Universe, scope both views to the
+`"BPA-Demo"` Service); after that, `create` finds and self-heals it like
+the rest. See the script's own header comment and
+[DX-O2_MANUAL_CONFIGURATION.md](DX-O2_MANUAL_CONFIGURATION.md) for the
+exact steps.
+
+A handful of other tenant-side settings similarly have no CLI path at all
+(mainly around SLI filter/SLO tuning) and must be configured by hand in the
+console too — see
+[DX-O2_MANUAL_CONFIGURATION.md](DX-O2_MANUAL_CONFIGURATION.md) for exactly
+which ones, the values to use, and why they can't be scripted.
 
 ---
 

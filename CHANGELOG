@@ -5,6 +5,36 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 17:20 - [Docs - README intro reframed around DX O2 demo purpose; QUICKSTART step 6 covers all tenant scripts]:
+  User asked for the README introduction to explicitly state this app's
+  purpose (demonstrating Broadcom DX O2's end-to-end APM monitoring
+  capabilities), list the agents installed, and distinguish what
+  deploys automatically from what needs manual intervention -- plus
+  updating QUICKSTART.md's tenant-configuration step to launch the full
+  set of dxo2-scripts, not just the original three.
+  README.md: added a "DX O2 agents demonstrated" table (Infrastructure
+  Agent, PHP Probe, DB Monitor extension, BTL, BPA WebServer Plugin,
+  Browser Agent -- component / what it monitors / where it runs) and a
+  "What deploys automatically vs. what needs manual setup" section
+  right after the opening paragraph. Manual items: downloading the four
+  licensed installer archives from the tenant's own DX O2 interface,
+  copying the Browser Agent snippet from the console, and the specific
+  tenant-side console-only steps documented in
+  DX-O2_MANUAL_CONFIGURATION.md.
+  QUICKSTART.md step 6: added the 4 scripts that existed but weren't
+  listed there yet (bpa-demo-universe.sh, bpa-demo-services-universe.sh,
+  bpa-demo-sli.sh, bpa-demo-agent-health-dashboard.sh) in dependency
+  order, alongside the original 3. Corrected a claim that all scripts
+  are "safe to re-run" from scratch -- bpa-demo-services-universe.sh's
+  create cannot create its Universe from nothing (o2-universe create
+  always produces a console-crashing unscoped result); the first one
+  must be created by hand in the console, documented as a new section in
+  DX-O2_MANUAL_CONFIGURATION.md (exact wizard steps, why the crash
+  happens, and how self-heal works normally afterward).
+  Files changed: README.md, QUICKSTART.md,
+  DX-O2_MANUAL_CONFIGURATION.md.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 16:25 - [Feat - SLO layer added to the 2 new SLI templates, modeled on sliId 2767's console config]:
   User asked to re-export sliId 2767 (attempted with a --config=demo-prod
   profile that doesn't exist in this sandbox; fell back to the default
