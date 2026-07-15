@@ -5,6 +5,33 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 17:45 - [Docs - add TOBEDONE.md, a snapshot of current outstanding shortcomings]:
+  User asked for a dump of everything currently known-broken/incomplete/
+  unverified, distinct from CHANGELOG (history) and
+  DX-O2_MANUAL_CONFIGURATION.md (completed manual steps). Compiled from
+  CLAUDE.md, dxo2-scripts/README.md, DX-O2_MANUAL_CONFIGURATION.md, and
+  BUGS.
+  Categories covered: agent identity (UnknownAgent fix shipped but not
+  confirmed live; stale metric-catalog entries), SLI/SLO (2767's filter
+  still mixing metric types; SLO layer not pushed to any of the 3 live
+  SLIs; no alert wired to any error budget; the 2 newer SLIs are one-off
+  imports, not a self-healing script), dashboards (PHP-probe panels
+  blocked on the UnknownAgent fix; network-time is 2 lines not a
+  computed field; the BPA WebServer Plugin's own <title>-tag cardinality
+  leak), alerts (empty_basket/locked have no observable signal),
+  universes (APM Universe Topology view only shows php-probe; O2/
+  Platform Universe CLI-creation is permanently broken, a Broadcom
+  product limitation not fixable in this repo), AIOps (Situations never
+  form from real, confirmed-firing alarms), and coverage gaps by design
+  (Browser Agent RUM data needs real browser traffic, which the
+  generator doesn't produce).
+  Intentionally excluded already-resolved items (e.g. the app-level
+  X-Page-ID numeric-order-id leak, fixed 2026-07-08) and the PHP-probe
+  Frontend-start/index.php issue (resolved by the per-page-wrapper fix,
+  confirmed working).
+  Files changed: TOBEDONE.md (new).
+
+------------------------------------------------------------------------------
 2026-07-10 @ 17:20 - [Docs - README intro reframed around DX O2 demo purpose; QUICKSTART step 6 covers all tenant scripts]:
   User asked for the README introduction to explicitly state this app's
   purpose (demonstrating Broadcom DX O2's end-to-end APM monitoring
