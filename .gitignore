@@ -7,6 +7,9 @@
 src/apache-php/app.tar.gz
 src/php-fpm/app.tar.gz
 
+# Generated deployment bundles (build-scripts/package-helm-bundle.sh)
+dist/
+
 # Python bytecode cache (traffic-generator/)
 __pycache__/
 *.pyc

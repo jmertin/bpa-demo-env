@@ -74,6 +74,20 @@ build-scripts/deploy.sh
 This generates a transient `values.local.yaml` from `.config`, runs
 `helm upgrade --install`, then deletes the file immediately.
 
+**Deploying from a different host than the one that built/pushed the
+images?** (e.g. a bastion host with registry access, and a separate host
+with `kubectl`/`helm` access to the cluster) — build/push there as normal,
+then run:
+
+```bash
+build-scripts/package-helm-bundle.sh
+```
+
+This produces a self-contained `dist/bpa-demo-helm-bundle-<tag>.tar.gz`
+containing everything `deploy.sh` needs (the full chart with every symlink
+dereferenced, `deploy.sh` itself, and `.config.example`) — copy it to the
+deploy host, extract, and follow the included `README.txt`.
+
 Verify:
 
 ```bash
