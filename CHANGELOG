@@ -5,6 +5,19 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-15 @ 11:40 - [Confirmed - UnknownAgent fix verified live on both Kubernetes and Docker Compose]:
+  User rebuilt and redeployed both stacks and confirmed via nass query that
+  the UnknownAgent PHP-probe fallback is gone: Kubernetes now reports
+  SuperDomain|bpa-demo-k8s|php-probes|bpa-demo-k8s:Agent Type: php and
+  Docker Compose reports SuperDomain|bpa-demo-docker|php-probes|
+  bpa-demo-docker:Agent Type: php - AgentName now correctly matches each
+  deployment's own identity on both. Updated CLAUDE.md's PHP probe
+  injection section from "not yet confirmed" to "confirmed live on both
+  deployments" with the exact reported paths, and removed the now-resolved
+  entry from TOBEDONE.md per that file's own convention (remove once fixed
+  and verified, don't just mark done in place).
+
+------------------------------------------------------------------------------
 2026-07-15 @ 10:05 - [Fix - real UnknownAgent fix via APMENV remote-agent naming, replacing both timing workarounds]:
   User found Broadcom's own Kubernetes-cluster-mode documentation, which
   identifies the UnknownAgent bug as an IA remote-agent auto-naming

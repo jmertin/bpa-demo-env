@@ -11,31 +11,6 @@ once it's actually fixed and verified, don't just mark it done in place.
 
 ## Agents / identity
 
-### PHP probe `UnknownAgent` fix — switched from timing workarounds to config, still not confirmed live
-
-Two timing-based fix attempts in `entrypoint.sh` (waiting on the
-PHP-collector TCP port, then on an `IntroscopeAgent.log` EM-connection
-line) were tried in sequence and the first was deployed and disproved
-live — `UnknownAgent` still occurred. Both are now removed: Broadcom's own
-Kubernetes-cluster-mode docs identify the real cause as the IA's
-remote-agent auto-naming, which assigns the probe's `AgentName` segment
-based on whichever of the IA's own identities has resolved *at the moment
-the probe registers* — not a fixed point in time, so no wait deadline was
-ever going to be sized correctly against it.
-
-Real fix: disable auto-naming and force the probe's identity statically
-instead of racing it — `APMENV_INTROSCOPE_AGENT_AGENTAUTONAMINGENABLED=false`
-plus `APMENV_INTROSCOPE_REMOTEAGENT_PROBE_AGENT_NAME=<deployment identity>`
-on the `dx-o2-agent` container, wired in both `statefulset.yaml` and
-`docker-compose.yml` (see CLAUDE.md's "PHP probe injection" section for
-the full writeup, including why `*_PROBE_PROCESS_NAME` was deliberately
-left unset).
-
-**Not yet confirmed:** whether this actually fixes `UnknownAgent` on the
-live Kubernetes deployment. Needs: rebuild/redeploy → generate traffic →
-check via `dx-do nass query` whether new PHP-probe metrics resolve to
-`bpa-demo-k8s(/usr/sbin/apache2)` instead of `UnknownAgent(/usr/sbin/apache2)`.
-
 ### Stale metric-catalog entries from the pre-identity-fix era
 
 The NASS metric catalog still carries dead historical sources
