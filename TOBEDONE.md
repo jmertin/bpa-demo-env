@@ -11,30 +11,30 @@ once it's actually fixed and verified, don't just mark it done in place.
 
 ## Agents / identity
 
-### PHP probe `UnknownAgent` fix — root cause corrected 2026-07-15, still not confirmed live
+### PHP probe `UnknownAgent` fix — switched from timing workarounds to config, still not confirmed live
 
-First fix attempt (`entrypoint.sh` waiting on the PHP-collector TCP port
-before starting Apache) was deployed and retested live — `UnknownAgent`
-still occurred. Root cause found 2026-07-15 by reading a real
-`IntroscopeAgent.log` pulled off a live pod: the collector port opens and
-the probe's first ARF connection happens at ~23-24s after IA startup, but
-the IA's own WSS connection to the EM — the thing the probe's `{collector}`
-identity actually depends on — doesn't succeed until ~104s after startup
-(and only on a second attempt, after the first failed with a
-`NullPointerException` in the WebSocket handshake). The port check was
-checking a condition satisfied 80+ seconds before the one that matters.
+Two timing-based fix attempts in `entrypoint.sh` (waiting on the
+PHP-collector TCP port, then on an `IntroscopeAgent.log` EM-connection
+line) were tried in sequence and the first was deployed and disproved
+live — `UnknownAgent` still occurred. Both are now removed: Broadcom's own
+Kubernetes-cluster-mode docs identify the real cause as the IA's
+remote-agent auto-naming, which assigns the probe's `AgentName` segment
+based on whichever of the IA's own identities has resolved *at the moment
+the probe registers* — not a fixed point in time, so no wait deadline was
+ever going to be sized correctly against it.
 
-`entrypoint.sh` now waits instead on `IntroscopeAgent.log` itself for the
-literal line `Connected controllable Agent to the Introscope Enterprise
-Manager`, capped at 90s (see CLAUDE.md's "PHP probe injection" section for
-the full root-cause writeup). Verified in isolation (the grep condition
-matches the real downloaded log) and via `bash -n`/ASCII checks.
+Real fix: disable auto-naming and force the probe's identity statically
+instead of racing it — `APMENV_INTROSCOPE_AGENT_AGENTAUTONAMINGENABLED=false`
+plus `APMENV_INTROSCOPE_REMOTEAGENT_PROBE_AGENT_NAME=<deployment identity>`
+on the `dx-o2-agent` container, wired in both `statefulset.yaml` and
+`docker-compose.yml` (see CLAUDE.md's "PHP probe injection" section for
+the full writeup, including why `*_PROBE_PROCESS_NAME` was deliberately
+left unset).
 
 **Not yet confirmed:** whether this actually fixes `UnknownAgent` on the
-live Kubernetes deployment. Needs: rebuild `apache-php` → push → redeploy →
-generate traffic → check via `dx-do nass query` whether new PHP-probe
-metrics resolve to `bpa-demo-k8s(/usr/sbin/apache2)` instead of
-`UnknownAgent(/usr/sbin/apache2)`.
+live Kubernetes deployment. Needs: rebuild/redeploy → generate traffic →
+check via `dx-do nass query` whether new PHP-probe metrics resolve to
+`bpa-demo-k8s(/usr/sbin/apache2)` instead of `UnknownAgent(/usr/sbin/apache2)`.
 
 ### Stale metric-catalog entries from the pre-identity-fix era
 

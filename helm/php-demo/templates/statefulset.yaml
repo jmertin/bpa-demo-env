@@ -144,6 +144,20 @@ spec:
               value: {{ .Values.dxo2.hostName | quote }}
             - name: APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME
               value: {{ .Values.dxo2.processName | quote }}
+            # Remote-agent (PHP probe) naming: the IA's auto-naming assigns the
+            # probe's {collector}/AgentName segment based on which of its own
+            # identities has resolved by the time the probe first registers -- if
+            # that races ahead of the IA's own EM-dependent name resolution, it
+            # falls back to "UnknownAgent" (see CLAUDE.md's "PHP probe injection"
+            # section). Disabling auto-naming and forcing the probe agent name
+            # directly removes the race instead of trying to win it. Deliberately
+            # NOT setting *_PROBE_PROCESS_NAME -- that would rename the literal
+            # "php-probes" segment every dxo2-scripts/ template and script matches
+            # on, for no benefit (the bug is only in the AgentName segment).
+            - name: APMENV_INTROSCOPE_AGENT_AGENTAUTONAMINGENABLED
+              value: "false"
+            - name: APMENV_INTROSCOPE_REMOTEAGENT_PROBE_AGENT_NAME
+              value: {{ .Values.dxo2.agentName | quote }}
             # Log level: log4j logger spec – level and appender name.
             - name: APMENV_LOG4J_LOGGER_INTROSCOPEAGENT
               value: "{{ .Values.dxo2.logLevel }}, logfile"

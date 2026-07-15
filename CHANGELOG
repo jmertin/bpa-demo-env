@@ -5,6 +5,35 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-15 @ 10:05 - [Fix - real UnknownAgent fix via APMENV remote-agent naming, replacing both timing workarounds]:
+  User found Broadcom's own Kubernetes-cluster-mode documentation, which
+  identifies the UnknownAgent bug as an IA remote-agent auto-naming
+  interaction, not a startup-timing race: the IA assigns the PHP probe's
+  AgentName segment based on whichever of its own identities has resolved
+  at the moment the probe first registers, which is never a fixed point
+  in time - so neither of the two prior wait-loop fixes (the entrypoint.sh
+  TCP-port wait shipped 2026-07-10, or the IntroscopeAgent.log EM-connection
+  wait from earlier this session) could ever have been sized correctly.
+  Added two new APMENV_* vars to the dx-o2-agent container -
+  APMENV_INTROSCOPE_AGENT_AGENTAUTONAMINGENABLED=false and
+  APMENV_INTROSCOPE_REMOTEAGENT_PROBE_AGENT_NAME=<deployment identity> -
+  in both helm/php-demo/templates/statefulset.yaml and docker-compose.yml's
+  dxo2 service, reusing the existing dxo2.agentName/APMIA_AGENT_NAME value
+  (no new .config variable needed). This forces the probe's identity
+  statically instead of racing it. Deliberately did not also set
+  APMENV_INTROSCOPE_REMOTEAGENT_PROBE_PROCESS_NAME (Broadcom's doc pairs it
+  with _AGENT_NAME) - that would rename the literal "php-probes" segment
+  hardcoded across nearly every dxo2-scripts/ script and template as the
+  PHP-probe-agent match token, for no benefit since the bug is only ever in
+  the AgentName segment. Removed both now-superseded timing workarounds
+  from src/apache-php/entrypoint.sh as dead weight. Updated CLAUDE.md's
+  PHP probe injection section and TOBEDONE.md's corresponding entry.
+  Verified: bash -n and grep -Pc '[^\x00-\x7F]' (0) on entrypoint.sh;
+  docker compose config parses the updated docker-compose.yml cleanly.
+  Not yet confirmed live - needs image rebuild + redeploy + a fresh nass
+  query check, no cluster access from this sandbox.
+
+------------------------------------------------------------------------------
 2026-07-15 @ 09:20 - [Fix - corrected UnknownAgent root cause and wait condition in entrypoint.sh]:
   User reported UnknownAgent still occurring after the 2026-07-10 TCP-port
   wait-loop fix was deployed live, then downloaded a real
