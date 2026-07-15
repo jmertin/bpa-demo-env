@@ -104,7 +104,8 @@ entirely by `.config`:
 │   ├── build.sh                  # docker build all images using IMAGE_TAG as-is (no bump)
 │   ├── push.sh                   # docker login (--password-stdin) + push all images
 │   ├── deploy.sh                 # renders values.local.yaml from .config, helm upgrade
-│   └── compose.sh                # docker compose wrapper (sources .config, exports vars)
+│   ├── compose.sh                # docker compose wrapper (sources .config, exports vars)
+│   └── package-helm-bundle.sh    # bundle helm/ + deploy.sh for a separate deploy host (images already pushed)
 │
 ├── traffic-generator/            # synthetic user traffic for the demo shop (stdlib-only Python)
 │   ├── Dockerfile

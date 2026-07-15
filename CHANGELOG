@@ -5,6 +5,35 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-10 @ 18:20 - [Feat - package-helm-bundle.sh for deploying Helm from a host without the full repo]:
+  User asked for a script producing all files needed to deploy via Helm,
+  assuming images are already pushed from a bastion host.
+  Added build-scripts/package-helm-bundle.sh: stages helm/php-demo/,
+  build-scripts/deploy.sh, .config.example, and a generated README.txt
+  into a temp directory, dereferencing every symlink with `cp -rL`
+  (not just files/vhost.conf specifically) before tarring into
+  dist/bpa-demo-helm-bundle-<IMAGE_TAG>.tar.gz. This is the scripted fix
+  for the exact failure mode the nuc1 partial-copy incident hit doing
+  this by hand: a plain `cp -r helm/` leaves files/vhost.conf dangling,
+  since its symlink target lives outside helm/ entirely. Asserts the
+  staged vhost.conf is a real, non-empty file (not a symlink) before
+  packaging, so a future regression fails loudly instead of shipping a
+  broken bundle.
+  Deliberately excludes application source, both Dockerfiles, the DX O2
+  installer archives, and every other build-scripts/ file that assumes
+  local Docker access -- none of it is needed once images already exist
+  in the registry.
+  Verified end to end: ran the script for real, extracted the resulting
+  tarball into an isolated directory with no other repo files present,
+  confirmed vhost.conf is a real file with identical content to the
+  source, confirmed `helm lint` passes clean against the standalone
+  chart with no symlink warning, and confirmed deploy.sh's own
+  SCRIPT_DIR-relative path resolution finds the chart correctly from
+  the bundle's preserved build-scripts/ + helm/ sibling layout.
+  Files changed: build-scripts/package-helm-bundle.sh (new), .gitignore
+  (dist/ output directory), CLAUDE.md, README.md, QUICKSTART.md.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 17:45 - [Docs - add TOBEDONE.md, a snapshot of current outstanding shortcomings]:
   User asked for a dump of everything currently known-broken/incomplete/
   unverified, distinct from CHANGELOG (history) and
