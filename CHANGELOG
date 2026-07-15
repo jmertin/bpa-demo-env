@@ -5,6 +5,37 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-07-15 @ 09:20 - [Fix - corrected UnknownAgent root cause and wait condition in entrypoint.sh]:
+  User reported UnknownAgent still occurring after the 2026-07-10 TCP-port
+  wait-loop fix was deployed live, then downloaded a real
+  IntroscopeAgent.log directly from a live pod's dx-o2-agent container and
+  asked for it to be checked. The log showed the true timeline: the
+  PHP-collector port opens and the PHP probe's first ARF connection
+  happens ~23-24s after IA startup, but the IA's own WSS connection to the
+  Enterprise Manager - the thing the probe's {collector} identity actually
+  depends on - does not succeed until ~104s after startup, and only on a
+  second attempt (the first failed with a NullPointerException in the
+  WebSocket handshake, "Cannot invoke ChannelFuture.await(long) because
+  ... handshakeFuture() is null", followed by serverWentAway). The probe's
+  identity is resolved (or falls back to UnknownAgent) at that first ARF
+  connection, 80+ seconds before the EM session it depends on exists - so
+  the previous TCP-port check was checking a condition satisfied long
+  before the condition that mattered.
+  Replaced the port-check wait loop in src/apache-php/entrypoint.sh with a
+  wait on IntroscopeAgent.log itself (already readable from apache-php via
+  the shared apmia-share volume) for the literal success line "Connected
+  controllable Agent to the Introscope Enterprise Manager", capped at 90s
+  (comfortably above the 104s-after-failed-first-attempt case observed),
+  same warn-and-continue fallback as before. Verified: bash -n passes;
+  grep -Pc '[^\x00-\x7F]' returns 0 (ASCII-only, per the entrypoint coding
+  standard); the exact grep condition matches the real downloaded log.
+  Updated CLAUDE.md's PHP probe injection section and TOBEDONE.md's
+  corresponding entry to reflect the corrected root cause and fix. Not yet
+  confirmed live - needs image rebuild + redeploy + a fresh nass query
+  check, no cluster access from this sandbox. The downloaded log
+  (dump/IntroscopeAgent.log) contains a live JWT and is not committed.
+
+------------------------------------------------------------------------------
 2026-07-10 @ 18:20 - [Feat - package-helm-bundle.sh for deploying Helm from a host without the full repo]:
   User asked for a script producing all files needed to deploy via Helm,
   assuming images are already pushed from a bastion host.

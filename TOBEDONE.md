@@ -11,20 +11,30 @@ once it's actually fixed and verified, don't just mark it done in place.
 
 ## Agents / identity
 
-### PHP probe `UnknownAgent` fix shipped but not confirmed live
+### PHP probe `UnknownAgent` fix — root cause corrected 2026-07-15, still not confirmed live
 
-`src/apache-php/entrypoint.sh` now waits for the `dx-o2-agent` sidecar's
-PHP-collector socket before starting Apache, to stop the PHP probe's first
-registration from racing the Infrastructure Agent's own identity
-resolution (see CLAUDE.md's "PHP probe injection" section for the full
-root-cause writeup). Verified in isolation and inside the built image that
-the wait logic itself works correctly.
+First fix attempt (`entrypoint.sh` waiting on the PHP-collector TCP port
+before starting Apache) was deployed and retested live — `UnknownAgent`
+still occurred. Root cause found 2026-07-15 by reading a real
+`IntroscopeAgent.log` pulled off a live pod: the collector port opens and
+the probe's first ARF connection happens at ~23-24s after IA startup, but
+the IA's own WSS connection to the EM — the thing the probe's `{collector}`
+identity actually depends on — doesn't succeed until ~104s after startup
+(and only on a second attempt, after the first failed with a
+`NullPointerException` in the WebSocket handshake). The port check was
+checking a condition satisfied 80+ seconds before the one that matters.
 
-**Not yet confirmed:** whether it actually fixes `UnknownAgent` on the live
-Kubernetes deployment. Needs: rebuild `apache-php` → push → redeploy →
-generate traffic → check via
-`dx-do nass query` whether new PHP-probe metrics resolve to
-`bpa-demo-k8s(/usr/sbin/apache2)` instead of `UnknownAgent(/usr/sbin/apache2)`.
+`entrypoint.sh` now waits instead on `IntroscopeAgent.log` itself for the
+literal line `Connected controllable Agent to the Introscope Enterprise
+Manager`, capped at 90s (see CLAUDE.md's "PHP probe injection" section for
+the full root-cause writeup). Verified in isolation (the grep condition
+matches the real downloaded log) and via `bash -n`/ASCII checks.
+
+**Not yet confirmed:** whether this actually fixes `UnknownAgent` on the
+live Kubernetes deployment. Needs: rebuild `apache-php` → push → redeploy →
+generate traffic → check via `dx-do nass query` whether new PHP-probe
+metrics resolve to `bpa-demo-k8s(/usr/sbin/apache2)` instead of
+`UnknownAgent(/usr/sbin/apache2)`.
 
 ### Stale metric-catalog entries from the pre-identity-fix era
 

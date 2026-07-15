@@ -196,34 +196,43 @@ else
     rm -f /etc/apache2/conf-enabled/bpa.conf
 fi
 
-# == Wait for the PHP collector before serving traffic =========================
-# The PHP probe's very first registration attempt resolves {collector} (the
-# Infrastructure Agent's own introscope.agent.agentName) into the agent-name
-# segment of its metric path -- see Broadcom's PHP agent naming docs. If that
-# first attempt races ahead of the Infrastructure Agent actually being up
-# (dx-o2-agent is a separate sidecar container with no guaranteed start order
-# relative to this one, and its JVM cold-start + EM handshake can take longer
-# than Apache's own startup, especially under a tight CPU limit), the probe
-# falls back to a generic placeholder agent name that then persists for the
-# life of this Apache process -- confirmed live: Kubernetes' PHP probe
-# reported under "UnknownAgent" instead of its real agent identity while
-# Docker Compose's own PHP probe (lighter startup, less likely to race)
-# resolved correctly. Waiting here for the collector port to accept
-# connections keeps the probe's first registration from racing the
-# Infrastructure Agent's readiness. Skipped entirely when the probe itself
-# isn't active (DX O2 not deployed) so this never adds startup latency to a
-# vanilla deployment.
+# == Wait for the Infrastructure Agent's EM connection before serving traffic ==
+# BUG (2026-07-15): the prior fix here waited for the PHP-collector TCP port
+# to accept connections, which turned out to check the wrong condition
+# entirely. A real IntroscopeAgent.log pulled from a live Kubernetes pod still showing
+# UnknownAgent showed the actual timeline: the PHP-collector port opens and
+# the PHP probe makes its first ARF connection within ~1 second of each
+# other (23s and 24s after IA startup in the sample), while the IA's actual
+# WSS connection to the Enterprise Manager didn't succeed until 104s after
+# startup -- 80 seconds LATER, and only on a *second* attempt (the first
+# failed with a NullPointerException in the WebSocket handshake:
+# "Cannot invoke ChannelFuture.await(long) because ... handshakeFuture()
+# is null", followed by "serverWentAway"). The probe's {collector} identity
+# gets resolved (or, in this case, fails to resolve and falls back to
+# "UnknownAgent") at the moment of that first ARF connection, well before
+# the EM session that {collector} depends on even exists -- waiting for the
+# collector port is checking a condition that's already true a full 80+
+# seconds before the condition that actually matters.
+# FIX: wait for the Infrastructure Agent's own log to report a successful EM
+# connection instead of a bare port check. apache-php already mounts the
+# same apmia-share volume dx-o2-agent writes IntroscopeAgent.log to (see
+# "DX O2 agent injection pattern" in CLAUDE.md), so this is a local file
+# read, not a network call. 90s cap (vs. the 104s observed here, since a
+# failed-then-retried EM handshake is exactly the slow case this needs
+# margin for) with the same warn-and-continue-anyway fallback as before --
+# still skipped entirely when the probe itself isn't active.
 if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
-    echo "[entrypoint] Waiting for PHP collector ${APMIA_PHP_COLLECTOR_HOST}:${APMIA_PHP_COLLECTOR_PORT} to accept connections..."
-    _collector_wait_deadline=$((SECONDS + 60))
-    until (: < "/dev/tcp/${APMIA_PHP_COLLECTOR_HOST}/${APMIA_PHP_COLLECTOR_PORT}") 2>/dev/null; do
-        if (( SECONDS >= _collector_wait_deadline )); then
-            echo "[entrypoint] WARNING: PHP collector not reachable after 60s - starting anyway." >&2
+    _ia_log="${APMIA_HOME}/logs/IntroscopeAgent.log"
+    echo "[entrypoint] Waiting for the Infrastructure Agent to connect to the Enterprise Manager (${_ia_log})..."
+    _em_wait_deadline=$((SECONDS + 90))
+    until grep -q 'Connected controllable Agent to the Introscope Enterprise Manager' "${_ia_log}" 2>/dev/null; do
+        if (( SECONDS >= _em_wait_deadline )); then
+            echo "[entrypoint] WARNING: Infrastructure Agent not connected to the EM after 90s - starting anyway." >&2
             break
         fi
-        sleep 1
+        sleep 2
     done
-    echo "[entrypoint] PHP collector reachable (or wait timed out) - continuing startup."
+    echo "[entrypoint] Infrastructure Agent connected to the EM (or wait timed out) - continuing startup."
 fi
 
 # == Start cron for daily security updates ====================================
