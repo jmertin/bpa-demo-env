@@ -12,7 +12,7 @@ if (!empty($_SESSION['login_error'])) {
 
 // Redirect if already logged in.
 if (auth_user()) {
-  header('Location: /shop');
+  header('Location: /index.php?page=shop');
   exit;
 }
 
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   else {
     $redirect = validate_slug($_GET['from'] ?? 'shop') ?? 'shop';
-    header("Location: /{$redirect}");
+    header("Location: /index.php?page={$redirect}");
     exit;
   }
 }

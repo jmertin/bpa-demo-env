@@ -16,10 +16,14 @@ once it's actually fixed and verified, don't just mark it done in place.
 At the user's request, the per-page-wrapper-file workaround for the PHP
 probe's Frontend-start/SCRIPT_NAME gating bug was fully reverted on
 2026-08-19: the 11 wrapper files (`app/src/shop.php`, `basket.php`, etc.)
-are deleted, `vhost.conf` routes clean URLs straight to `index.php?page=<slug>`
-again, and the bare-root-to-`/shop` redirect is gone. See `bug_php_probe.md`
-for the original diagnosis and `CLAUDE.md`'s "PHP probe injection" section
-for what changed.
+are deleted, and — at the user's further request the same day — `vhost.conf`'s
+`RewriteRule`/root-redirect were removed entirely rather than just
+repointed, so there is now no clean-URL rewriting at all. Every page is
+reached as `index.php?page=<slug>`; every internal link, form action, and
+redirect across the app (`templates/layout.php`, every `pages/*.php` file,
+and `traffic-generator/generator.py`) was updated to match. See
+`bug_php_probe.md` for the original diagnosis and `CLAUDE.md`'s "Front
+controller" / "PHP probe injection" sections for what changed.
 
 This is a deliberate, intentional state, not a regression to fix — but it
 does mean the browser-agent snippet no longer injects into any page
@@ -29,6 +33,15 @@ which assumed injection worked and only synthetic traffic was the gap.
 Reapplying the workaround (see `bug_php_probe.md`'s "Fix — Per-Page
 Wrapper Files" section) is the way back if browser-agent RUM data is
 needed again.
+
+**Also open, not investigated:** whether the PHP probe's separate
+`Frontends|Apps|<app>|URLs|<url>` response-time/error-rate metrics — the
+ones `dxo2-scripts/`'s alerts and SLIs are built on — depend on the same
+"Frontend start" gate as BA injection. All of this project's `nass query`
+verification of those metrics happened while the wrapper-file workaround
+was active (`SCRIPT_NAME` was never `/index.php` during that testing), so
+whether they still report per-URL data now is unverified. Check this
+first if per-URL alerts/SLIs go quiet after redeploying past this revert.
 
 ---
 

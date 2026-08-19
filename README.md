@@ -75,7 +75,7 @@ entirely by `.config`:
 ├── app/
 │   └── src/                      # PHP application source
 │       ├── health                # static file – K8s liveness/readiness/startup probe target (no PHP)
-│       ├── index.php             # front-controller (all routing; Apache routes clean URLs straight here)
+│       ├── index.php             # front-controller (all routing; reached only as index.php?page=<slug>, no clean-URL rewriting)
 │       ├── config/               # session bootstrap, PDO singleton
 │       ├── lib/                  # auth, product, basket, order, usecase, validate, headers
 │       ├── pages/                # shop, product, basket, checkout, order, login, admin

@@ -5,6 +5,62 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-19 @ 14:10 - [Simplify - removed vhost.conf's RewriteRule entirely; app now routes only via index.php?page=<slug>]:
+  Following the wrapper-file revert above, user asked why clean URLs
+  (/shop, /basket, /admin, /dxo2) still worked, having assumed the PHP
+  probe's "op=" opcode terminology from bug_php_probe.md was a URL
+  parameter. Clarified that "op" there means PHP opcode (Zend bytecode,
+  what the probe hooks for Gate 1), unrelated to the app's own ?page=
+  routing parameter, and that the clean-URL RewriteRule was never part
+  of the wrapper-file workaround - it's the app's original baseline
+  routing. User then asked to remove it anyway for simplicity.
+  Flagged before proceeding: every internal link, form action, and
+  redirect across templates/layout.php and every pages/*.php file uses
+  clean URLs (href="/shop", header('Location: /basket'), etc.) - removing
+  only the RewriteRule would 404 all in-app navigation. User chose to
+  also update every internal reference rather than leave navigation
+  broken.
+  Changes:
+  - src/apache-php/config/vhost.conf: removed the RewriteEngine/
+    RewriteCond/RewriteRule block entirely. Every page is now reached
+    only as index.php?page=<slug>; there is no URL rewriting at all.
+  - Updated every href/form action/header('Location: ...') across
+    app/src/templates/layout.php and every app/src/pages/*.php file
+    (shop, product, basket, checkout, order, login, logout, admin) plus
+    app/src/lib/auth.php and app/src/usecases/locked.php to the
+    index.php?page=<slug> form. shop.php's GET filter form needed a
+    hidden <input name="page" value="shop"> (not just a query string in
+    the action URL) since browsers discard a GET form's action-URL query
+    string and rebuild it from the form fields alone; POST forms don't
+    have this problem since the action URL's query string is preserved
+    as-is for a POST request.
+  - traffic-generator/generator.py: updated every hardcoded path
+    (login/shop/basket/checkout/product/admin/info/db/dxo2/logout) and
+    the PRODUCT_SLUG_RE regex (which parses rendered HTML for product
+    links) to match. traffic-generator/README.md's page-list mention
+    updated too.
+  - CLAUDE.md, README.md, TOBEDONE.md: updated to describe the fully
+    query-param-only routing, including an open question (not
+    investigated) about whether the PHP probe's own
+    Frontends|Apps|<app>|URLs|<url> response-time/error-rate metrics --
+    the basis for dxo2-scripts/'s alerts and SLIs -- depend on the same
+    Frontend-start gate as browser-agent injection, since all of this
+    project's nass query verification of those metrics happened while
+    the wrapper-file workaround (SCRIPT_NAME never index.php) was active.
+  Verified end to end via compose.sh: rebuilt apache-php and traffic
+  images; confirmed bare / and index.php?page=shop return 200 while the
+  old /shop now correctly 404s; walked a full session by hand (login,
+  shop with brand/cap/pagination filters, product view, add-to-basket,
+  basket, checkout, order confirmation, order history, all four admin/
+  diagnostic pages, the GET filter form's hidden page field, logout) --
+  every generated link resolved correctly with no 404s. Rebuilt and
+  restarted the traffic-generator container and confirmed a live cycle
+  ran multiple full sessions (login through logout, guest sessions,
+  checkouts) with zero 404s in Apache's access log after the restart,
+  versus the old image's steady stream of 404s on /shop before it was
+  rebuilt.
+
+------------------------------------------------------------------------------
 2026-08-19 @ 13:20 - [Revert - removed the per-page-wrapper-file workaround for the PHP probe's Frontend-start/SCRIPT_NAME bug]:
   User asked to check bug_php_probe.md and undo all app-level changes that
   circumvented the PHP probe's browser-agent injection gating bug, at the
