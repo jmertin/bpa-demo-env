@@ -532,7 +532,7 @@ requirement.  The property name is
 `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength`
 (note `.autoInjection.` between `.browseragent.` and `.snippet.`).
 
-**Why BA injection requires per-page wrapper files (not a plain front-controller):**
+**Why BA injection doesn't work against a plain front-controller — not currently worked around.**
 The PHP probe has two independent gates that must both pass before it injects:
 
 *Gate 1 — Frontend start detection:* the probe hooks PHP's opcode executor.
@@ -540,32 +540,25 @@ When the very first opcode of the entry script is a non-include opcode, it
 emits `Frontend start: /shop.php` and proceeds to injection.  When the first
 opcode is an include (op 61/62/136 — `require`/`include`), the probe enters
 include-tracking mode and never establishes `Frontend start` — BA injection is
-silently skipped for that entire request.  A bare `require __DIR__ . '/index.php'`
-at the top of a PHP file triggers this skip.
+silently skipped for that entire request.  BPA-Demo's `index.php` opens with
+several `require_once` calls, so this gate always fails.
 
 *Gate 2 — SCRIPT_NAME segment:* the probe reads `SCRIPT_NAME` (not
 `REQUEST_URI`) and treats `index.php` and bare `/` as null segments, skipping
 injection.  Changing `REQUEST_URI` via mod_rewrite is not sufficient; `SCRIPT_NAME`
-must also change.
+must also change — and every request in this app resolves to `SCRIPT_NAME=/index.php`.
 
-BPA-Demo resolves both by routing Apache requests to per-page wrapper files
-(`app/src/shop.php`, `basket.php`, etc.) rather than directly to `index.php`.
-Each wrapper opens with:
+A per-page-wrapper-file workaround (routing Apache requests to `app/src/shop.php`,
+`basket.php`, etc. instead of directly to `index.php`, each running one non-include
+opcode before `require`-ing `index.php`) previously satisfied both gates. It was
+reverted at the user's request on 2026-08-19 — see `bug_php_probe.md` for the
+full diagnosis, `CLAUDE.md`'s "PHP probe injection" section for what changed,
+and the "Recommended Probe Changes (Vendor)" section of `bug_php_probe.md` for
+the vendor-facing fix request this bug should really be resolved by.
 
-```php
-<?php
-$_GET['page'] ??= basename(__FILE__, '.php'); // non-include opcode: triggers Frontend start
-require __DIR__ . '/index.php';
-```
-
-The null-coalescing assignment compiles to non-include opcodes that execute
-before the `require`, satisfying Gate 1.  `vhost.conf` routes `/shop` →
-`shop.php?page=shop` so `SCRIPT_NAME=/shop.php` satisfies Gate 2.
-`REQUEST_URI` stays `/shop` — the probe uses it for the BA cookie name
-(`x-apm-brtm-response-bt-page-shop`).
-
-Any port of BPA-Demo to a different framework or app must preserve this
-pattern, or the browser agent will inject on zero pages without error messages.
+**Browser-agent auto-injection does not currently function in this app** as a
+result — this is the original, unmodified probe behavior against a standard
+front-controller pattern, not a regression.
 
 ---
 
@@ -846,9 +839,9 @@ by a front-controller pattern (all requests through `index.php`):
   mod_rewrite that maps `/shop` → `index.php?page=shop` changes `REQUEST_URI`
   but leaves `SCRIPT_NAME=/index.php` — Gate 2 still fails.
 
-**Fix:** BPA-Demo uses per-page wrapper files at the document root.  Each wrapper
-(`shop.php`, `basket.php`, etc.) runs one non-include statement before
-`require __DIR__ . '/index.php'`:
+**Status: not currently worked around (reverted 2026-08-19).** BPA-Demo previously
+used per-page wrapper files at the document root — each wrapper (`shop.php`,
+`basket.php`, etc.) ran one non-include statement before `require __DIR__ . '/index.php'`:
 
 ```php
 <?php
@@ -856,16 +849,17 @@ $_GET['page'] ??= basename(__FILE__, '.php'); // triggers Frontend start
 require __DIR__ . '/index.php';
 ```
 
-`vhost.conf` maps `/shop` → `shop.php?page=shop` (not `index.php?page=shop`) so
-`SCRIPT_NAME=/shop.php`.  Both gates pass; the probe emits:
-```
-Frontend start: /shop.php
-Frontend URI: /shop
-BA Correlation  cookie x-apm-brtm-response-bt-page-shop set successfully
-```
+with `vhost.conf` mapping `/shop` → `shop.php?page=shop` (not `index.php?page=shop`)
+so `SCRIPT_NAME=/shop.php` and both gates passed. This workaround was removed at
+the user's request — see `bug_php_probe.md` and `CLAUDE.md`'s "PHP probe injection"
+section. Browser-agent auto-injection currently does not occur anywhere in the app;
+this is expected, not a bug to chase. To reapply the workaround, recreate the
+wrapper files and the `vhost.conf` rewrite target from `bug_php_probe.md`'s
+"Fix — Per-Page Wrapper Files" section.
 
 Enable DEBUG logging (`APMIA_PHP_LOG_LEVEL=DEBUG` in `.config`, rebuild) to
-see per-request gate decisions in `/var/log/php-probe/wily_php_agent_<pid>.log`.
+see the per-request gate decisions described above in
+`/var/log/php-probe/wily_php_agent_<pid>.log`.
 
 ### PHP probe reports under `UnknownAgent` instead of its real identity
 

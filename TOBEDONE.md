@@ -9,6 +9,29 @@ once it's actually fixed and verified, don't just mark it done in place.
 
 ---
 
+## PHP application
+
+### Browser-agent auto-injection reverted — does not currently work at all
+
+At the user's request, the per-page-wrapper-file workaround for the PHP
+probe's Frontend-start/SCRIPT_NAME gating bug was fully reverted on
+2026-08-19: the 11 wrapper files (`app/src/shop.php`, `basket.php`, etc.)
+are deleted, `vhost.conf` routes clean URLs straight to `index.php?page=<slug>`
+again, and the bare-root-to-`/shop` redirect is gone. See `bug_php_probe.md`
+for the original diagnosis and `CLAUDE.md`'s "PHP probe injection" section
+for what changed.
+
+This is a deliberate, intentional state, not a regression to fix — but it
+does mean the browser-agent snippet no longer injects into any page
+response, under any traffic source (synthetic or real browser). This
+supersedes the "Browser Agent RUM data sits at 0" coverage-gap item below,
+which assumed injection worked and only synthetic traffic was the gap.
+Reapplying the workaround (see `bug_php_probe.md`'s "Fix — Per-Page
+Wrapper Files" section) is the way back if browser-agent RUM data is
+needed again.
+
+---
+
 ## Agents / identity
 
 ### Stale metric-catalog entries from the pre-identity-fix era
