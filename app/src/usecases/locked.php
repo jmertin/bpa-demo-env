@@ -26,6 +26,6 @@ function usecase_locked(PDO $db, array &$ctx): void {
   }
   session_regenerate_id(true);
   $_SESSION['login_error'] = 'Locked by admin. Please contact site admin';
-  header('Location: /login');
+  header('Location: /index.php?page=login');
   exit;
 }

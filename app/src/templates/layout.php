@@ -10,21 +10,21 @@
 
 <?php /* ── Top navigation bar ──────────────────────────────────────────────── */ ?>
 <header class="topbar">
-  <a href="/shop" class="topbar-brand">🏠 <?= APP_NAME ?></a>
+  <a href="/index.php?page=shop" class="topbar-brand">🏠 <?= APP_NAME ?></a>
   <div class="topbar-right">
     <?php if (auth_user()): ?>
       <span class="topbar-user">
         <?php if (auth_is_admin()): ?>
-          <a href="/admin" style="color:#ffd54f">⚙ Admin</a> &nbsp;
+          <a href="/index.php?page=admin" style="color:#ffd54f">⚙ Admin</a> &nbsp;
         <?php endif ?>
         Hi, <strong><?= htmlspecialchars(auth_user()['full_name'] ?: auth_user()['username']) ?></strong>
         &nbsp;|&nbsp;
-        <a href="/logout" style="color:#ef9a9a">Logout</a>
+        <a href="/index.php?page=logout" style="color:#ef9a9a">Logout</a>
       </span>
     <?php else: ?>
-      <a href="/login" style="color:#b0bec5">Login</a>
+      <a href="/index.php?page=login" style="color:#b0bec5">Login</a>
     <?php endif ?>
-    <a href="/basket" class="basket-badge">
+    <a href="/index.php?page=basket" class="basket-badge">
       🛒 Basket
       <span class="count"><?= basket_count() ?></span>
       &nbsp;€<?= number_format(basket_total(), 2) ?>
@@ -38,9 +38,9 @@
 <aside class="sidebar">
   <div class="sidebar-section">
     <h3>Brands</h3>
-    <a href="/shop" class="<?= empty($_GET['brand']) ? 'active' : '' ?>">All brands</a>
+    <a href="/index.php?page=shop" class="<?= empty($_GET['brand']) ? 'active' : '' ?>">All brands</a>
     <?php foreach (product_get_brands() as $b): ?>
-      <a href="/shop?brand=<?= $b['slug'] ?>"
+      <a href="/index.php?page=shop&brand=<?= $b['slug'] ?>"
          class="<?= (($_GET['brand'] ?? '') === $b['slug']) ? 'active' : '' ?>">
         <span class="brand-dot" style="background:#<?= htmlspecialchars($b['color']) ?>"></span>
         <?= htmlspecialchars($b['name']) ?>
@@ -50,9 +50,9 @@
 
   <div class="sidebar-section">
     <h3>Protocol</h3>
-    <a href="/shop" class="<?= empty($_GET['cap']) ? 'active' : '' ?>">All protocols</a>
+    <a href="/index.php?page=shop" class="<?= empty($_GET['cap']) ? 'active' : '' ?>">All protocols</a>
     <?php foreach (product_get_capabilities() as $c): ?>
-      <a href="/shop?cap=<?= $c['slug'] ?>"
+      <a href="/index.php?page=shop&cap=<?= $c['slug'] ?>"
          class="<?= (($_GET['cap'] ?? '') === $c['slug']) ? 'active' : '' ?>">
         <span class="brand-dot" style="background:#<?= htmlspecialchars($c['color']) ?>"></span>
         <?= htmlspecialchars($c['name']) ?>
@@ -62,21 +62,21 @@
 
   <div class="sidebar-section">
     <h3>Shop</h3>
-    <a href="/basket">🛒 My Basket</a>
+    <a href="/index.php?page=basket">🛒 My Basket</a>
     <?php if (auth_user()): ?>
-      <a href="/order">📦 My Orders</a>
+      <a href="/index.php?page=order">📦 My Orders</a>
     <?php endif ?>
     <?php if (auth_is_admin()): ?>
-      <a href="/admin" class="<?= ($page === 'admin') ? 'active' : '' ?>">⚙ Admin Panel</a>
+      <a href="/index.php?page=admin" class="<?= ($page === 'admin') ? 'active' : '' ?>">⚙ Admin Panel</a>
     <?php endif ?>
   </div>
 
   <?php if (auth_is_admin()): ?>
   <div class="sidebar-section">
     <h3>Diagnostics</h3>
-    <a href="/dxo2" class="<?= ($page === 'dxo2') ? 'active' : '' ?>">&#128202; DX O2 Status</a>
-    <a href="/info" class="<?= ($page === 'info') ? 'active' : '' ?>">&#128196; PHP Info</a>
-    <a href="/db"   class="<?= ($page === 'db')   ? 'active' : '' ?>">&#128421; Database</a>
+    <a href="/index.php?page=dxo2" class="<?= ($page === 'dxo2') ? 'active' : '' ?>">&#128202; DX O2 Status</a>
+    <a href="/index.php?page=info" class="<?= ($page === 'info') ? 'active' : '' ?>">&#128196; PHP Info</a>
+    <a href="/index.php?page=db"   class="<?= ($page === 'db')   ? 'active' : '' ?>">&#128421; Database</a>
   </div>
   <?php endif ?>
 </aside>

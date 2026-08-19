@@ -112,7 +112,7 @@ CAPABILITY_SLUGS = ["wifi", "zigbee", "matter", "z-wave", "bluetooth"]
 TEST_CARD_NUMBERS = ["4532015112830366", "4539578763621486", "5425233430109903"]
 
 CSRF_TOKEN_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
-PRODUCT_SLUG_RE = re.compile(r'/product\?slug=([a-z0-9-]+)')
+PRODUCT_SLUG_RE = re.compile(r'page=product&slug=([a-z0-9-]+)')
 PRODUCT_ID_RE = re.compile(r'name="product_id" value="(\d+)"')
 
 NETWORK_ERRORS = (urllib.error.URLError, http.client.HTTPException, socket.timeout, OSError)
@@ -271,12 +271,12 @@ def login(username: str) -> BrowsingSession | None:
       treats as an error.
     """
     session = new_session(username)
-    get(session, "/shop")
+    get(session, "/index.php?page=shop")
     if not session.csrf_token:
-        log.warning("[%s] no CSRF token found on /shop -- skipping this user", username)
+        log.warning("[%s] no CSRF token found on /index.php?page=shop -- skipping this user", username)
         return None
 
-    resp = post(session, "/login", {"username": username, "password": PASSWORD})
+    resp = post(session, "/index.php?page=login", {"username": username, "password": PASSWORD})
     if resp.status != 302:
         log.info(
             "[%s] login did not redirect (status %s) -- likely blocked (e.g. the "
@@ -286,7 +286,7 @@ def login(username: str) -> BrowsingSession | None:
         return None
 
     session.is_admin = username == "admin"
-    get(session, resp.location or "/shop")
+    get(session, resp.location or "/index.php?page=shop")
     log.info("[%s] logged in%s", username, " (admin)" if session.is_admin else "")
     return session
 
@@ -304,7 +304,7 @@ def action_browse_shop(session: BrowsingSession) -> None:
         params.append(f"cap={random.choice(CAPABILITY_SLUGS)}")
     elif roll < 0.40:
         params.append(f"p={random.randint(2, 4)}")
-    path = "/shop" + (f"?{'&'.join(params)}" if params else "")
+    path = "/index.php?page=shop" + (f"&{'&'.join(params)}" if params else "")
     get(session, path)
 
 
@@ -316,7 +316,7 @@ def action_view_product(session: BrowsingSession) -> None:
     if not session.known_slugs:
         action_browse_shop(session)
     if session.known_slugs:
-        get(session, f"/product?slug={random.choice(session.known_slugs)}")
+        get(session, f"/index.php?page=product&slug={random.choice(session.known_slugs)}")
 
 
 def action_add_to_basket(session: BrowsingSession) -> None:
@@ -327,7 +327,7 @@ def action_add_to_basket(session: BrowsingSession) -> None:
         action_browse_shop(session)
     if session.known_product_ids:
         product_id = random.choice(session.known_product_ids)
-        post(session, "/basket", {
+        post(session, "/index.php?page=basket", {
             "action": "add",
             "product_id": product_id,
             "qty": str(random.randint(1, 3)),
@@ -336,21 +336,21 @@ def action_add_to_basket(session: BrowsingSession) -> None:
 
 
 def action_view_basket(session: BrowsingSession) -> None:
-    get(session, "/basket")
+    get(session, "/index.php?page=basket")
 
 
 def action_checkout(session: BrowsingSession) -> None:
     """Completes a checkout if the basket is believed to hold items.
-    checkout.php redirects straight to /basket for an empty basket, so an
-    empty attempt is harmless -- this still exercises that path some of
+    checkout.php redirects straight to ?page=basket for an empty basket, so
+    an empty attempt is harmless -- this still exercises that path some of
     the time when basket_has_items is stale/wrong.
     """
-    resp = get(session, "/checkout")
+    resp = get(session, "/index.php?page=checkout")
     if resp.status != 200 or "billing_name" not in resp.text:
-        return  # Redirected to /basket (empty) or page shape unexpected.
+        return  # Redirected to ?page=basket (empty) or page shape unexpected.
 
     year = time.gmtime().tm_year + 3
-    resp = post(session, "/checkout", {
+    resp = post(session, "/index.php?page=checkout", {
         "billing_name": f"{session.username.capitalize()} Demo",
         "billing_email": f"{session.username}@bpa.demo",
         "cc_number": random.choice(TEST_CARD_NUMBERS),
@@ -359,12 +359,15 @@ def action_checkout(session: BrowsingSession) -> None:
     })
     if resp.status == 302:
         session.basket_has_items = False
-        get(session, resp.location or "/shop")
+        get(session, resp.location or "/index.php?page=shop")
 
 
 def action_visit_admin_pages(session: BrowsingSession) -> None:
     """Admin-only diagnostic pages -- only called for the admin account."""
-    get(session, random.choice(["/admin", "/info", "/db", "/dxo2"]))
+    get(session, random.choice([
+        "/index.php?page=admin", "/index.php?page=info",
+        "/index.php?page=db", "/index.php?page=dxo2",
+    ]))
 
 
 # Weighted so basket/checkout activity (the interesting business flow) is
@@ -409,7 +412,7 @@ def run_user_session(username: str) -> None:
         return
 
     action_count = _run_session_actions(session)
-    get(session, "/logout")
+    get(session, "/index.php?page=logout")
     log.info("[%s] session complete (%d actions)", username, action_count)
 
 
@@ -425,9 +428,9 @@ def run_guest_session(label: str) -> None:
     same way action_checkout already does for authenticated users.
     """
     session = new_session(label)
-    get(session, "/shop")
+    get(session, "/index.php?page=shop")
     if not session.csrf_token:
-        log.warning("[%s] no CSRF token found on /shop -- skipping this guest", label)
+        log.warning("[%s] no CSRF token found on /index.php?page=shop -- skipping this guest", label)
         return
 
     action_count = _run_session_actions(session)

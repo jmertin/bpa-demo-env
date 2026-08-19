@@ -24,7 +24,7 @@ shop actions (browse the listing with occasional filters, view a product,
 add to basket, view the basket, or complete a checkout — guest checkout
 works too, the app accepts orders with no user id), then an authenticated
 session logs out. The `admin` account also occasionally visits the admin
-diagnostic pages (`/admin`, `/info`, `/db`, `/dxo2`).
+diagnostic pages (`?page=admin`, `?page=info`, `?page=db`, `?page=dxo2`).
 
 Pacing between actions has a small chance (`TRAFFIC_SLOWDOWN_PROBABILITY`)
 of an extra randomized delay on top, simulating an occasional slow client
