@@ -19,7 +19,7 @@
 #              IMAGE_TAG must all be set.
 #
 # Images pushed:
-#   apache-php        Apache 2.4 + mod_php 8.1 application image (replaces nginx + php-fpm)
+#   apache-php        Apache 2.4 + mod_php 8.3 application image (replaces nginx + php-fpm)
 #   dx-o2-agents      Broadcom APMIA + BTL sidecar (conditional on --skip-dxo2)
 #   traffic-generator Synthetic user traffic for the demo shop
 set -euo pipefail

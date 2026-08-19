@@ -244,7 +244,7 @@ spec:
         {{- end }}
 
         # ── apache-php ────────────────────────────────────────────────────────
-        # Single container combining Apache 2.4 + mod_php 8.1, replacing the
+        # Single container combining Apache 2.4 + mod_php 8.3, replacing the
         # former nginx + php-fpm two-container setup.  Both the PHP probe and
         # the BPA WebServer Plugin (Apache) are injected opportunistically at
         # startup from the apmia-share emptyDir when dxo2 is enabled.
