@@ -373,11 +373,11 @@ Gated by `auth_require_admin()`. Linked from the **Diagnostics** sidebar section
 
 | Route | File | Purpose |
 |---|---|---|
-| `/info` | `pages/info.php` | PHP version, SAPI, OS, memory limit, loaded extensions |
-| `/db` | `pages/db.php` | Live PDO connection test, server version, uptime |
-| `/dxo2` | `pages/dxo2.php` | Full DX O2 stack health check |
+| `/index.php?page=info` | `pages/info.php` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| `/index.php?page=db` | `pages/db.php` | Live PDO connection test, server version, uptime |
+| `/index.php?page=dxo2` | `pages/dxo2.php` | Full DX O2 stack health check |
 
-### `/dxo2` checks
+### `/index.php?page=dxo2` checks
 
 - **PHP probe:** `extension_loaded('wily_php_agent')`; globs `$phpConfD/*-wily_php_agent.ini` (phpConfD built from `PHP_MAJOR_VERSION`/`PHP_MINOR_VERSION`); `realpath()` to resolve symlink to mods-available; displays key INI properties.
 - **BPA module:** `shell_exec('apache2ctl -t -D DUMP_MODULES 2>&1')` → searches for `caplugin_module`. Falls back to `apache_get_modules()` if `shell_exec` is unavailable. Raw output shown verbatim.

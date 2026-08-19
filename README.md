@@ -437,7 +437,7 @@ Replace `<APP_NAMESPACE>` with the value of `APP_NAMESPACE` from your `.config`
 
 ### Logging in
 
-Click **Sign in** in the top-right corner, or navigate directly to `/login`.
+Click **Sign in** in the top-right corner, or navigate directly to `/index.php?page=login`.
 All demo accounts use the password **`demo123`**.
 
 | Username | Role | Notes |
@@ -458,9 +458,9 @@ pages that inspect the runtime from inside the container:
 
 | Page | URL | Shows |
 |---|---|---|
-| DX O2 Status | `/dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, APMIA IA / PHP probe / BTListener log tails |
-| PHP Info | `/info` | PHP version, SAPI, OS, memory limit, loaded extensions |
-| Database | `/db` | Live MariaDB connection result, server version, uptime |
+| DX O2 Status | `/index.php?page=dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, APMIA IA / PHP probe / BTListener log tails |
+| PHP Info | `/index.php?page=info` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| Database | `/index.php?page=db` | Live MariaDB connection result, server version, uptime |
 
 These pages are available even when DX O2 is not deployed — all probes will report
 "not loaded", which is the expected state for a vanilla deployment.
@@ -575,22 +575,28 @@ All accounts use the password **`demo123`**.
 
 ### Application routes
 
+There is no clean-URL rewriting — every page is a plain `index.php?page=<slug>`
+query string (see CLAUDE.md's "Front controller" section for why: a per-page
+wrapper-file workaround for a PHP-probe browser-agent injection bug used to
+provide clean URLs, but was reverted at the user's request on 2026-08-19,
+along with the underlying `vhost.conf` `RewriteRule` itself).
+
 | URL | Description |
 |---|---|
-| `/shop` | Product grid with filter bar (default landing page) |
-| `/shop?brand=<slug>` | Filter by brand: `shelly` / `sonoff` / `tuya` |
-| `/shop?cap=<slug>` | Filter by protocol capability |
-| `/shop?q=<search>` | Full-text product search |
-| `/product?slug=<slug>` | Product detail page |
-| `/basket` | Shopping basket |
-| `/checkout` | Billing form + Luhn-validated fake credit-card payment |
-| `/order?id=<id>` | Order confirmation |
-| `/order` | Order history (login required) |
-| `/login` | Sign in |
-| `/admin` | Admin panel (admin role required) |
-| `/info` | PHP runtime diagnostics — **admin only** |
-| `/db` | MariaDB connection test — **admin only** |
-| `/dxo2` | DX O2 agent status and log tails — **admin only** |
+| `/index.php?page=shop` | Product grid with filter bar (default landing page; bare `/` also resolves here) |
+| `/index.php?page=shop&brand=<slug>` | Filter by brand: `shelly` / `sonoff` / `tuya` |
+| `/index.php?page=shop&cap=<slug>` | Filter by protocol capability |
+| `/index.php?page=shop&q=<search>` | Full-text product search |
+| `/index.php?page=product&slug=<slug>` | Product detail page |
+| `/index.php?page=basket` | Shopping basket |
+| `/index.php?page=checkout` | Billing form + Luhn-validated fake credit-card payment |
+| `/index.php?page=order&id=<id>` | Order confirmation |
+| `/index.php?page=order` | Order history (login required) |
+| `/index.php?page=login` | Sign in |
+| `/index.php?page=admin` | Admin panel (admin role required) |
+| `/index.php?page=info` | PHP runtime diagnostics — **admin only** |
+| `/index.php?page=db` | MariaDB connection test — **admin only** |
+| `/index.php?page=dxo2` | DX O2 agent status and log tails — **admin only** |
 
 ### Admin diagnostic pages
 
