@@ -5,6 +5,23 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-19 @ 14:45 - [Docs - README.md still listed the old clean-URL routes]:
+  User caught that README.md's "Application routes" table, its "Logging in"
+  section, and its admin diagnostic pages table still listed the pre-revert
+  clean URLs (/shop, /login, /dxo2, etc.), which now 404. A full repo grep
+  turned up one more live (non-historical) stale reference in CLAUDE.md's
+  "Admin diagnostic pages" table and its "/dxo2 checks" heading.
+  Updated all of these to the index.php?page=<slug> form and added a note
+  to README.md's "Application routes" section explaining there is no
+  clean-URL rewriting anymore, with a pointer to CLAUDE.md for why.
+  Swept the rest of the repo (QUICKSTART.md, DX-O2-AGENT-SETUP.md,
+  dxo2-scripts/*, bug_php_probe.md) for the same pattern: every remaining
+  hit was either prose (not a literal route), an already-historical
+  "Bug fixed" entry correctly describing removed code, or bug_php_probe.md
+  itself (a historical bug report, deliberately never edited). None of
+  those needed changing.
+
+------------------------------------------------------------------------------
 2026-08-19 @ 14:10 - [Simplify - removed vhost.conf's RewriteRule entirely; app now routes only via index.php?page=<slug>]:
   Following the wrapper-file revert above, user asked why clean URLs
   (/shop, /basket, /admin, /dxo2) still worked, having assumed the PHP
