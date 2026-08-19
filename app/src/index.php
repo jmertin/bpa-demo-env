@@ -1,7 +1,7 @@
 <?php
 // BPA-Demo front controller.
 // Apache mod_rewrite maps clean URLs (/shop, /basket, /product, etc.) to this
-// file with ?page=<slug>.  The bare / redirects to /shop externally (302).
+// file with ?page=<slug>.  Bare / and /index.php default to 'shop' internally.
 
 require_once __DIR__ . '/config/app.php';
 require_once __DIR__ . '/config/database.php';

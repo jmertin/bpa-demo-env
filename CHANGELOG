@@ -5,6 +5,46 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-19 @ 13:20 - [Revert - removed the per-page-wrapper-file workaround for the PHP probe's Frontend-start/SCRIPT_NAME bug]:
+  User asked to check bug_php_probe.md and undo all app-level changes that
+  circumvented the PHP probe's browser-agent injection gating bug, at the
+  user's explicit request (not a bug in the revert itself - the underlying
+  probe limitation from bug_php_probe.md returns intentionally).
+  Scope: only the "Fix - Per-Page Wrapper Files" section of bug_php_probe.md
+  (the front-controller circumvention). Left the "Additional Bugs Found
+  During Investigation" fixes in entrypoint.sh untouched (response.decoration
+  master switch, correct maxSearchingLength property name/value, numeric
+  logLevel mapping) - those are independent INI-correctness fixes matching
+  the probe's own official installer, not circumventions of the gating bug.
+  Changes:
+  - Deleted all 11 per-page wrapper files: app/src/shop.php, basket.php,
+    product.php, checkout.php, order.php, login.php, logout.php, admin.php,
+    info.php, db.php, dxo2.php.
+  - src/apache-php/config/vhost.conf: removed the bare-root-to-/shop 302
+    redirect (existed solely to avoid the probe's bare-"/" null-segment
+    case) and reverted the clean-URL rewrite target from
+    /$1.php?page=$1 back to /index.php?page=$1.
+  - app/src/index.php: updated the header comment (the redirect it
+    described no longer exists; bare / and /index.php already default
+    internally to page=shop via the existing $_GET['page'] ?? 'shop').
+  - CLAUDE.md, README.md, COMPATIBILITY.md, DX-O2-AGENT-SETUP.md,
+    TOBEDONE.md: updated the front-controller/PHP-probe-injection
+    documentation to describe the current (reverted) state, while keeping
+    the historical Gate 1/Gate 2 technical explanation for reference
+    (including how to reapply the workaround from bug_php_probe.md if
+    browser-agent RUM data is needed again later). Left dated historical
+    "Bug fixed" entries elsewhere in CLAUDE.md as-is per this project's
+    practice of never rewriting history.
+  helm/php-demo/files/vhost.conf is a symlink to the same file Compose and
+  the Dockerfile use, so no separate Helm change was needed.
+  Verified via build-scripts/compose.sh: rebuilt apache-php, brought up the
+  full stack, confirmed clean URLs (/shop, /basket, /login, etc.) still
+  route correctly through the front controller with no wrapper files
+  present, and that login/add-to-basket/checkout still function - only the
+  browser-agent snippet injection is now absent, which is the intended
+  outcome of this revert, not a defect.
+
+------------------------------------------------------------------------------
 2026-08-19 @ 12:35 - [Upgrade - apache-php and dx-o2-agents images moved to Ubuntu 24.04 / PHP 8.3]:
   User asked to upgrade the app to Ubuntu 24.04 with Apache2 and PHP 8.3,
   making sure everything still works. Changed:
