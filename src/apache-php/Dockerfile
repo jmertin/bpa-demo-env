@@ -1,6 +1,6 @@
 # ════════════════════════════════════════════════════════════════════════════
-# Apache 2.4 + mod_php 8.1 – Single hardened application container
-# Base: ubuntu:22.04 (Jammy LTS)
+# Apache 2.4 + mod_php 8.3 – Single hardened application container
+# Base: ubuntu:24.04 (Noble LTS)
 #
 # Replaces the previous nginx + php-fpm two-container setup.  Both the DX O2
 # PHP probe and the BPA WebServer Plugin for Apache are injected at container
@@ -8,14 +8,14 @@
 # container starts cleanly when the agent volume is absent.
 #
 # Stage 1 (app-builder): Extracts the application archive.
-# Stage 2 (runtime)    : Apache 2.4 + mod_php 8.1; no build tools present.
+# Stage 2 (runtime)    : Apache 2.4 + mod_php 8.3; no build tools present.
 #
-# PHP version  : 8.1 (ubuntu:22.04; within DX O2 PHP Agent ceiling ≤8.4)
+# PHP version  : 8.3 (ubuntu:24.04; within DX O2 PHP Agent ceiling ≤8.4)
 # HTTP port    : 8080 (non-privileged)
 # ════════════════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Extract application archive ────────────────────────────────────
-FROM ubuntu:22.04 AS app-builder
+FROM ubuntu:24.04 AS app-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -29,13 +29,13 @@ RUN mkdir -p /app && \
     rm /tmp/app.tar.gz
 
 # ── Stage 2: Runtime image ───────────────────────────────────────────────────
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Apache 2.4 + PHP 8.1 as an Apache module (mod_php).
-# libapache2-mod-php8.1 pulls in php8.1-common; php8.1-cli is added so the
-# entrypoint can call `php8.1 -r 'echo ini_get("extension_dir");'` to locate
+# Apache 2.4 + PHP 8.3 as an Apache module (mod_php).
+# libapache2-mod-php8.3 pulls in php8.3-common; php8.3-cli is added so the
+# entrypoint can call `php8.3 -r 'echo ini_get("extension_dir");'` to locate
 # the correct path for the APMIA probe .so at runtime.
 # cron: daily security-update job.
 # Troubleshooting tools: curl, dnsutils (dig/nslookup/host), iputils-ping,
@@ -43,10 +43,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         apache2 \
-        libapache2-mod-php8.1 \
-        php8.1-cli \
-        php8.1-mysql \
-        php8.1-mbstring \
+        libapache2-mod-php8.3 \
+        php8.3-cli \
+        php8.3-mysql \
+        php8.3-mbstring \
         cron \
         ca-certificates \
         curl \
@@ -58,14 +58,14 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Enable required Apache modules; disable the distro default site.
-RUN a2enmod rewrite headers php8.1 && \
+RUN a2enmod rewrite headers php8.3 && \
     a2dissite 000-default
 
 # Disable PHP OPcache so every request compiles PHP source fresh.
-# php8.1-opcache may be pulled in as a transitive dependency; this ini
+# php8.3-opcache may be pulled in as a transitive dependency; this ini
 # drop-in disables it regardless of whether the package is present.
 RUN printf '[opcache]\nopcache.enable=0\nopcache.enable_cli=0\n' \
-    > /etc/php/8.1/apache2/conf.d/99-disable-opcache.ini
+    > /etc/php/8.3/apache2/conf.d/99-disable-opcache.ini
 
 # Suppress "Could not reliably determine the server's FQDN" at every startup.
 RUN echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf && \

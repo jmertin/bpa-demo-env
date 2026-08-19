@@ -88,13 +88,13 @@ entirely by `.config`:
 │       └── setup/                # init_users.php (CLI only, not web-accessible)
 │
 ├── src/
-│   ├── apache-php/               # Apache 2.4 + mod_php container (ubuntu:22.04, multi-stage)
+│   ├── apache-php/               # Apache 2.4 + mod_php container (ubuntu:24.04, multi-stage)
 │   │   ├── Dockerfile            # Stage 1: extract archive; Stage 2: runtime + OPcache disabled
 │   │   ├── entrypoint.sh         # PHP probe + BPA Apache module injection, cron, Apache
 │   │   └── config/
 │   │       └── vhost.conf        # VirtualHost :8080; no-cache headers; baked in + ConfigMap override
 │   │
-│   └── dx-o2-agents/             # Broadcom DX O2 monitoring container (ubuntu:22.04)
+│   └── dx-o2-agents/             # Broadcom DX O2 monitoring container (ubuntu:24.04)
 │       ├── Dockerfile            # extracts APMIA + BTL + BPA plugin to /opt/apmia, /opt/btlistener
 │       ├── entrypoint.sh         # APMENV_* identity; starts IA + BTL; APMIA_DEPLOY passthrough
 │       └── installers/           # place 3 DX O2 packages here (git-ignored)
@@ -229,11 +229,11 @@ Services run in separate containers and communicate via the Compose network.
 
 | Requirement | Implementation |
 |---|---|
-| Base image | `ubuntu:22.04` LTS (Jammy) – glibc 2.35, PHP 8.1, Apache 2.4; all within Broadcom DX O2 agent ceilings |
+| Base image | `ubuntu:24.04` LTS (Noble) – glibc 2.39, PHP 8.3, Apache 2.4; all within Broadcom DX O2 agent ceilings |
 | Single web container | Apache 2.4 + mod_php replaces the former nginx + php-fpm pair; eliminates FastCGI intermediary and cross-container vhost config differences |
 | No-recommends installs | `apt-get install --no-install-recommends` on every `RUN` layer |
 | Multi-stage Apache build | Stage 1 (app-builder): extracts `app.tar.gz`; Stage 2 (runtime): Apache + PHP packages; no archive tools in the final image |
-| PHP version pin | PHP 8.1 (libapache2-mod-php8.1); within DX O2 PHP Agent ceiling (≤ 8.4) |
+| PHP version pin | PHP 8.3 (libapache2-mod-php8.3); within DX O2 PHP Agent ceiling (≤ 8.4) |
 | DX O2 opportunistic injection | PHP probe and BPA module NOT baked into app image; `dxo2-init` initContainer populates an `emptyDir`; entrypoint injects at startup if the volume is present; starts cleanly without it |
 | APMENV_* identity | Agent identity set via native APMIA Docker env var mechanism; `IntroscopeAgent.profile` (tenant JWT + EM URL) is never modified |
 | Container hostname in metric path | `spec.hostname` on the pod template sets the OS hostname used by the IA and BPA Apache module. The PHP probe additionally has `wily_php_agent.hostname` patched to `APMIA_PHP_AGENT_NAME` by the entrypoint, so it always reports a fixed name regardless of pod hostname |

@@ -27,7 +27,7 @@ APMIA_WEB_AGENT_NAME="${APMIA_WEB_AGENT_NAME:-bpa-demo-web-plugin}"
 # response (wily_php_agent.browseragent.autoInjection).  Leave empty to disable.
 APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET:-}"
 
-PHP_VERSION="8.1"
+PHP_VERSION="8.3"
 PHP_MODS_AVAIL="/etc/php/${PHP_VERSION}/mods-available"
 # mod_php uses the apache2 SAPI conf.d, not the fpm one.
 PHP_CONF_D="/etc/php/${PHP_VERSION}/apache2/conf.d"
@@ -36,7 +36,7 @@ PHP_CONF_D="/etc/php/${PHP_VERSION}/apache2/conf.d"
 if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     echo "[entrypoint] Injecting DX O2 PHP probe from ${PHP_PROBE_DIR}"
 
-    PHP_EXT_DIR=$(php8.1 -r 'echo ini_get("extension_dir");')
+    PHP_EXT_DIR=$(php8.3 -r 'echo ini_get("extension_dir");')
     if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.so" ]]; then
         cp "${PHP_PROBE_DIR}/wily_php_agent.so" "${PHP_EXT_DIR}/"
         echo "[entrypoint]   Copied wily_php_agent.so -> ${PHP_EXT_DIR}/"

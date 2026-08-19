@@ -1,6 +1,6 @@
 # ════════════════════════════════════════════════════════════════════════════
 # Broadcom DX O2 – Combined Infrastructure Agent + BTL Container
-# Base: ubuntu:22.04 (Jammy LTS, glibc 2.35)
+# Base: ubuntu:24.04 (Noble LTS, glibc 2.39)
 #
 # Installer prerequisites (build-time) – download from your DX O2 interface,
 # four archives from two different console locations:
@@ -36,7 +36,7 @@
 #   APMIA_LOG_LEVEL     Log verbosity (optional, default INFO)
 # ════════════════════════════════════════════════════════════════════════════
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # Use bash for all RUN commands (required for [[ ]] and process substitution).
 SHELL ["/bin/bash", "-c"]
@@ -89,12 +89,17 @@ RUN set -euo pipefail && \
     echo "Infrastructure Agent extracted to /opt/apmia"
 
 # ── PHP Probe – normalise to expected extension path ─────────────────────────
-# The PHP_apmia archive places the probe under probe/lib/php<ver>/.
-# Create extensions/PHPAgent/ so the php-fpm entrypoint uses the same path
-# regardless of APMIA release generation.
+# The PHP_apmia archive places the probe under probe/lib/php<ver>/, prebuilt
+# per PHP minor version (confirmed via the real archive: php80-php84, non-ZTS
+# lib/ variant matches Ubuntu's non-threaded mod_php; lib-zts/ is unused here).
+# Create extensions/PHPAgent/ so apache-php's entrypoint uses the same path
+# regardless of APMIA release generation. php83 here must track apache-php's
+# own PHP_VERSION (src/apache-php/entrypoint.sh) -- a mismatch fails to load
+# with a PHP API version error, since the probe .so is built against a
+# specific PHP minor version's Zend Module API, not forward/backward compatible.
 RUN set -euo pipefail && \
     mkdir -p /opt/apmia/extensions/PHPAgent && \
-    cp /opt/apmia/probe/lib/php81/wily_php_agent.so \
+    cp /opt/apmia/probe/lib/php83/wily_php_agent.so \
        /opt/apmia/extensions/PHPAgent/wily_php_agent.so && \
     cp /opt/apmia/probe/wily_php_agent.ini \
        /opt/apmia/extensions/PHPAgent/wily_php_agent.ini && \

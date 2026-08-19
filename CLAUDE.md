@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-BPA-Demo is a PHP 8.1 + Apache 2.4 + MariaDB web shop (300 smart-home products, three brands) used as a Broadcom DX O2 APM demonstration target. Deployed via Helm/Kubernetes or Docker Compose with an optional APMIA monitoring sidecar.
+BPA-Demo is a PHP 8.3 + Apache 2.4 + MariaDB web shop (300 smart-home products, three brands) used as a Broadcom DX O2 APM demonstration target. Deployed via Helm/Kubernetes or Docker Compose with an optional APMIA monitoring sidecar.
 
 ---
 
@@ -77,7 +77,7 @@ All caching is disabled at every layer so APM tooling sees genuine request laten
 
 | Layer | Mechanism | Configuration |
 |---|---|---|
-| PHP OPcache | Disabled | `/etc/php/8.1/apache2/conf.d/99-disable-opcache.ini` (`opcache.enable=0`) — written by Dockerfile |
+| PHP OPcache | Disabled | `/etc/php/8.3/apache2/conf.d/99-disable-opcache.ini` (`opcache.enable=0`) — written by Dockerfile |
 | Web-server cache | Not enabled | `mod_cache`/`mod_cache_disk` are never loaded; no caching directives in `vhost.conf` |
 | Browser cache | No-cache headers | `vhost.conf`: `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`; `Pragma: no-cache`; `Expires: Thu, 01 Jan 1970 00:00:00 GMT`; ETags and `Last-Modified` stripped |
 
@@ -179,9 +179,11 @@ All DX O2 behaviour is gated on `dxo2.enabled` in `values.yaml`. The sidecar is 
 
 ### PHP probe injection
 
+**`wily_php_agent.so` is a per-PHP-minor-version binary, not a single portable build.** `src/dx-o2-agents/Dockerfile` extracts it from `probe/lib/php<ver>/` inside the `PHP_apmia_*.tar` archive (`probe/lib/` for non-ZTS builds — matches Ubuntu's non-threaded mod_php; `probe/lib-zts/` ships in parallel for threaded SAPIs and is unused here). Confirmed by inspecting the real downloaded archive: it ships prebuilt `.so` files for PHP 8.0 through 8.4, each compiled against that PHP version's own Zend Module API — loading the wrong one doesn't degrade gracefully, it fails outright (`PHP Warning: PHP Startup: wily_php_agent: Unable to initialize module... Module compiled with module API=<X>, PHP compiled with module API=<Y>, These options need to match`), and the probe silently reports as "not loaded" everywhere (`?page=dxo2`, `get_loaded_extensions()`) with no other error. The Dockerfile's `probe/lib/php<ver>/` selection must always exactly match `apache-php/entrypoint.sh`'s own `PHP_VERSION` — verify with `docker exec <apache-php container> sha256sum <extension_dir>/wily_php_agent.so` against `docker run --rm --entrypoint sha256sum <dx-o2-agents image> /opt/apmia/extensions/PHPAgent/wily_php_agent.so`; a mismatch (or the `?page=dxo2` "Extension loaded: ✗ no" badge) means either the wrong `php<ver>` directory was selected or the `apmia_data` volume is stale (see "Docker Compose notes" above — this exact combination is what broke live verification of the 2026-08-19 PHP 8.1→8.3 upgrade before the volume was recreated).
+
 `apache-php/entrypoint.sh`:
 - Copies `wily_php_agent.so` into PHP's `extension_dir`.
-- Copies `wily_php_agent.ini` to `/etc/php/8.1/mods-available/`; symlinks as `99-wily_php_agent.ini` into `/etc/php/8.1/apache2/conf.d/`.
+- Copies `wily_php_agent.ini` to `/etc/php/8.3/mods-available/`; symlinks as `99-wily_php_agent.ini` into `/etc/php/8.3/apache2/conf.d/`.
 - Patches `collectorHost`, `collectorPort`, `application.name`, `agentName`, `hostname` via `sed -i`. `agentName` and `hostname` are both set to `APMIA_PHP_AGENT_NAME` (default `bpa-demo-php-probe`) — `hostname` overrides OS `gethostname()` so the PHP probe appears with a recognisable name in the metric path instead of an auto-generated pod ID.
 - Sets `logdir="/var/log/php-probe"`, `disableLogging=0`, `logLevel=<N>` (numeric). `APMIA_PHP_LOG_LEVEL` accepts a name (TRACE/DEBUG/INFO/WARN/WARNING/ERROR/FATAL) or a number (0–5); the entrypoint maps the name to its numeric equivalent before writing the INI because `wily_php_agent.logLevel` only accepts `0=trace,1=debug,2=info,3=warning,4=error,5=fatal`. The log directory is created in the Dockerfile and owned by `www-data` so the Apache process can write logs without privilege escalation.
 - Writes browser-agent INI properties when `APMIA_BROWSER_SNIPPET` is set (enclose in single quotes in `.config` because the value contains double-quotes). Three properties are set: `response.decoration=1` (master switch — activates the browser agent module; required by the PHP probe before `autoInjection` is honoured), `snippet.autoInjection=1`, and `browseragent.autoInjection.snippetString='...'`. When `APMIA_BROWSER_SNIPPET` is empty all three are disabled/removed. Also sets `wily_php_agent.enable.browseragent.autoInjection.snippet.maxSearchingLength=30000` unconditionally — `<head>` is at byte 33 and `</head>`/`<body>` at byte ~239/247 (CSS is a separate static file), well within the probe's 100–30000 valid range. **Important — Frontend start and SCRIPT_NAME:** the PHP probe has two independent gates for BA injection. (1) It hooks PHP opcodes: if the very first opcode of a script is an include (op 61/62/136), the probe enters include-tracking mode and never emits `Frontend start` — BA injection is skipped entirely. (2) It extracts the last segment of `SCRIPT_NAME` (not `REQUEST_URI`) to name the BA cookie; it treats `index.php` and bare `/` as null segments and skips injection for those. A plain front-controller pattern (all requests through `index.php`) fails both gates. The fix: per-page wrapper files (`shop.php`, `basket.php`, etc.) at the document root, each containing one non-include opcode (`$_GET['page'] ??= basename(__FILE__, '.php')`) before the `require __DIR__ . '/index.php'`. The non-include opcode triggers `Frontend start: /shop.php`; `SCRIPT_NAME=/shop.php` passes Gate 2; `REQUEST_URI=/shop` is used for the actual cookie name (`x-apm-brtm-response-bt-page-shop`). `vhost.conf` routes `/shop` → `shop.php?page=shop` (not `index.php?page=shop`). Since `index.php` and bare `/` both fail Gate 2 regardless of wrapper files, `vhost.conf` also externally redirects the bare root to `/shop` (`RewriteRule ^$ ... [R=302,L]`) rather than internally rewriting it — an internal rewrite leaves the client-visible `REQUEST_URI` at `/` (still a null segment for the cookie name), where only a real client-visible redirect to `/shop` produces a fresh request with `REQUEST_URI=/shop`.
@@ -336,7 +338,7 @@ Verified end to end against the real stack (not just a syntax check): built via 
 
 ## Container image contents (both images)
 
-Both `apache-php` and `dx-o2-agents` include these troubleshooting packages (Ubuntu 22.04):
+Both `apache-php` and `dx-o2-agents` include these troubleshooting packages (Ubuntu 24.04):
 
 | Package | Commands |
 |---|---|
@@ -468,6 +470,7 @@ DXO2_TENANT_USER_EMAIL   # login email of the tenant user running dxo2-scripts/*
 - `APMIA_BROWSER_SNIPPET` uses passthrough form (`- APMIA_BROWSER_SNIPPET`, no `=`) to prevent YAML parser corruption of the embedded double-quotes.
 - `APMIA_PHP_COLLECTOR_HOST` and `APMIA_BTL_HOST` are hardcoded to `dxo2` (service name) in `docker-compose.yml`. In Kubernetes the same-pod default `127.0.0.1` applies.
 - **Static per-service IPs** on a dedicated `bpa-demo` bridge network (`172.28.0.0/24`; `dxo2`=`.10`, `mariadb`=`.11`, `apachephp`=`.12`, `traffic`=`.13`). Without a user-defined network, Compose places every service on the project's auto-created default bridge, whose subnet Docker picks fresh at network-creation time — this can shift across a `compose.sh down` + `up` cycle (new network = new IPAM choice), and DX O2 was observed treating this as a distinct host each time. Pinning both the network's subnet and each service's `ipv4_address` makes every address deterministic regardless of Docker's IPAM. Verified: IPs identical before and after a full `down`/`up` cycle; service-name DNS resolution (`mariadb`, `dxo2`) and app health both confirmed working unchanged.
+- **`apmia_data` named volume only ever seeds once — rebuilding `dx-o2-agents` alone is not enough to pick up new contents.** Docker's named-volume behaviour: when a volume is mounted read-write over a directory that has content baked into the image (`/opt/apmia` here), Docker copies the image's content into the volume only the *first* time that volume is created — every subsequent container start (including `compose.sh up -d` after rebuilding the `dx-o2-agents` image) reuses whatever is already in the volume and ignores the new image's `/opt/apmia` entirely. Caught live during the 2026-08-19 PHP 8.1→8.3 upgrade: rebuilding `dx-o2-agents` with a corrected `wily_php_agent.so` selection (see "PHP probe injection" below) produced a verified-correct image, but the running `apachephp` container kept injecting the *old* `.so` from the stale `apmia_data` volume — confirmed via `sha256sum` mismatch between the volume's copy and the freshly built image's copy. Any change to `dx-o2-agents`' baked-in `/opt/apmia` contents (probe binaries, BTL, BPA module, profile) requires `compose.sh down -v` (or `docker volume rm <project>_apmia_data`) before the next `up`, not just a rebuild — a plain rebuild + restart silently keeps serving the old volume contents with no error of any kind.
 
 ---
 

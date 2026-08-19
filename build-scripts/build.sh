@@ -24,7 +24,7 @@
 #   DX-O2-AGENT-SETUP.md for download instructions.
 #
 # Application image:
-#   src/apache-php/ – Apache 2.4 + mod_php 8.1 in a single container, replacing
+#   src/apache-php/ – Apache 2.4 + mod_php 8.3 in a single container, replacing
 #   the former nginx + php-fpm two-image setup.
 #
 # Traffic generator image:

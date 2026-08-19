@@ -34,9 +34,9 @@ to your DX O2 backend automatically without any manual EM configuration.
 
 | Runtime | Project version | APMIA requirement | Status |
 |---|---|---|---|
-| PHP | 8.1 (ubuntu:22.04) | PHP Probe ≤ 8.4 | ✓ within ceiling |
-| Apache | 2.4.x (ubuntu:22.04) | BPA Apache module (mod_*.so) | ✓ supported |
-| glibc | 2.35 (ubuntu:22.04 Jammy) | Infrastructure Agent ≥ 2.17 | ✓ satisfied |
+| PHP | 8.3 (ubuntu:24.04) | PHP Probe ≤ 8.4 | ✓ within ceiling |
+| Apache | 2.4.x (ubuntu:24.04) | BPA Apache module (mod_*.so) | ✓ supported |
+| glibc | 2.39 (ubuntu:24.04 Noble) | Infrastructure Agent ≥ 2.17 | ✓ satisfied |
 | JRE | Bundled in `PHP_apmia*.tar` | BTL requires JRE 11+ | ✓ bundled JRE used |
 | OS architecture | linux/amd64 | x86_64 Linux | ✓ matches `BUILD_PLATFORM` |
 
@@ -149,7 +149,7 @@ gracefully if absent.
 │   └── IntroscopeAgent.profile    ← Pre-configured: tenant EM URL (WSS) + JWT
 │                                     NEVER overwrite — identity set via APMENV_*
 ├── extensions/PHPAgent/
-│   ├── wily_php_agent.so          ← PHP 8.1 probe extension (normalised by Dockerfile)
+│   ├── wily_php_agent.so          ← PHP 8.3 probe extension (normalised by Dockerfile)
 │   └── wily_php_agent.ini         ← PHP INI snippet (normalised by Dockerfile)
 ├── extensions/WebServerPlugin/
 │   ├── mod_<name>.so              ← Apache BPA module (from BPA zip, if present)
@@ -172,7 +172,7 @@ gracefully if absent.
 
 ### 4.3 PHP Probe normalisation step
 
-The `PHP_apmia*.tar` archive places probe files at `probe/lib/php81/`.
+The `PHP_apmia*.tar` archive places probe files at `probe/lib/php83/`.
 The Dockerfile copies them to `extensions/PHPAgent/` so the `apache-php`
 entrypoint always finds them at the same path regardless of APMIA release generation.
 
@@ -241,9 +241,9 @@ metrics or BPA instrumentation until the optional archives are added.
 ```
 Check: /opt/apmia/extensions/PHPAgent/wily_php_agent.ini exists?
   YES →
-    Copy wily_php_agent.so  →  $(php8.1 -r 'echo ini_get("extension_dir");')/
-    Copy wily_php_agent.ini →  /etc/php/8.1/mods-available/wily_php_agent.ini
-    Symlink                 →  /etc/php/8.1/apache2/conf.d/99-wily_php_agent.ini
+    Copy wily_php_agent.so  →  $(php8.3 -r 'echo ini_get("extension_dir");')/
+    Copy wily_php_agent.ini →  /etc/php/8.3/mods-available/wily_php_agent.ini
+    Symlink                 →  /etc/php/8.3/apache2/conf.d/99-wily_php_agent.ini
     Patch wily_php_agent.ini:
       wily_php_agent.collectorHost    = ${APMIA_PHP_COLLECTOR_HOST}  (default: 127.0.0.1)
       wily_php_agent.collectorPort    = ${APMIA_PHP_COLLECTOR_PORT}  (default: 5005)
@@ -599,7 +599,7 @@ Expected `apache-php` log output:
 ```
 [entrypoint] Injecting DX O2 PHP probe from /opt/apmia/extensions/PHPAgent
 [entrypoint]   Copied wily_php_agent.so → /usr/lib/php/20210902/
-[entrypoint]   Probe INI installed at /etc/php/8.1/apache2/conf.d/99-wily_php_agent.ini
+[entrypoint]   Probe INI installed at /etc/php/8.3/apache2/conf.d/99-wily_php_agent.ini
 [entrypoint]   PHP probe IPC: 127.0.0.1:5005
 [entrypoint]   PHP probe agent : bpa-demo-php-probe
 [entrypoint]   PHP probe host  : bpa-demo-php-probe
@@ -615,11 +615,11 @@ Expected `apache-php` log output:
 
 ```bash
 kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
-  php8.1 -r 'var_dump(extension_loaded("wily_php_agent"));'
+  php8.3 -r 'var_dump(extension_loaded("wily_php_agent"));'
 # expected: bool(true)
 
 kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
-  php8.1 -m | grep wily
+  php8.3 -m | grep wily
 # expected: wily_php_agent
 ```
 
@@ -639,7 +639,7 @@ kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
 
 ```bash
 kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
-  cat /etc/php/8.1/mods-available/wily_php_agent.ini
+  cat /etc/php/8.3/mods-available/wily_php_agent.ini
 ```
 
 Verify:
@@ -670,7 +670,7 @@ Verify OPcache is disabled (PHP serves from source, not bytecode cache):
 
 ```bash
 kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
-  php8.1 -r 'echo ini_get("opcache.enable"), "\n";'
+  php8.3 -r 'echo ini_get("opcache.enable"), "\n";'
 # expected: 0
 ```
 
@@ -808,7 +808,7 @@ The entrypoint always sets `wily_php_agent.hostname` to `APMIA_PHP_AGENT_NAME`
 the PHP probe still shows a random ID, verify the patched INI:
 ```bash
 kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
-  grep hostname /etc/php/8.1/mods-available/wily_php_agent.ini
+  grep hostname /etc/php/8.3/mods-available/wily_php_agent.ini
 # expected: wily_php_agent.hostname="bpa-demo-k8s" (or your configured value)
 ```
 

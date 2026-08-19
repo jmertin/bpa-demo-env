@@ -1,7 +1,7 @@
 # Version Compatibility Matrix – BPA-Demo / DX O2 Integration
 
-Updated: 2026-07-02
-Status: All action items resolved; stack is at its target baseline.
+Updated: 2026-08-19
+Status: All action items resolved; stack is at its target baseline (ubuntu:24.04 / PHP 8.3, upgraded from ubuntu:22.04 / PHP 8.1).
 
 ---
 
@@ -9,9 +9,9 @@ Status: All action items resolved; stack is at its target baseline.
 
 | Component | Image / Package | Version | Notes |
 |---|---|---|---|
-| Web server | apache2 (ubuntu:22.04 repos) | 2.4.x | mod_php; replaced former nginx + php-fpm pair |
-| PHP | libapache2-mod-php8.1 (ubuntu:22.04 repos) | 8.1 | Within DX O2 PHP Agent ceiling ≤ 8.4 |
-| Base OS | ubuntu:22.04 (Jammy LTS) | glibc 2.35 | Confirmed compatible with APMIA binary |
+| Web server | apache2 (ubuntu:24.04 repos) | 2.4.x | mod_php; replaced former nginx + php-fpm pair |
+| PHP | libapache2-mod-php8.3 (ubuntu:24.04 repos) | 8.3 | Within DX O2 PHP Agent ceiling ≤ 8.4 |
+| Base OS | ubuntu:24.04 (Noble LTS) | glibc 2.39 | Confirmed compatible with APMIA binary (see §2, §3) |
 | Database | mariadb:11 (Docker Hub) | 11.x | Official image, pinned major |
 | DX O2 agent (PHP Agent) | PHP_apmia_*.tar (DX O2 interface) | tenant-specific | Bundled JRE; pre-configured profile; base install |
 | DX O2 agent (MySQL Monitor extension) | Infrastructure_Agent_apmia_*.tar (DX O2 interface, optional) | tenant-specific | Only its mysql-*.tar.gz is used, layered onto the PHP Agent install |
@@ -24,24 +24,26 @@ Status: All action items resolved; stack is at its target baseline.
 
 | Agent / Plugin | Ceiling | Project version | Status |
 |---|---|---|---|
-| PHP Agent (`wily_php_agent`) | PHP **8.4** | PHP 8.1 | ✅ within ceiling |
+| PHP Agent (`wily_php_agent`) | PHP **8.4** | PHP 8.3 | ✅ within ceiling |
 | BPA WebServer Plugin (Apache `mod_*.so`) | Apache 2.4.x | Apache 2.4.x | ✅ within ceiling |
 | BPA WebServer Plugin (nginx `ngx_http_ca_*`) | NGINX **1.29.x** | n/a (Apache stack) | — |
-| Infrastructure Agent binary | Ubuntu 20.04 / 22.04 (glibc ≥ 2.17) | ubuntu:22.04 (glibc 2.35) | ✅ confirmed |
-| Business Transaction Listener | Same OS as Infra Agent | ubuntu:22.04 | ✅ confirmed |
+| Infrastructure Agent binary | Ubuntu 20.04 / 22.04 / 24.04 (glibc ≥ 2.17) | ubuntu:24.04 (glibc 2.39) | ✅ confirmed — floor is glibc ≥ 2.17, 2.39 comfortably clears it |
+| Business Transaction Listener | Same OS as Infra Agent | ubuntu:24.04 | ✅ confirmed |
 | DB Monitor (MySQL/MariaDB) | MariaDB / MySQL compatible | mariadb:11 | ✅ compatible with `version=5_6x` (extension's default query set targets MySQL 5.7+ `performance_schema` tables MariaDB doesn't implement) |
 
 Sources: Broadcom DX APM Compatibility Guide.
+
+**PHP probe binary is per-minor-version, not forward/backward compatible.** `wily_php_agent.so` is compiled against a specific PHP minor version's Zend Module API — a mismatch fails to load with a PHP API version error, not a graceful fallback. Confirmed by inspecting the real downloaded `PHP_apmia_*.tar` archive (`tar -tf`): it ships prebuilt `.so` files for `php80` through `php84`, both `probe/lib/php<ver>/` (non-ZTS — matches Ubuntu's non-threaded mod_php) and `probe/lib-zts/php<ver>/` (unused here). `src/dx-o2-agents/Dockerfile` selects `probe/lib/php83/wily_php_agent.so` for this project's PHP 8.3 — this selection must always match `src/apache-php/entrypoint.sh`'s `PHP_VERSION` exactly, not just satisfy the ≤8.4 ceiling in the abstract.
 
 ---
 
 ## 3. Base Image Selection Rationale
 
-**Selected: `ubuntu:22.04` (Jammy Jellyfish, LTS until April 2027)**
+**Selected: `ubuntu:24.04` (Noble Numbat, LTS until April 2029)** — upgraded 2026-08-19 from the prior `ubuntu:22.04` baseline. The table below is preserved from the original 22.04 selection, with the "Partial" APMIA-compatibility flag re-verified rather than just carried forward: the real downloaded `PHP_apmia_*.tar` archive was inspected directly (`tar -tf`) and confirmed to ship a prebuilt PHP-8.3 probe binary (`probe/lib/php83/wily_php_agent.so`), and the Infrastructure Agent's documented glibc floor (≥ 2.17, see §2) is comfortably met by 24.04's glibc 2.39. The original "⚠️ Partial (recent builds)" note had no cited source and predated this project actually having the archive on hand to check.
 
 | Criterion | ubuntu:22.04 | ubuntu:24.04 | ubuntu:26.04 |
 |---|---|---|---|
-| APMIA binary compatibility | ✅ Confirmed | ⚠️ Partial (recent builds) | ❌ Unverified |
+| APMIA binary compatibility | ✅ Confirmed | ✅ Confirmed (verified 2026-08-19 against the real `PHP_apmia_*.tar` and IA glibc floor — see above) | ❌ Unverified |
 | Default PHP version | 8.1 (≤ 8.4 ✅) | 8.3 (≤ 8.4 ✅) | 8.4–8.5 (may exceed ceiling) |
 | Default Apache version | 2.4.x (✅) | 2.4.x (✅) | 2.4.x (✅) |
 | glibc version | 2.35 | 2.39 | 2.41+ |
@@ -52,8 +54,8 @@ Sources: Broadcom DX APM Compatibility Guide.
 ## 4. Web Server Migration History
 
 The project originally used **nginx 1.18 + php-fpm** as two separate containers.
-This was replaced with a **single apache-php container** (Apache 2.4 + mod_php 8.1)
-for the following reasons:
+This was replaced with a **single apache-php container** (Apache 2.4 + mod_php,
+originally PHP 8.1, upgraded to PHP 8.3 — see §3) for the following reasons:
 
 - Eliminates the FastCGI intermediary and all cross-container vhost configuration differences.
 - Simplifies the DX O2 BPA plugin injection (single entrypoint; Apache's `LoadModule` mechanism).
@@ -121,22 +123,22 @@ Disabled at image build time via a PHP ini drop-in written by the Dockerfile:
 
 | File | Property | Value |
 |---|---|---|
-| `/etc/php/8.1/apache2/conf.d/99-disable-opcache.ini` | `opcache.enable` | `0` |
-| `/etc/php/8.1/apache2/conf.d/99-disable-opcache.ini` | `opcache.enable_cli` | `0` |
+| `/etc/php/8.3/apache2/conf.d/99-disable-opcache.ini` | `opcache.enable` | `0` |
+| `/etc/php/8.3/apache2/conf.d/99-disable-opcache.ini` | `opcache.enable_cli` | `0` |
 
-The drop-in is written unconditionally — if `php8.1-opcache` is not installed the file is harmless; if it is installed, the extension is loaded but immediately disabled.
+The drop-in is written unconditionally — if `php8.3-opcache` is not installed the file is harmless; if it is installed, the extension is loaded but immediately disabled.
 
 Verify at runtime:
 
 ```bash
 kubectl exec -n <APP_NAMESPACE> <pod> -c apache-php -- \
-  php8.1 -r 'echo ini_get("opcache.enable"), "\n";'
+  php8.3 -r 'echo ini_get("opcache.enable"), "\n";'
 # expected: 0
 ```
 
 ### 7.2 Web-server cache
 
-`mod_cache` and `mod_cache_disk` are not loaded (`a2enmod` in the Dockerfile only enables `rewrite`, `headers`, and `php8.1`). No server-side caching is active.
+`mod_cache` and `mod_cache_disk` are not loaded (`a2enmod` in the Dockerfile only enables `rewrite`, `headers`, and `php8.3`). No server-side caching is active.
 
 ### 7.3 Browser cache (HTTP headers)
 

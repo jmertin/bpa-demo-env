@@ -5,6 +5,61 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-19 @ 12:35 - [Upgrade - apache-php and dx-o2-agents images moved to Ubuntu 24.04 / PHP 8.3]:
+  User asked to upgrade the app to Ubuntu 24.04 with Apache2 and PHP 8.3,
+  making sure everything still works. Changed:
+  - src/apache-php/Dockerfile: ubuntu:22.04 -> 24.04 (both stages),
+    libapache2-mod-php8.1/php8.1-cli/php8.1-mysql/php8.1-mbstring -> 8.3,
+    a2enmod ... php8.1 -> php8.3, OPcache-disable ini path
+    /etc/php/8.1/... -> /etc/php/8.3/....
+  - src/apache-php/entrypoint.sh: PHP_VERSION="8.1" -> "8.3" (single-point
+    change that drives PHP_MODS_AVAIL/PHP_CONF_D), php8.1 -r ... -> php8.3.
+  - src/dx-o2-agents/Dockerfile: ubuntu:22.04 -> 24.04; changed the PHP
+    probe binary selection from probe/lib/php81/wily_php_agent.so to
+    probe/lib/php83/wily_php_agent.so inside the PHP_apmia_*.tar archive.
+  - CLAUDE.md, README.md, COMPATIBILITY.md, DX-O2-AGENT-SETUP.md, plus
+    comment-only references in helm/php-demo/templates/statefulset.yaml,
+    build-scripts/build.sh, build-scripts/push.sh: updated version/OS text.
+    COMPATIBILITY.md's base-image comparison table previously flagged
+    ubuntu:24.04 APMIA binary compatibility as "Partial (recent builds)"
+    with no cited source; re-verified for real this time (see below) and
+    upgraded to "Confirmed."
+  Two real risks were checked against the actual downloaded archive before
+  touching any code, not assumed from the ceiling documentation alone:
+  the PHP_apmia_*.tar archive was inspected directly (tar -tf) and
+  confirmed to ship a prebuilt php83 probe binary; the Infrastructure
+  Agent's documented glibc floor (>= 2.17) is comfortably met by 24.04's
+  glibc 2.39. Left the dead, unused src/nginx/ and src/php-fpm/
+  Dockerfiles (not referenced by build.sh/push.sh/docker-compose.yml/Helm)
+  untouched at their old 22.04/8.1 pins - out of scope, flagged for a
+  separate decision if full-repo consistency is wanted later.
+  Verified end to end via build-scripts/compose.sh (not just a docker
+  build): both images built clean; brought up the full stack (mariadb,
+  dxo2, apachephp, traffic) on a temporary host port to avoid colliding
+  with an unrelated compose project already using 8080, reverted that
+  port change afterward. Caught and fixed two real problems only visible
+  at runtime, not from reading the Dockerfiles:
+  (1) the PHP probe initially reported "not loaded" on ?page=dxo2 despite
+  every file being in the right place - Apache's error log showed a PHP
+  module API mismatch (compiled API 20210902, i.e. PHP 8.1's, against a
+  running API of 20230831, PHP 8.3's). Root cause: the apmia_data Docker
+  named volume only seeds from the dx-o2-agents image on first creation:
+  it already existed from a prior 8.1-era run, so rebuilding the image
+  alone did not refresh its contents - confirmed via sha256sum mismatch
+  between the volume's copy and the freshly built image's copy. Fixed by
+  compose.sh down -v before the next up (see the new CLAUDE.md "Docker
+  Compose notes" entry - this generalizes to any future dx-o2-agents
+  rebuild, not just this one). (2) confirmed after the volume fix: probe
+  extension loads clean (get_loaded_extensions() includes wily_php_agent
+  via the real Apache SAPI, not just CLI), BPA module loads, browser
+  agent enabled, PHP/BTL collectors reachable, OPcache still disabled
+  (opcache.enable=0 verified through the actual Apache SAPI, not the CLI
+  SAPI which never shared this config to begin with), login/shop/
+  add-to-basket/checkout/db-diagnostic pages all functioned normally
+  under PHP 8.3.6, and the traffic generator + Infrastructure Agent ran
+  without incident against the upgraded stack.
+
+------------------------------------------------------------------------------
 2026-07-15 @ 11:40 - [Confirmed - UnknownAgent fix verified live on both Kubernetes and Docker Compose]:
   User rebuilt and redeployed both stacks and confirmed via nass query that
   the UnknownAgent PHP-probe fallback is gone: Kubernetes now reports
