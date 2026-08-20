@@ -27,8 +27,16 @@
 #     onto the PHP_apmia-based install. Skipped gracefully if absent (no DB
 #     Monitor metrics until it's added and the image rebuilt).
 #
-# Place all four archives in src/dx-o2-agents/installers/ before running
-# build.sh.  The installers/ directory is git-ignored.
+#   wily_php_agent.so                                            (optional, troubleshooting)
+#     Not downloaded from the console – a standalone replacement PHP probe
+#     binary (e.g. a patched build from Broadcom support). When present,
+#     replaces the PHP_apmia archive's own probe binary at build time; the
+#     archive's original is kept alongside as wily_php_agent.so_orig for an
+#     easy revert. See "PHP Probe – optional troubleshooting override" below.
+#
+# Place all archives (and the optional override binary) in
+# src/dx-o2-agents/installers/ before running build.sh.  The installers/
+# directory is git-ignored.
 #
 # Runtime environment variables (optional – EM connection is pre-configured):
 #   APMIA_AGENT_NAME    Unique agent name shown in the APM console
@@ -104,6 +112,27 @@ RUN set -euo pipefail && \
     cp /opt/apmia/probe/wily_php_agent.ini \
        /opt/apmia/extensions/PHPAgent/wily_php_agent.ini && \
     echo "PHP probe files installed to /opt/apmia/extensions/PHPAgent/"
+
+# ── PHP Probe – optional troubleshooting override ─────────────────────────────
+# For diagnosing probe issues with Broadcom support: drop a replacement
+# binary at src/dx-o2-agents/installers/wily_php_agent.so (git-ignored, see
+# .gitignore) and rebuild. When present, the package-provided .so extracted
+# above is kept -- not deleted -- alongside it as wily_php_agent.so_orig, and
+# the override becomes the file apache-php's entrypoint actually copies into
+# PHP's extension_dir at runtime. Skipped entirely (package binary stays in
+# place, no _orig file created) when no override is present, which is the
+# default/expected case for a normal build.
+RUN set -euo pipefail && \
+    OVERRIDE_SO="/tmp/installers/wily_php_agent.so" && \
+    if [[ -f "${OVERRIDE_SO}" ]]; then \
+        echo "[Dockerfile] Override wily_php_agent.so found in installers/ -- replacing the package-provided binary."; \
+        mv /opt/apmia/extensions/PHPAgent/wily_php_agent.so \
+           /opt/apmia/extensions/PHPAgent/wily_php_agent.so_orig && \
+        cp "${OVERRIDE_SO}" /opt/apmia/extensions/PHPAgent/wily_php_agent.so && \
+        echo "[Dockerfile] Package binary preserved as wily_php_agent.so_orig; override now active at the target path."; \
+    else \
+        echo "[Dockerfile] No override wily_php_agent.so in installers/ -- using the package-provided binary."; \
+    fi
 
 # ── Business Transaction Listener ─────────────────────────────────────────────
 RUN set -euo pipefail && \
