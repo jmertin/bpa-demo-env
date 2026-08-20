@@ -5,6 +5,34 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-20 @ 14:39 - [Feat - optional troubleshooting override for wily_php_agent.so]:
+  User asked for a way to swap in a standalone wily_php_agent.so binary
+  (e.g. a patched build from Broadcom support) instead of the one baked
+  into the PHP_apmia_*.tar archive, for probe troubleshooting -- without
+  losing the ability to revert.
+  Added a new RUN step to src/dx-o2-agents/Dockerfile, right after the
+  existing PHP-probe-normalisation step: if
+  src/dx-o2-agents/installers/wily_php_agent.so is present at build time,
+  the archive-provided binary already copied to
+  /opt/apmia/extensions/PHPAgent/wily_php_agent.so is renamed to
+  wily_php_agent.so_orig (kept, not deleted) and the override file is
+  copied into its place -- the same target path apache-php's entrypoint
+  already reads from at runtime, so no entrypoint.sh changes were needed.
+  Absent the override file, the step is a no-op and no _orig file is
+  created. installers/ is already fully git-ignored (src/dx-o2-agents/
+  installers/*), so this needed no .gitignore change.
+  Documented as a new build-time-prerequisites bullet in the Dockerfile's
+  top comment block and in CLAUDE.md's "PHP probe injection" section.
+  Verified both branches for real against the actual archive: with a
+  real override .so placed in installers/, the built image's target path
+  hash matched the override file exactly and wily_php_agent.so_orig's
+  hash matched the archive's own probe/lib/php83/wily_php_agent.so
+  exactly; with the override file temporarily moved aside and a
+  --no-cache rebuild, the target held the plain package binary and no
+  _orig file was created. Restored the override file to its original
+  location afterward and rebuilt once more so the image on disk matches.
+
+------------------------------------------------------------------------------
 2026-08-19 @ 14:45 - [Docs - README.md still listed the old clean-URL routes]:
   User caught that README.md's "Application routes" table, its "Logging in"
   section, and its admin diagnostic pages table still listed the pre-revert
