@@ -54,6 +54,7 @@ command and remove them manually (each script's header comment says which).
 | `bpa-demo-services-universe.sh` | The `"BPA Demo"` **O2/Platform Universe** (`dx-do o2-universe` -- a.k.a. "Services Universe" in the console; a different resource from the APM Universe above, with its own id space) -- created because the tenant needs both universe types until the product merges them. `o2-universe create` accepts no scoping parameters at all (extras are silently ignored), so a CLI-created Universe is always unscoped (`{"filter": {"op": "ALL"}}` on both its `tas` and `nass` views) -- **confirmed to crash the console's edit UI** when opened in that state (2026-07-07; see `dx-do-o2-universe-issue.md`). There is no `update`/`add-view` command to narrow it afterward either, so this script deliberately does **not** fall back to `o2-universe create` when its state file is missing/stale -- it fails with instructions for manual console creation instead (pick a Service scope in the console's own creation wizard, which avoids the crash entirely). The currently-tracked instance (`VIEW618`) was created that way. `delete` still uses `apm-universe delete`, which works across both universe types since `o2-universe` has no `delete` command of its own. |
 | `bpa-demo-sli.sh` | Three **SLI groups** (Service Level Indicators, `dx-do sli` -- see the SLIs section below) bound to the `"BPA-Demo"` Service: Frontend Response Time, Frontend Error Rate, Client-Side Page Load Time. Each has an SLO (rolling-percentage/error-budget) and an alert on the SLO's rolling percentage. Uses `dx-do` v7.2.1's structured `sli create-group`/`add-slo`/`add-alert`/`set-group-filter` surface -- no JSON templates, no file-based import. `delete` runs `sli delete-group`, which really does delete the SLI, its SLO, and its alerts (unlike the old CLI's service-unbind-only `exclude-service`). |
 | `bpa-demo-agent-health-dashboard.sh` | The `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder: one traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. Includes a "Deployment" dropdown variable (`docker`/`k8s`, defaults to "All") so the Infrastructure Agent/PHP Probe panels can be scoped to one deployment or show both together -- see "2026-07-10" below for why that's needed and two bugs found shipping it. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert; `dashboard-import`'s documented `preserveUid=true overwrite=true` upsert doesn't work on this build -- `overwrite=` is silently ignored), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
+| `bpa-demo-application-dashboards.sh` | Three more **Dashboards** in the existing `"BPA-Demo"` folder -- `"BPA-Demo · Application Overview"`, `"BPA-Demo · Application Drilldown"`, `"BPA-Demo · Transaction Details Drilldown"` -- templated from dashboards the user exported by hand from the console (`jm-dashboards/bpa/`), not authored from scratch. Unlike every other dashboard/alert/SLI in this project, these query the BPA WebServer Extension's raw captured-transaction Elasticsearch index (`AIOps_BPAMetadata` datasource, `ao_aum_captured_data_2*`) directly -- per-request rows (`app_alias`, `bt_name`, `res_status`, `server_time`, client/server IPs, `transaction_id`, ...), not a NASS metric-catalog aggregate. Same create/check/delete shape and dashboard-import/export-edit-update upsert pattern as `bpa-demo-agent-health-dashboard.sh` (array-driven over all three). See the Dashboards section below for what each one shows. |
 
 ## Alerts
 
@@ -305,3 +306,66 @@ documentation written for newer builds:**
   self-check; verification instead relied on `dashboard-export`/`check`
   (correct panel count/types/titles) and direct `metric data` queries
   confirming every panel's underlying query returns real data.
+
+### `bpa-demo-application-dashboards.sh` -- BPA WebServer Extension raw-capture dashboards
+
+2026-08-21: the user exported three more BPA-related dashboards by hand
+from the console (Dashboards -> JSON Model -> Export) into
+`jm-dashboards/bpa/` and asked for them to be templated and created in
+the `"BPA-Demo"` folder the same way `bpa-demo-agent-health-dashboard.sh`
+was. Unlike every other dashboard/alert/SLI in this project, all three
+query the **`AIOps_BPAMetadata`** Grafana datasource directly against
+the BPA WebServer Extension's raw captured-transaction Elasticsearch
+index (`ao_aum_captured_data_2*`) -- one document per HTTP
+request/response `mod_caplugin` actually captured (`app_alias`,
+`bt_name`, `res_status`, `server_time`, `res_size`/`req_size`,
+`req_metadata_client_ip`/`req_metadata_server_ip`,
+`req_header_x_forwarded_for`, `reqUrl.keyword`, `transaction_id`), not a
+NASS metric-catalog aggregate. There is no metric-catalog equivalent of
+"list me the individual slow requests" -- that's exactly the gap these
+three fill.
+
+| Dashboard | Templating vars | Panels |
+|---|---|---|
+| `"BPA-Demo · Application Overview"` | `application` | Success Rate (piechart: HTTP <500 vs. 5xx), Average Response Time heatmap, Response Count (graph), and three "Performance Overview" tables -- dashboard time range, fixed last-24h, fixed last-7d -- each breaking ART/percentiles/size/volume/count/server-errors out per Business Transaction |
+| `"BPA-Demo · Application Drilldown"` | `application`, `bt_name` | Server Errors (graph), ART by Server IP (heatmap -- spot one slow backend instance), Unique Client IPs / Forwarded Client IPs (stat -- the latter is the real client when behind a reverse proxy), Performance Overview (BT-level) + Performance Overview Details (URL-level) tables |
+| `"BPA-Demo · Transaction Details Drilldown"` | `application`, `bt_name`, `httpStatus`, `resTime` (min response time threshold), `Filters` (ad hoc) | Transaction Details (by time/client IP/server IP), a "Total Filtered Transactions" stat, a raw-captured-document table (intentionally unaggregated -- narrow the filters first or it returns up to 10 000 raw documents), Filtered Transaction List keyed by `transaction_id` |
+
+Templating (from the raw export -> template step):
+- `id`/`uid`/`version`/`iteration`/`gnetId` stripped so a fresh import
+  mints its own (matches `bpa-demo-agent-health-dashboard.sh`'s
+  template convention).
+- Titles prefixed `"BPA-Demo · "` to match the existing dashboard in the
+  same folder, and the original `"Transaction Details  Drilldown"`
+  double-space typo fixed to a single space.
+- `tags` set to `["bpa-demo", "BPA"]` -- keeps the dashboards' own
+  built-in "BPA" cross-link dropdown (each dashboard's `links[1]` lists
+  every dashboard tagged `BPA`) working, while also matching this
+  project's `bpa-demo` tagging convention.
+- A human-readable `description` (the "i" hover icon) added to every
+  data panel that lacked one, grounded in the actual ES fields each
+  panel's `targets[].metrics`/`bucketAggs` query (verified by reading
+  each panel's raw JSON, not guessed from the title alone). The one
+  panel that already had a description (the response-time heatmap) was
+  left as-is.
+
+Same create/check/delete shape as `bpa-demo-agent-health-dashboard.sh`,
+just array-driven over all three keys in one script instead of one
+script per dashboard -- `create` uses `dashboard-import` for a fresh
+dashboard and the same export -> edit -> `dashboard-update` upsert
+workaround for an existing one (this build's `dashboard-import
+overwrite=true` and `dashboard-update`-from-bare-uid limitations apply
+identically here; see the landmines list above). `delete` prints manual
+console-removal instructions per dashboard, same as before. The
+`AIOps_BPAMetadata` datasource is referenced by plain name, not a
+templated `${DS_...}` input, so it must already exist on the target
+tenant -- true here since the source dashboards were exported directly
+from this same tenant.
+
+Verified live: `create` imported all three into the `"BPA-Demo"` folder
+with the expected panel counts/types/titles (`check`'s output matches
+the original exports exactly); re-running `create` upserted all three
+in place by uid (version 1 -> 2, no duplicates) instead of re-importing;
+`dashboard-export` after the upsert confirmed `tags`, `templating`, and
+every panel's `description` survived the export -> edit -> update
+round-trip.

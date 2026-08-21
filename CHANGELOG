@@ -5,6 +5,61 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-21 @ 16:40 - [Feat - templated and created three more BPA application dashboards from console exports]:
+  User exported three pre-existing BPA-related dashboards by hand from
+  the DX O2 console (Dashboards -> JSON Model -> Export) into
+  jm-dashboards/bpa/ and asked for them to be analyzed, given human-
+  readable panel descriptions, and created in the "BPA-Demo" folder the
+  same way bpa-demo-agent-health-dashboard.sh's dashboard already is.
+  Analysis: unlike every other dashboard/alert/SLI in this project, all
+  three query the AIOps_BPAMetadata Grafana datasource directly against
+  the BPA WebServer Extension's raw captured-transaction Elasticsearch
+  index (ao_aum_captured_data_2*) -- one document per HTTP
+  request/response mod_caplugin actually captured (app_alias, bt_name,
+  res_status, server_time, res_size/req_size, req_metadata_client_ip/
+  req_metadata_server_ip, req_header_x_forwarded_for, reqUrl.keyword,
+  transaction_id), not a NASS metric-catalog aggregate. Confirmed by
+  reading each panel's raw targets[].metrics/bucketAggs JSON, not
+  guessed from titles.
+  Added dxo2-scripts/templates/bpa-demo-{application-overview,
+  application-drilldown,transaction-details-drilldown}-dashboard.json:
+  - id/uid/version/iteration/gnetId stripped (fresh import mints its
+    own), matching bpa-demo-agent-health-dashboard.sh's convention.
+  - Titles prefixed "BPA-Demo <middle dot> " to match the folder's
+    existing dashboard; fixed a double-space typo in the original
+    "Transaction Details  Drilldown" title.
+  - tags set to ["bpa-demo", "BPA"] -- keeps each dashboard's own
+    built-in "BPA"-tag cross-link dropdown working, while matching this
+    project's tagging convention.
+  - A human-readable description (Grafana's "i" hover icon) added to
+    every data panel that lacked one:
+    * BPA-Demo Application Overview: Success Rate, Average Response
+      Time heatmap, Response Count, and 3 Performance Overview tables
+      (dashboard range / fixed 24h / fixed 7d).
+    * BPA-Demo Application Drilldown: Server Errors, ART by Server IP,
+      Unique/Forwarded Client IPs, Performance Overview (BT-level) +
+      Details (URL-level).
+    * BPA-Demo Transaction Details Drilldown: Transaction Details,
+      Total Filtered Transactions stat, raw-captured-document table,
+      Filtered Transaction List.
+  Added dxo2-scripts/bpa-demo-application-dashboards.sh: same
+  create/check/delete shape and dashboard-import/export-edit-update
+  upsert pattern as bpa-demo-agent-health-dashboard.sh, array-driven
+  over all three dashboards in one script instead of one script per
+  dashboard. No new CLI landmines beyond the ones that script's header
+  comment already documents (dashboardExportFile= param name, broken
+  overwrite=true upsert, dashboard-update not resolving a numeric id
+  from a bare uid on this build).
+  Verified live: `create` imported all three into the "BPA-Demo" folder
+  with the expected panel counts/types/titles (`check` output matches
+  the original exports exactly); re-running `create` upserted all three
+  in place by uid (version 1 -> 2, no duplicates); a post-upsert
+  dashboard-export confirmed tags, templating, and every panel's
+  description survived the export -> edit -> update round-trip.
+  Documented in dxo2-scripts/README.md (new Scripts row + Dashboards
+  subsection) and CLAUDE.md's dxo2-scripts narrative.
+
+------------------------------------------------------------------------------
 2026-08-21 @ 14:05 - [Fix - bpa-demo-agent-alerts.sh contradictory create/delete after parent Management Module was deleted and recreated]:
   User reported: create says all 12 alerts already exist, delete says none
   of them exist -- for the same ids. Root cause: at some point the "BPA-
