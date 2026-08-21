@@ -6,7 +6,8 @@
 # 1 alert on the SLO's rolling percentage, all bound to the "BPA-Demo"
 # Service):
 #
-#   "BPA-Demo Frontend Response Time" (sliGroupId 2955 in this tenant)
+#   "BPA-Demo Frontend Response Time" (sliGroupId 2958 in this tenant --
+#   see "Bug fixed 2026-08-21" below re: the id renumbering)
 #     SLI:   average of every Frontends|Apps|bpa-demo-*|URLs|<page>
 #            :Average Response Time (ms) reported by the PHP probe agent,
 #            5-min aggregation, sli_type Latency.
@@ -15,13 +16,13 @@
 #     Alert: caution below 98%, danger below 90% of the rolling SLO
 #            percentage.
 #
-#   "BPA-Demo Frontend Error Rate" (sliGroupId 2956)
+#   "BPA-Demo Frontend Error Rate" (sliGroupId 2959)
 #     SLI:   average of every Frontends|Apps|bpa-demo-*|URLs|<page>
 #            :Errors Per Interval, 5-min aggregation, sli_type Errors.
 #     SLO:   objective LE 2 per interval, target 98% rolling 1-day.
 #     Alert: same caution/danger thresholds as above.
 #
-#   "BPA-Demo Client-Side Page Load Time" (sliGroupId 2957)
+#   "BPA-Demo Client-Side Page Load Time" (sliGroupId 2960)
 #     SLI:   average of every Business Segment|BPA Demo|<page>:Average
 #            Page Load Time (ms) reported by the Browser Agent (via the
 #            BPA WebServer Agent's Logstash-APM-Plugin identity), 5-min
@@ -72,6 +73,22 @@
 # `internal::serviceNames` tag that `nass query` honors. Used the
 # per-URL pattern instead (same shape as the Response Time SLI), which is
 # visible and reliable.
+#
+# Bug fixed 2026-08-21 (doc-only, found during an unrelated docs audit):
+# every doc that recorded this rebuild's sliGroupIds (this header, CLAUDE.md,
+# TOBEDONE.md, the CHANGELOG entry) said 2955/2956/2957, but the live
+# tenant's `.state/bpa-demo-sli.env` and `sli list-groups` both show
+# 2958/2959/2960 -- the three groups actually live today. The state
+# file's mtime is a few minutes after the commit that documented
+# 2955-2957, so the groups were evidently deleted and recreated
+# (whether via a manual `delete` + `create` re-run or something else)
+# after that commit was made, and nothing re-verified the docs against
+# the new ids afterward. Corrected the header above, CLAUDE.md, and
+# TOBEDONE.md to the current ids; left the CHANGELOG's original
+# 13:27 entry untouched since it's a historical record of what was true
+# at that timestamp, not a live reference. `create`/`check`/`delete`
+# were never affected by this -- they always read the real id from
+# `.state/bpa-demo-sli.env`, never a hardcoded literal.
 #
 # Usage:
 #   dxo2-scripts/bpa-demo-sli.sh create   - create all 3 SLI groups (with

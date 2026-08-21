@@ -5,6 +5,38 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-21 @ 17:15 - [Docs - corrected stale SLI group ids found during a documentation-accuracy audit]:
+  User asked to verify all recent changes were documented in the right
+  places. While checking the SLI subsystem (following up on the
+  Client-Side Page Load Time "no matches" investigation earlier the same
+  day), found that every doc recording the 15:30 SLI/SLO rebuild's
+  sliGroupIds (bpa-demo-sli.sh's header comment, CLAUDE.md, TOBEDONE.md)
+  said 2955/2956/2957, but the live tenant no longer has those ids at
+  all -- .state/bpa-demo-sli.env and `sli list-groups` both show
+  2958/2959/2960 as the three groups that actually exist today, with no
+  2955-2957 duplicates lingering. The state file's mtime (15:34) is a
+  few minutes after the commit that recorded 2955-2957 (15:30-15:31),
+  so the groups were evidently deleted and recreated (manual re-run or
+  otherwise) shortly after that commit, and nothing re-verified the docs
+  against the new ids afterward.
+  Corrected the ids in bpa-demo-sli.sh's header comment, CLAUDE.md's
+  dxo2-scripts narrative, and TOBEDONE.md's SLI/SLO table -- each now
+  also carries a short note pointing at this entry. Deliberately did NOT
+  edit the 13:27 CHANGELOG entry below that originally recorded
+  2955/2956/2957 -- it's a historical record of what was true at that
+  timestamp, not a live reference, and this project's convention is to
+  never rewrite past CHANGELOG entries.
+  Also added a missing top-of-file "Bug fixed 2026-08-21" entry to
+  bpa-demo-agent-alerts.sh documenting the orphaned-Management-Module
+  self-heal fix from earlier today (the code fix itself, its CHANGELOG
+  entry, and its CLAUDE.md entry were already in place; only this
+  script's own header narrative -- which lists every other bug fix this
+  script has had -- was missing it).
+  No code behavior changed by any of this -- create/check/delete in both
+  scripts always read ids from their state files, never a hardcoded
+  literal, so the stale docs never affected actual script behavior.
+
+------------------------------------------------------------------------------
 2026-08-21 @ 16:40 - [Feat - templated and created three more BPA application dashboards from console exports]:
   User exported three pre-existing BPA-related dashboards by hand from
   the DX O2 console (Dashboards -> JSON Model -> Export) into
