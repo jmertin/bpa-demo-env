@@ -34,14 +34,55 @@ Reapplying the workaround (see `bug_php_probe.md`'s "Fix — Per-Page
 Wrapper Files" section) is the way back if browser-agent RUM data is
 needed again.
 
-**Also open, not investigated:** whether the PHP probe's separate
-`Frontends|Apps|<app>|URLs|<url>` response-time/error-rate metrics — the
-ones `dxo2-scripts/`'s alerts and SLIs are built on — depend on the same
-"Frontend start" gate as BA injection. All of this project's `nass query`
-verification of those metrics happened while the wrapper-file workaround
-was active (`SCRIPT_NAME` was never `/index.php` during that testing), so
-whether they still report per-URL data now is unverified. Check this
-first if per-URL alerts/SLIs go quiet after redeploying past this revert.
+**Resolved 2026-08-21:** the PHP probe's separate `Frontends|Apps|<app>|URLs|<url>`
+response-time/error-rate metrics do NOT depend on the same "Frontend
+start" gate as BA injection — confirmed live via `nass query-metric-data`
+that `Frontends|Apps|bpa-demo-docker|URLs|/index.php:Average Response Time (ms)`
+has fresh, actively-updating data post-revert. The real, confirmed change:
+the URL segment comes from `SCRIPT_NAME` (not `REQUEST_URI`), so every
+page now collapses into one shared `/index.php` bucket instead of
+distinct per-page ones — real per-business-page granularity is gone, but
+the metric itself is alive. See CLAUDE.md's "PHP probe injection" section
+for the full finding.
+
+### `dxo2-scripts/` PHP-tier metric groupings/content queries broke separately — fixed 2026-08-21
+
+Found while investigating the item above (unrelated to the front-controller
+revert itself): `bpa-demo-agent-alerts.sh`'s five PHP-tier metric groupings
+and `bpa-demo-service.sh`'s PHP-probe content group all hardcoded a
+trailing `(/usr/sbin/apache2)` on the agent identity, which stopped
+appearing once the 2026-07-15 UnknownAgent fix disabled the IA's
+remote-agent auto-naming (the thing that had been appending the running
+process's path). All had zero live matches. Fixed by making the suffix
+optional in both scripts plus the response-time/error-rate SLI templates
+and the agent-health dashboard template; re-ran each script's self-heal
+and confirmed live matches returned via `metricgrouping list-metrics` and
+a re-exported dashboard. The two SLI templates were fixed for future
+reapplication only — pushing the fix to the *live* SLI resources (2767,
+2768) needs the same manual-console workaround already documented for
+SLI 2767's other issue below, **unless** the newly-installed `dx-do`
+v7.2.1 CLI's new `sli set-sli-filter`/`sli set-group-filter` commands
+(absent in the v6.4.0 CLI this project used until now) can do it — not
+yet investigated, see the new item under "SLI / SLO" below.
+
+### `bpa-demo-universe.sh` — separate, older stale-identity bug, not yet fixed
+
+Found the same day as the item above, while grepping for the
+`(/usr/sbin/apache2)` literal, but a genuinely different root cause: this
+script's `METRIC_SOURCES` array still hardcodes the *pre-`DEPLOYMENT_NAME`/
+`DEPLOYMENT_POSTFIX`* literal identities (`bpa-demo-host`,
+`bpa-demo-php-probe`, `bpa-demo-infra-agent(/usr/sbin/apache2)`) as
+`EXACT` metric sources — these have never matched anything live since the
+2026-07-10 deployment-identity change, and this script was simply missed
+in that day's batch fix across the other `dxo2-scripts/` files (which all
+have their own dated "Bug fixed 2026-07-10" header entries; this one
+doesn't). Unlike the items above, not yet fixed — flagging for a
+follow-up pass rather than fixing opportunistically, since it wasn't part
+of what was being investigated. Fix shape would mirror the others:
+switch the two dead `EXACT` sources to wildcarded `REGEX` ones (the
+script's own header notes `metricSourceType` supports `REGEX`, just never
+used it) and re-run `create` to add them alongside the still-good third
+source.
 
 ---
 
@@ -59,6 +100,24 @@ out, or whether they need manual pruning.
 ---
 
 ## SLI / SLO
+
+### `dx-do` v7.2.1 may have unlocked SLI editing that v6.4.0 couldn't do — not yet investigated
+
+Every "needs manual console entry, no CLI path" conclusion below (and in
+`DX-O2_MANUAL_CONFIGURATION.md`) was reached against `dx-do` v6.4.0's `sli`
+command group (`export`/`import`/`exclude-service`/`include-service`/`list`
+only — no update, and `import` refuses outright on a name collision).
+`tools/` was updated to v7.2.1 on 2026-08-20/21, and that version's `sli`
+group looks structurally different: `sli list-groups`, `sli
+set-group-filter`, `sli set-sli-filter` (dry-run by default, structured
+`sliFilter.<field>.<condition>` args — equals/contains/not_contains/
+ends_with/regex), `sli status`. Whether these operate on the SLI groups
+this project's `bpa-demo-sli.sh`-created resources (2767, 2768, 2769)
+belong to, and whether they can finally push the filter/SLO fixes below
+to the *live* resources instead of just the templates, has not been
+checked — this is a promising lead, not a confirmed fix. Start with
+`sli list-groups` and `sli status` (read-only) before touching
+`set-sli-filter`/`set-group-filter` with `dry-run=false`.
 
 ### SLI 2767 ("BPA-Demo Frontend Response Time") filter still not fully correct
 

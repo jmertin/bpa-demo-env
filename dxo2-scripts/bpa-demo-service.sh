@@ -51,6 +51,19 @@
 #     applying: all four groups present, `MATCHES`-based ones showing the
 #     corrected regex, DxC group unchanged.
 #
+# Bug fixed 2026-08-21: PHP_PROBE_AGENT_PATTERN required a trailing
+# `(/usr/sbin/apache2)` on the agent segment -- dead since the 2026-07-15
+# UnknownAgent fix disabled the IA's remote-agent auto-naming (the thing
+# that was appending the running process's path to the identity in the
+# first place). Confirmed via `nass query-metadata` that the live source
+# is the bare `SuperDomain|bpa-demo-docker|php-probes|bpa-demo-docker`,
+# with no `(/usr/sbin/apache2)` variant anywhere in the catalog. Same root
+# cause as the identically-dated fix in bpa-demo-agent-alerts.sh -- see
+# that script's header for the full writeup. Fixed by making the suffix
+# optional rather than deleting it, so the pattern still matches if
+# auto-naming is ever re-enabled. `create`'s `set-content` self-heal picks
+# this up automatically on the next run.
+#
 # Usage:
 #   dxo2-scripts/bpa-demo-service.sh create        - create the Service, or
 #                                                     if it already exists,
@@ -91,7 +104,7 @@ readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly BPA_WEBSERVER_AGENT="Experience Collector Host|DxC Agent|Logstash-APM-Plugin"
 readonly APP_NAME_PATTERN='^bpa-demo-.*$'
 readonly INFRA_AGENT_PATTERN='^bpa-demo-.*\|bpa-demo-.*\|bpa-demo-.*$'
-readonly PHP_PROBE_AGENT_PATTERN='^bpa-demo-.*\|php-probes\|bpa-demo-.*\(/usr/sbin/apache2\)$'
+readonly PHP_PROBE_AGENT_PATTERN='^bpa-demo-.*\|php-probes\|bpa-demo-.*(\(/usr/sbin/apache2\))?$'
 
 ## Print usage information.
 usage() {

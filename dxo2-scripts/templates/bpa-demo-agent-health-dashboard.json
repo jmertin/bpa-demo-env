@@ -1303,7 +1303,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?(\\(/usr/sbin/apache2\\))?$"
                   }
                 ]
               }
@@ -1466,7 +1466,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?(\\(/usr/sbin/apache2\\))?$"
                   }
                 ]
               }
@@ -1629,7 +1629,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?(\\(/usr/sbin/apache2\\))?$"
                   }
                 ]
               }
@@ -1792,7 +1792,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?\\(/usr/sbin/apache2\\)$"
+                    "pattern": "SuperDomain\\|bpa-demo-${deployment:regex}\\|php-probes\\|bpa-demo-${deployment:regex}(%\\d+)?(\\(/usr/sbin/apache2\\))?$"
                   }
                 ]
               }

@@ -40,7 +40,7 @@
               "op": "SPEC",
               "sourceNameSpecifier": {
                 "op": "REGEX",
-                "pattern": "^SuperDomain\\|bpa-demo-[^|]+\\|php-probes\\|bpa-demo-[^|]+(%\\d+)?\\(/usr/sbin/apache2\\)$"
+                "pattern": "^SuperDomain\\|bpa-demo-[^|]+\\|php-probes\\|bpa-demo-[^|]+(%\\d+)?(\\(/usr/sbin/apache2\\))?$"
               },
               "attributeNameSpecifier": {
                 "op": "REGEX",
