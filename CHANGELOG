@@ -5,6 +5,43 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-21 @ 14:05 - [Fix - bpa-demo-agent-alerts.sh contradictory create/delete after parent Management Module was deleted and recreated]:
+  User reported: create says all 12 alerts already exist, delete says none
+  of them exist -- for the same ids. Root cause: at some point the "BPA-
+  Demo" Management Module was deleted and recreated (mm-3562 -> mm-45705),
+  cascade-deleting all 12 child Metric Groupings/Alerts this script had
+  created under the old one. .state/bpa-demo-agent-alerts.env never
+  detected this and kept referencing the dead ids under the old MM.
+  `create` reported "already created" from stale local state, then
+  crashed with exit 255 after healing only 1 of 12 keys: heal_one()'s
+  metricgrouping update call had no || fallback (unlike its sibling
+  list-metrics call), so a 404 from updating a metric grouping whose
+  parent MM no longer exists propagated straight through set -euo
+  pipefail and killed the script. `delete` technically succeeded for all
+  24 resources (12 alerts + 12 metric groupings, each caught by an
+  existing || info "already gone." fallback) but printed a noisy raw
+  Axios 404 dump for every one, which reasonably read as failure.
+  Fixed in dxo2-scripts/bpa-demo-agent-alerts.sh:
+  - Added grouping_exists() (metricgrouping detail probe, no output).
+  - heal_one() now checks grouping_exists first and falls through to
+    create_one() (recreate from scratch) instead of attempting a doomed
+    update on a nonexistent resource.
+  - cmd_delete()'s two delete loops (alerts, metric groupings) now check
+    existence first and print a clean "already gone -- nothing to
+    delete" message, skipping the delete call entirely instead of
+    attempting it and catching the resulting error noise.
+  Verified live: `delete` against the genuinely-broken state completed
+  cleanly (24 "already gone" messages, no crash, no noisy dumps) and
+  removed the stale state file. `create` from the now-clean state
+  recreated all 12 metric groupings + alerts fresh under mm-45705 with no
+  crash; spot-checked 3 (infra-availability, php-resp-time, browser-
+  page-load) via metricgrouping list-metrics output.format=json and
+  confirmed each has real live matches (1, 1, and 13 rows respectively).
+  Not investigated: why the parent Management Module was deleted and
+  recreated in the first place (manual console action vs. a related bug
+  in bpa-demo-management-module.sh) -- out of scope for this fix.
+
+------------------------------------------------------------------------------
 2026-08-21 @ 13:27 - [Feat - rebuilt BPA-Demo SLI/SLO monitoring from scratch under dx-do v7.2.1's SLI-group model]:
   User asked to rebuild SLI/SLO monitoring under the new model, following
   the entry below's finding that the tenant's old sliId 873/2767/2768/2769
