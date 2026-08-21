@@ -173,13 +173,3 @@ TRAFFIC_SLOWDOWN_PROBABILITY="0.12"
 TRAFFIC_SLOWDOWN_MIN_SECS="3"
 TRAFFIC_SLOWDOWN_MAX_SECS="12"
 TRAFFIC_LOG_LEVEL="INFO"
-
-# ── DX O2 tenant configuration scripts (dxo2-scripts/) ───────────────────────
-# DXO2_TENANT_USER_EMAIL: the login email of the DX O2 tenant user running
-#   dxo2-scripts/*.sh (matches the "user:" shown in dx-do's own startup log
-#   and ~/.dxdo/default.dxo2.config.json). Some tenant resources record a
-#   createdBy/created_by attribution field tied to this user -- notably the
-#   SLI import payload in dxo2-scripts/templates/*.json, which uses
-#   __DXO2_TENANT_USER_EMAIL__ as a placeholder substituted at runtime.
-#   Required by dxo2-scripts/bpa-demo-sli.sh; unused elsewhere.
-DXO2_TENANT_USER_EMAIL="user@example.com"

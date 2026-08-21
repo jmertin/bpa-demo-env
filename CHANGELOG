@@ -5,6 +5,67 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-21 @ 13:27 - [Feat - rebuilt BPA-Demo SLI/SLO monitoring from scratch under dx-do v7.2.1's SLI-group model]:
+  User asked to rebuild SLI/SLO monitoring under the new model, following
+  the entry below's finding that the tenant's old sliId 873/2767/2768/2769
+  no longer exist. dxo2-scripts/bpa-demo-sli.sh was rewritten from scratch
+  (the old export/import-based script and its three now-schema-
+  incompatible JSON templates deleted -- templates/bpa-demo-response-
+  time-sli.json, bpa-demo-error-rate-sli.json, bpa-demo-page-load-time-
+  sli.json) to create and self-heal 3 independent SLI groups purely via
+  CLI flags (sli create-group/add-slo/add-alert/set-group-filter), no
+  files needed:
+  - BPA-Demo Frontend Response Time (sliGroupId 2955): average of every
+    Frontends|Apps|bpa-demo-*|URLs|<page>:Average Response Time (ms) from
+    the PHP probe agent, 5-min aggregation. SLO: LE 200ms objective, 98%
+    target, rolling 1-day.
+  - BPA-Demo Frontend Error Rate (2956): same shape, Errors Per Interval,
+    SLO LE 2.
+  - BPA-Demo Client-Side Page Load Time (2957): Business Segment|BPA
+    Demo|<page>:Average Page Load Time (ms) from the Browser Agent
+    (Logstash-APM-Plugin identity). SLO LE 300ms. Currently registers
+    sliStatusCode 5 ("no metrics matching") -- expected, browser-agent
+    auto-injection is still reverted so there's no live client-side data,
+    same as the original SLI 2769's lifelong totalMetrics: 0 before the
+    reset.
+  Every group also got an alert on its SLO's rolling percentage (caution
+  <98%, danger <90%) -- a genuine improvement over the original three
+  SLIs, none of which ever had an alert wired to any SLO.
+  Two landmines found live while building this, both documented in the
+  script's header comment and DX-O2_MANUAL_CONFIGURATION.md: (1) the
+  `regex` filter condition is silently broken by a trailing $ anchor --
+  a pattern like foo$ matches zero metrics with no error, the identical
+  pattern without the trailing $ matches correctly (the match is
+  effectively start-anchored/prefix-style already). Every pattern reused
+  from elsewhere in this project needed its trailing $ stripped.
+  (2) The PHP probe's app-level metric aggregate (Frontends|Apps|bpa-
+  demo-docker:Errors Per Interval, no |URLs| segment) exists in the raw
+  NASS catalog but is not visible in sli filter-test's service-scoped
+  view for BPA-Demo -- only per-URL variants are. Used the per-URL
+  pattern for Error Rate instead (same shape as Response Time), which is
+  visible and reliable.
+  Verified live: sli status shows 2 of 3 groups healthy (sliStatusCode 0)
+  and the third's zero-match status is the expected/documented one;
+  re-running bpa-demo-sli.sh create against all 3 already-created groups
+  reapplied the filters cleanly (set-group-filter is idempotent) and
+  added no duplicate SLO/alert.
+  Also removed the now-unused DXO2_TENANT_USER_EMAIL variable from
+  .config.example and CLAUDE.md's ".config required variables" section
+  -- it was only ever needed by the old script's template-rendering step,
+  which no longer exists.
+  Updated CLAUDE.md's dxo2-scripts section, TOBEDONE.md's SLI/SLO
+  section (closing out every previously-open item: the filter-mixing
+  bug, the SLO layer never reaching live resources, no alert on any
+  SLO), dxo2-scripts/README.md, and DX-O2_MANUAL_CONFIGURATION.md (its
+  SLI section, previously the console-only-workaround record, marked
+  superseded since the new CLI path needs no console editing at all;
+  condensed the still-useful technical findings from that era as
+  institutional knowledge). Also caught and fixed a leftover
+  inconsistency from the prior commit: TOBEDONE.md's bpa-demo-universe.sh
+  entry still said "not yet fixed" despite that bug having been fixed in
+  the same commit.
+
+------------------------------------------------------------------------------
 2026-08-21 @ 12:39 - [Fix + Finding - bpa-demo-universe.sh's own stale-identity bug fixed; the tenant's SLI subsystem has been reset]:
   User asked to handle the two items flagged at the end of the entry
   below: (1) bpa-demo-universe.sh's separate, older stale-identity bug,

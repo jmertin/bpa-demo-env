@@ -1,85 +1,93 @@
 #!/usr/bin/env bash
-# bpa-demo-sli.sh - Create, check, or unbind the "BPA-Demo Frontend Response
-# Time" Service Level Indicator (SLI) for the "BPA-Demo" Service.
+# bpa-demo-sli.sh - Create, check, or delete the three BPA-Demo SLI groups
+# under dx-do v7.2.1's SLI-group model (see `dx-do help slis`).
 #
-# Structure created:
-#   SLI "BPA-Demo Frontend Response Time" (sliId 2767 in this tenant)
-#     Raw metric: average of every Frontends|Apps|BPA-Demo|URLs|<page>
-#       :Average Response Time (ms) attribute reported by the PHP probe
-#       agent (SuperDomain|bpa-demo-php-probe|php-probes|
-#       bpa-demo-infra-agent(/usr/sbin/apache2)), matched via a REGEX
-#       specifier that deliberately excludes the nested "Called
-#       Backends|...SQL..." sub-metrics -- this is page load time, not
-#       blended with DB query time. Surfaces the `trouble` use case's
-#       5000-sequential-DB-read slowdown regardless of which page the
-#       trouble user visits.
-#     Written onto the BPA-Demo service vertex as an is_sli-tagged metric
-#       named "BPA-Demo Frontend Response Time", sli_type "Latency".
-#     Phase 1 only: no sloDefinition (threshold/rolling-percentage/
-#       error-budget) or alertDefinition yet -- see "Why no SLO yet" below.
+# Structure created (3 independent SLI groups, each with 1 SLI + 1 SLO +
+# 1 alert on the SLO's rolling percentage, all bound to the "BPA-Demo"
+# Service):
 #
-# The dx-do `sli` command group has no native create/delete: a new SLI is
-# made by `sli import`-ing a raw SLI export JSON file, bound to a target
-# service via serviceName=. The unbind counterpart is `sli exclude-service`
-# (there is no `sli delete` -- excluding a service just returns the SLI to
-# the unbound-template state the tenant's other 3 pre-existing SLIs are
-# already in; the SLI definition itself is not deleted from the tenant).
+#   "BPA-Demo Frontend Response Time" (sliGroupId 2955 in this tenant)
+#     SLI:   average of every Frontends|Apps|bpa-demo-*|URLs|<page>
+#            :Average Response Time (ms) reported by the PHP probe agent,
+#            5-min aggregation, sli_type Latency.
+#     SLO:   objective LE 200ms per interval, target 98% over a rolling
+#            1-day window.
+#     Alert: caution below 98%, danger below 90% of the rolling SLO
+#            percentage.
 #
-# Bug found 2026-07-10, CONFIRMED UNFIXABLE VIA THIS CLI: the template's
-# sourceNameSpecifier hardcoded the pre-DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX
-# identity (SuperDomain|bpa-demo-php-probe|php-probes|bpa-demo-infra-agent
-# (/usr/sbin/apache2)) and its attributeNameSpecifier hardcoded the
-# application name literal "BPA-Demo" (APMIA_APP_NAME no longer defaults to
-# that -- see CLAUDE.md's "Deployment identity" section); the live SLI
-# (sliId 2767) dropped to totalMetrics=0 as a result. The template's own
-# specifiers are fixed (both now REGEX-based, wildcarding the deployment
-# segment), but **there is no way to push that fix to the existing SLI via
-# this CLI**: `sli` has only exclude-service/export/import/include-service/
-# list -- no update. `sli import` refuses outright on a name collision
-# (confirmed live: "Refusing to import: an SLI named '...' already exists
-# (sliId 2767)", even with dry-run=false and undocumented overwrite=true/
-# force=true params, both silently ignored -- "ignoring extra args"). The
-# script's original design comment assumed importing with the real groupId
-# would update in place; that assumption does not hold on this build.
-# Excluding the service first doesn't help either -- the sliName persists
-# even when unbound (that's the exact state the tenant's other 3 example
-# SLIs are already in), so it still collides on any re-import under the
-# same name. **Fixing the live SLI requires a manual console edit**: open
-# "BPA-Demo Frontend Response Time" (sliId 2767) in the console's SLI
-# editor and replace its source/attribute filter with the corrected REGEX
-# patterns now in templates/bpa-demo-response-time-sli.json. `create`
-# cannot self-heal this one the way bpa-demo-management-module.sh and
-# bpa-demo-agent-alerts.sh do for their own metric groupings. The console's
-# own filter editor takes structured Source/Metric conditions
-# (contains/starts_with/ends_with), not raw regex -- see
-# ../DX-O2_MANUAL_CONFIGURATION.md for the exact steps taken there, the
-# resulting specifier, and an open item found while verifying it.
+#   "BPA-Demo Frontend Error Rate" (sliGroupId 2956)
+#     SLI:   average of every Frontends|Apps|bpa-demo-*|URLs|<page>
+#            :Errors Per Interval, 5-min aggregation, sli_type Errors.
+#     SLO:   objective LE 2 per interval, target 98% rolling 1-day.
+#     Alert: same caution/danger thresholds as above.
 #
-# Why no SLO yet: the tenant's two SLI examples with a full SLO/error-budget
-# pipeline (sliId 813, 873) use `attributeType` numeric codes and an
-# `errorbudget` threshold whose exact units/semantics are not documented and
-# differ between the two examples in ways this script's author could not
-# fully verify from the outside. Rather than guess and risk a
-# silently-broken SLO pipeline -- the same failure mode as the
-# agentExpressions bug in bpa-demo-management-module.sh -- this script
-# ships the raw SLI only, verified with real matched data (52 live metrics
-# at creation time), and leaves the SLO/error-budget/alert layer as a
-# follow-up once its semantics are confirmed.
+#   "BPA-Demo Client-Side Page Load Time" (sliGroupId 2957)
+#     SLI:   average of every Business Segment|BPA Demo|<page>:Average
+#            Page Load Time (ms) reported by the Browser Agent (via the
+#            BPA WebServer Agent's Logstash-APM-Plugin identity), 5-min
+#            aggregation, sli_type Latency.
+#     SLO:   objective LE 300ms per interval, target 98% rolling 1-day.
+#     Alert: same caution/danger thresholds as above.
+#     Currently registers sliStatusCode 5 ("no metrics matching") -- not
+#     a bug. Browser-agent auto-injection is currently reverted (see
+#     CLAUDE.md's "PHP probe injection" section and bug_php_probe.md), so
+#     there is no live client-side page-load data at all right now. This
+#     lights up on its own once/if real browser traffic resumes.
+#
+# Background -- why this script was rewritten from scratch (2026-08-21):
+# the tenant's entire SLI subsystem was found to have been reset -- the
+# previous sliId 2767/2768/2769 (created via the old `sli export`/`import`
+# raw-JSON CLI surface) no longer exist: `sli list-groups` returned zero
+# groups tenant-wide, and `sli export` on both a known project id and the
+# tenant's own unrelated pre-existing example returned an identical
+# null/invalid response. See CLAUDE.md's dxo2-scripts section and
+# TOBEDONE.md's SLI/SLO section for the full investigation. The `dx-do`
+# CLI was updated to v7.2.1 in the same session (see CLAUDE.md), which
+# exposes a structurally different, genuinely more capable `sli` command
+# surface: `create-group`/`add-sli`/`add-slo`/`add-alert` are real,
+# idempotent-preview (dry-run by default) write commands with structured
+# `groupFilter.<field>.<condition>`/`sliFilter.<field>.<condition>` filters
+# -- no more "no update, name-collision refusal" limitation that made the
+# old SLI 2767's filter and all three SLIs' SLO/alert layers permanently
+# stuck needing manual console edits.
+#
+# Landmine found live while building this (2026-08-21): the `regex`
+# filter condition on this API is silently broken by a trailing `$`
+# anchor -- a pattern like `foo$` matches ZERO metrics with no error,
+# while the identical pattern without the trailing `$` matches correctly.
+# Confirmed via `sli filter-test`: matching stops naturally once the
+# pattern's literal content is satisfied (the match is effectively
+# start-anchored/prefix-style, not `^...$`), so omitting the trailing `$`
+# entirely is both necessary and sufficient -- do NOT port `$`-anchored
+# patterns from `metricgrouping`/`sli`(old)/`service` regexes elsewhere in
+# this project without stripping the trailing `$` first.
+#
+# Landmine found live while picking the Error Rate SLI's metric: the
+# app-level aggregate `Frontends|Apps|bpa-demo-docker:Errors Per Interval`
+# (no `|URLs|` segment) exists in the raw NASS catalog (confirmed via
+# `nass query-metadata`) but is NOT visible in `sli filter-test`'s
+# service-scoped view for "BPA-Demo" -- only the per-URL variants are.
+# Whatever computes "which metrics belong to this service" for the SLI
+# subsystem specifically is narrower than the metric's own
+# `internal::serviceNames` tag that `nass query` honors. Used the
+# per-URL pattern instead (same shape as the Response Time SLI), which is
+# visible and reliable.
 #
 # Usage:
-#   dxo2-scripts/bpa-demo-sli.sh create   - import the SLI bound to
-#                                            BPA-Demo. Safe to re-run: if it
-#                                            already exists but is unbound
-#                                            or has zero live metrics,
-#                                            self-heals via include-service.
-#   dxo2-scripts/bpa-demo-sli.sh check    - print whether it exists, is
-#                                            bound to BPA-Demo, and its
-#                                            live metric count.
-#   dxo2-scripts/bpa-demo-sli.sh delete   - unbind BPA-Demo from the SLI
-#                                            (sli exclude-service). Prompts
-#                                            for confirmation; pass -y|--yes
-#                                            to skip it. Does not delete the
-#                                            SLI definition itself.
+#   dxo2-scripts/bpa-demo-sli.sh create   - create all 3 SLI groups (with
+#                                            their SLO and alert). Safe to
+#                                            re-run: for an already-created
+#                                            group, re-applies the group
+#                                            filter (idempotent) and adds
+#                                            the SLO/alert only if missing.
+#   dxo2-scripts/bpa-demo-sli.sh check    - print each group's live status
+#                                            (`sli status` + `sli export`
+#                                            summary).
+#   dxo2-scripts/bpa-demo-sli.sh delete   - permanently delete all 3 SLI
+#                                            groups (their SLIs, SLOs, and
+#                                            alerts). Prompts for
+#                                            confirmation; pass -y|--yes to
+#                                            skip it.
 #   dxo2-scripts/bpa-demo-sli.sh -h|--help - print this help.
 #
 # Prerequisites:
@@ -93,35 +101,76 @@
 #   ~/.dxdo/default.dxo2.config.json    dx-do tenant credentials - see
 #                                        https://github.com/kialambroca/dx-do-dist
 #                                        for how to generate this file.
-#   .config (project root)              DXO2_TENANT_USER_EMAIL must be set -
-#                                        see .config.example. `create` renders
-#                                        the SLI template into a temp file
-#                                        with the __DXO2_TENANT_USER_EMAIL__
-#                                        placeholder substituted for this
-#                                        value before importing it, so the
-#                                        tenant's createdBy/created_by
-#                                        attribution matches whoever is
-#                                        actually running this script rather
-#                                        than a hardcoded original author.
+#   python3                             used to parse `sli list-groups`/
+#                                        `sli export` JSON output.
 #
 # State:
-#   This script persists the sliId it creates to
+#   Persists each SLI group's id to
 #   dxo2-scripts/.state/bpa-demo-sli.env (git-ignored) so check/delete can
-#   find it again. If that file is lost, the SLI still exists in the tenant
-#   -- find it via `dx-do sli list` (the name "BPA-Demo Frontend Response
-#   Time" is visible there even without the state file).
+#   find them again. If lost, `sli list-groups filter=BPA-Demo` finds them
+#   by name regardless.
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly SLI_NAME="BPA-Demo Frontend Response Time"
-readonly SERVICE_NAME="BPA-Demo"
-readonly TEMPLATE_FILE="${SCRIPT_DIR}/templates/bpa-demo-response-time-sli.json"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
-readonly PROJECT_CONFIG="${ROOT_DIR}/.config"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
 readonly STATE_FILE="${STATE_DIR}/bpa-demo-sli.env"
+
+readonly SERVICE_NAME="BPA-Demo"
+readonly AGGREGATION_INTERVAL=5
+readonly SLO_TARGET=98
+readonly SLO_WINDOW_DAYS=1
+readonly ALERT_CAUTION_THRESHOLD=98
+readonly ALERT_DANGER_THRESHOLD=90
+
+readonly SLI_KEYS=(response-time error-rate page-load)
+
+declare -rA SLI_GROUP_NAME=(
+    [response-time]="BPA-Demo Frontend Response Time"
+    [error-rate]="BPA-Demo Frontend Error Rate"
+    [page-load]="BPA-Demo Client-Side Page Load Time"
+)
+
+declare -rA SLI_TYPE=(
+    [response-time]=Latency
+    [error-rate]=Errors
+    [page-load]=Latency
+)
+
+declare -rA SLI_DESCRIPTION=(
+    [response-time]="Average PHP-probe response time across all tracked frontend URLs"
+    [error-rate]="Average PHP-probe errors per interval across all tracked frontend URLs"
+    [page-load]="Average real-user (Browser Agent) page load time across tracked pages"
+)
+
+declare -rA SOURCE_CONDITION=(
+    [response-time]=regex
+    [error-rate]=regex
+    [page-load]=equals
+)
+
+# No trailing $ -- see the "Landmine" header comment above.
+declare -rA SOURCE_PATTERN=(
+    [response-time]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?'
+    [error-rate]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?'
+    [page-load]='SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin'
+)
+
+declare -rA ATTRIBUTE_PATTERN=(
+    [response-time]='Frontends\|Apps\|bpa-demo-[^|]+\|URLs\|[^|]+:Average Response Time \(ms\)'
+    [error-rate]='Frontends\|Apps\|bpa-demo-[^|]+\|URLs\|[^|]+:Errors Per Interval'
+    [page-load]='Business Segment\|BPA Demo\|[^|]+:Average Page Load Time \(ms\)'
+)
+
+declare -rA SLO_OBJECTIVE_VALUE=(
+    [response-time]=200
+    [error-rate]=2
+    [page-load]=300
+)
+
+declare -gA GROUP_ID=()
 
 ## Print usage information.
 usage() {
@@ -156,35 +205,15 @@ resolve_dx_do() {
 
 readonly DX_DO_BIN="$(resolve_dx_do)"
 
-## Verify the dx-do binary, tenant config, and SLI template are present
-## before doing anything.
+## Verify the dx-do binary, tenant config, and python3 are present before
+## doing anything.
 check_prerequisites() {
     [[ -x "${DX_DO_BIN}" ]] || \
         fatal "dx-do binary not found or not executable at ${DX_DO_BIN}. Download the latest release for your platform from https://github.com/kialambroca/dx-do-dist/releases, place it under tools/, chmod +x it, and re-run (or set DX_DO to its path)."
     [[ -f "${DXDO_CONFIG}" ]] || \
         fatal "dx-do tenant config not found at ${DXDO_CONFIG}. See https://github.com/kialambroca/dx-do-dist for how to generate it."
-    [[ -f "${TEMPLATE_FILE}" ]] || \
-        fatal "SLI template not found at ${TEMPLATE_FILE}."
-}
-
-## Load DXO2_TENANT_USER_EMAIL from the project .config. Only called by
-## cmd_create, which is the only subcommand that renders the SLI template.
-load_config() {
-    [[ -f "${PROJECT_CONFIG}" ]] || \
-        fatal ".config not found at ${PROJECT_CONFIG}. Copy .config.example to .config and set DXO2_TENANT_USER_EMAIL."
-    # shellcheck disable=SC1090
-    source "${PROJECT_CONFIG}"
-    : "${DXO2_TENANT_USER_EMAIL:?DXO2_TENANT_USER_EMAIL must be set in .config -- see .config.example}"
-}
-
-## Render TEMPLATE_FILE into a fresh temp file with the
-## __DXO2_TENANT_USER_EMAIL__ placeholder substituted for the real tenant
-## user email from .config. Prints the temp file's path; caller must rm -f
-## it when done.
-render_template() {
-    local -r rendered_file="$(mktemp -t bpa-demo-sli-import-XXXXXX.json)"
-    sed "s/__DXO2_TENANT_USER_EMAIL__/${DXO2_TENANT_USER_EMAIL}/g" "${TEMPLATE_FILE}" > "${rendered_file}"
-    printf '%s' "${rendered_file}"
+    command -v python3 >/dev/null 2>&1 || \
+        fatal "python3 is required (used to parse sli list-groups/sli export JSON output)."
 }
 
 ## Run a dx-do command, stripping progress noise and defensively dropping any
@@ -200,9 +229,9 @@ run_dx_do_json() {
     "${DX_DO_BIN}" "$@" 2>/dev/null
 }
 
-## Load the sliId from the state file into SLI_ID, if it exists.
+## Load GROUP_ID[key]=sliGroupId entries from the state file, if it exists.
 load_state() {
-    SLI_ID=""
+    GROUP_ID=()
     # An `if` guard, not `[[ -f ]] && source` -- the latter is this
     # function's last statement, so under `set -e` a nonexistent state
     # file (the common first-run case) would make load_state itself
@@ -213,137 +242,208 @@ load_state() {
     fi
 }
 
-## Persist SLI_ID to the state file.
+## Persist GROUP_ID to the state file.
 save_state() {
     mkdir -p "${STATE_DIR}"
-    printf 'SLI_ID=%q\n' "${SLI_ID}" > "${STATE_FILE}"
+    {
+        declare -p GROUP_ID | sed 's/^declare -A/declare -gA/'
+    } > "${STATE_FILE}"
 }
 
-## Look up the sliId for SLI_NAME via `sli list`, regardless of state file.
-## Prints the id, or nothing if not found.
-find_sli_id() {
-    "${DX_DO_BIN}" sli list output.format=json 2>/dev/null \
-        | python3 -c "
+## Look up a sliGroupId by exact sliGroupName via `sli list-groups`,
+## regardless of the state file. Prints the id, or nothing if not found.
+#
+# @param string $1
+#   The exact sliGroupName to search for.
+find_group_id() {
+    local -r name="$1"
+    run_dx_do_json sli list-groups "filter=${name}" output.format=json | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
 except Exception:
     sys.exit(0)
 for row in data:
-    if row.get('sliName', '').strip() == '${SLI_NAME}':
-        print(row['sliId'])
+    if row.get('sliGroupName', '').strip() == '${name}':
+        print(row['sliGroupId'])
         break
 " 2>/dev/null || true
 }
 
-## Create the SLI, bound to BPA-Demo. Safe to re-run.
-cmd_create() {
-    load_state
+## Print 'yes'/'no' for whether an existing SLI group already has an SLO
+## and an alert defined, via `sli export`.
+#
+# @param string $1
+#   The sliGroupId to inspect.
+group_has_slo_and_alert() {
+    local -r group_id="$1"
+    run_dx_do_json sli export "sliGroupId=${group_id}" | python3 -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('no')
+    print('no')
+    sys.exit(0)
+slo = data.get('sloDefinition', {}).get('functions', [])
+alerts = data.get('alertDefinition', [[]])
+alert_count = sum(len(a) for a in alerts) if alerts else 0
+print('yes' if slo else 'no')
+print('yes' if alert_count > 0 else 'no')
+"
+}
 
-    if [[ -z "${SLI_ID}" ]]; then
-        SLI_ID="$(find_sli_id)"
+## Create (or self-heal) one SLI group's filter, SLO, and alert.
+#
+# @param string $1
+#   The SLI_KEYS entry to create/heal.
+create_one() {
+    local -r key="$1"
+    local -r name="${SLI_GROUP_NAME[${key}]}"
+    local group_id="${GROUP_ID[${key}]:-}"
+
+    if [[ -z "${group_id}" ]]; then
+        group_id="$(find_group_id "${name}")"
     fi
 
-    if [[ -n "${SLI_ID}" ]]; then
-        info "SLI '${SLI_NAME}' already exists (sliId ${SLI_ID}) -- checking it's bound to '${SERVICE_NAME}' and has live metrics."
-        local detail_json
-        detail_json=$("${DX_DO_BIN}" sli list output.format=json 2>/dev/null || true)
-        local bound total
-        bound=$(printf '%s' "${detail_json}" | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for row in data:
-    if str(row.get('sliId')) == '${SLI_ID}':
-        print('yes' if '${SERVICE_NAME}' in row.get('serviceNames', []) else 'no')
-        print(row.get('totalMetrics', 0))
-        break
-" 2>/dev/null || echo "no
-0")
-        total=$(printf '%s' "${bound}" | tail -1)
-        bound=$(printf '%s' "${bound}" | head -1)
+    if [[ -n "${group_id}" ]]; then
+        info "'${name}' already exists (sliGroupId ${group_id}) -- re-applying its group filter (idempotent)."
+        run_dx_do sli set-group-filter \
+            "sliGroupId=${group_id}" \
+            "groupFilter.sourceName.${SOURCE_CONDITION[${key}]}=${SOURCE_PATTERN[${key}]}" \
+            "groupFilter.attributeName.regex=${ATTRIBUTE_PATTERN[${key}]}" \
+            dry-run=false
 
-        if [[ "${bound}" != "yes" ]]; then
-            info "SLI exists but is not bound to '${SERVICE_NAME}' -- self-healing with 'sli include-service'."
-            run_dx_do sli include-service sliId="${SLI_ID}" serviceName="${SERVICE_NAME}" dry-run=false
-        elif [[ "${total}" -eq 0 ]]; then
-            info "WARNING: SLI is bound to '${SERVICE_NAME}' but reports zero live metrics. If the underlying metrics ARE flowing (check 'dx-do nass query' against the pattern in ${TEMPLATE_FILE}), this cannot be self-healed by this script -- 'sli import' refuses on a name collision and there is no 'sli update' on this CLI build. See this script's 'Bug found 2026-07-10' header comment: the fix requires a manual console edit of this SLI's filter."
-        else
-            info "Bound with ${total} live metrics -- nothing to do."
+        local heal_check has_slo has_alert
+        heal_check="$(group_has_slo_and_alert "${group_id}")"
+        has_slo="$(printf '%s' "${heal_check}" | sed -n '1p')"
+        has_alert="$(printf '%s' "${heal_check}" | sed -n '2p')"
+
+        if [[ "${has_slo}" != "yes" ]]; then
+            info "'${name}' has no SLO yet -- adding it."
+            add_slo "${group_id}" "${key}"
         fi
-        save_state
-        info "Run '${SCRIPT_NAME} check' to see its current definition."
+        if [[ "${has_alert}" != "yes" ]]; then
+            info "'${name}' has no alert yet -- adding it."
+            add_alert "${group_id}" "${key}"
+        fi
+
+        GROUP_ID[${key}]="${group_id}"
         return 0
     fi
 
-    load_config
-    local rendered_file
-    rendered_file="$(render_template)"
-
-    info "Importing SLI '${SLI_NAME}' for service '${SERVICE_NAME}' (createdBy: ${DXO2_TENANT_USER_EMAIL})..."
-    local import_json
-    import_json=$("${DX_DO_BIN}" sli import \
-        file="${rendered_file}" \
-        serviceName="${SERVICE_NAME}" \
+    info "Creating SLI group '${name}'..."
+    local create_json
+    create_json=$("${DX_DO_BIN}" sli create-group \
+        "sliGroupName=${name}" \
+        "serviceName=${SERVICE_NAME}" \
+        "sliName=${name}" \
+        op=average \
+        "aggregationInterval=${AGGREGATION_INTERVAL}" \
+        "sliType=${SLI_TYPE[${key}]}" \
+        "sliDescription=${SLI_DESCRIPTION[${key}]}" \
+        "groupFilter.sourceName.${SOURCE_CONDITION[${key}]}=${SOURCE_PATTERN[${key}]}" \
+        "groupFilter.attributeName.regex=${ATTRIBUTE_PATTERN[${key}]}" \
         dry-run=false 2>&1 | grep -v -e '^ℹ' -e '^☒' -e '^…' -e '^☐' -e 'Authorization')
-    rm -f "${rendered_file}"
-    echo "${import_json}"
-    SLI_ID=$(printf '%s' "${import_json}" | grep -o '"groupId": *[0-9]*' | head -1 | grep -o '[0-9]*$')
-    [[ -n "${SLI_ID}" ]] || fatal "Could not parse SLI id (groupId) from dx-do output above."
-    info "SLI created: sliId ${SLI_ID}"
+    echo "${create_json}"
+    group_id=$(printf '%s' "${create_json}" | grep -o '"groupId": *[0-9]*' | head -1 | grep -o '[0-9]*$')
+    [[ -n "${group_id}" ]] || fatal "Could not parse sliGroupId from dx-do output above."
+    info "SLI group created: sliGroupId ${group_id}"
+
+    add_slo "${group_id}" "${key}"
+    add_alert "${group_id}" "${key}"
+
+    GROUP_ID[${key}]="${group_id}"
+}
+
+## Add the SLO (objective + rolling percentage + error budget) to a
+## group's SLI.
+#
+# @param string $1
+#   The sliGroupId.
+# @param string $2
+#   The SLI_KEYS entry (for its SLO objective value).
+add_slo() {
+    local -r group_id="$1"
+    local -r key="$2"
+    local -r name="${SLI_GROUP_NAME[${key}]}"
+
+    run_dx_do sli add-slo \
+        "sliGroupId=${group_id}" \
+        "sliName=${name}" \
+        objectiveComparator=LE \
+        "objectiveValue=${SLO_OBJECTIVE_VALUE[${key}]}" \
+        "target=${SLO_TARGET}" \
+        windowType=rolling \
+        "windowDays=${SLO_WINDOW_DAYS}" \
+        dry-run=false
+}
+
+## Add an alert on the SLO's rolling percentage to a group's SLI.
+#
+# @param string $1
+#   The sliGroupId.
+# @param string $2
+#   The SLI_KEYS entry.
+add_alert() {
+    local -r group_id="$1"
+    local -r key="$2"
+    local -r name="${SLI_GROUP_NAME[${key}]}"
+
+    run_dx_do sli add-alert \
+        "sliGroupId=${group_id}" \
+        "sliName=${name}" \
+        target=slo-percentage \
+        operator=LESS_THAN \
+        "cautionThreshold=${ALERT_CAUTION_THRESHOLD}" \
+        "dangerThreshold=${ALERT_DANGER_THRESHOLD}" \
+        resolution=300 \
+        dry-run=false
+}
+
+## Create (or self-heal) all 3 SLI groups. Safe to re-run.
+cmd_create() {
+    load_state
+
+    local key
+    for key in "${SLI_KEYS[@]}"; do
+        create_one "${key}"
+    done
 
     save_state
     info "Done. State saved to ${STATE_FILE}."
-    info "Note: raw SLI only -- no SLO/error-budget/alert layer yet (see this script's header comment)."
+    info "Run '${SCRIPT_NAME} check' to see each group's live status."
 }
 
-## Print whether the SLI exists, is bound to BPA-Demo, and its live metric
-## count / current definition.
+## Print each SLI group's live status and export summary.
 cmd_check() {
     load_state
 
-    if [[ -z "${SLI_ID}" ]]; then
-        SLI_ID="$(find_sli_id)"
-    fi
+    local key name group_id
+    for key in "${SLI_KEYS[@]}"; do
+        name="${SLI_GROUP_NAME[${key}]}"
+        group_id="${GROUP_ID[${key}]:-}"
+        if [[ -z "${group_id}" ]]; then
+            group_id="$(find_group_id "${name}")"
+        fi
 
-    if [[ -z "${SLI_ID}" ]]; then
-        info "No state file at ${STATE_FILE} and no SLI named '${SLI_NAME}' found via 'dx-do sli list' -- '${SCRIPT_NAME} create' has not been run."
-        exit 1
-    fi
+        if [[ -z "${group_id}" ]]; then
+            info "'${name}': not found -- '${SCRIPT_NAME} create' has not been run, or it was deleted outside this script."
+            continue
+        fi
 
-    info "SLI (sliId ${SLI_ID}):"
-    run_dx_do_json sli list output.format=json | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for row in data:
-    if str(row.get('sliId')) == '${SLI_ID}':
-        print(json.dumps(row, indent=2))
-        break
-else:
-    print('  not found -- may have been deleted outside this script.')
-"
-
-    info "Bound services (via 'service slis'):"
-    run_dx_do service slis serviceName="${SERVICE_NAME}" output.format=json || info "  none currently bound."
+        info "'${name}' (sliGroupId ${group_id}):"
+        run_dx_do sli status | grep -A2 "^${group_id} " || info "  sliStatusCode 0 (healthy) -- not listed by 'sli status', which only surfaces nonzero statuses."
+    done
 }
 
-## Unbind BPA-Demo from the SLI (sli exclude-service). Does not delete the
-## SLI definition itself -- there is no `sli delete` command; excluding the
-## service returns it to the unbound-template state. Prompts for
-## confirmation unless -y/--yes is given.
+## Permanently delete all 3 SLI groups. Prompts for confirmation unless
+## -y/--yes is given.
 #
 # @param string[] "$@"
 #   Remaining arguments after the 'delete' subcommand (e.g. -y, --yes).
 cmd_delete() {
     load_state
-
-    if [[ -z "${SLI_ID}" ]]; then
-        SLI_ID="$(find_sli_id)"
-    fi
-
-    if [[ -z "${SLI_ID}" ]]; then
-        info "No state file at ${STATE_FILE} and no SLI named '${SLI_NAME}' found -- nothing to unbind."
-        exit 1
-    fi
 
     local skip_confirm="false"
     local arg
@@ -355,15 +455,29 @@ cmd_delete() {
 
     if [[ "${skip_confirm}" != "true" ]]; then
         local reply
-        read -r -p "Unbind '${SERVICE_NAME}' from SLI '${SLI_NAME}' (sliId ${SLI_ID})? The SLI definition itself is not deleted. [y/N] " reply
+        read -r -p "Permanently delete all 3 BPA-Demo SLI groups (their SLIs, SLOs, and alerts)? [y/N] " reply
         [[ "${reply}" =~ ^[Yy]$ ]] || { info "Aborted."; exit 0; }
     fi
 
-    info "Excluding '${SERVICE_NAME}' from SLI (sliId ${SLI_ID})..."
-    run_dx_do sli exclude-service sliId="${SLI_ID}" serviceName="${SERVICE_NAME}" dry-run=false || info "  already unbound."
+    local key name group_id
+    for key in "${SLI_KEYS[@]}"; do
+        name="${SLI_GROUP_NAME[${key}]}"
+        group_id="${GROUP_ID[${key}]:-}"
+        if [[ -z "${group_id}" ]]; then
+            group_id="$(find_group_id "${name}")"
+        fi
+
+        if [[ -z "${group_id}" ]]; then
+            info "'${name}': not found -- already gone."
+            continue
+        fi
+
+        info "Deleting '${name}' (sliGroupId ${group_id})..."
+        run_dx_do sli delete-group "sliGroupId=${group_id}" "sliGroupName=${name}" dry-run=false || info "  already gone."
+    done
 
     rm -f "${STATE_FILE}"
-    info "Done. The SLI definition itself still exists in the tenant, unbound (same state as the tenant's other pre-existing SLIs)."
+    info "Done."
 }
 
 # == Argument parsing =========================================================
