@@ -1,0 +1,1602 @@
+{
+  "dashboard": {
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "graphTooltip": 0,
+    "id": null,
+    "links": [
+      {
+        "icon": "doc",
+        "includeVars": true,
+        "keepTime": true,
+        "targetBlank": true,
+        "title": "PDF",
+        "tooltip": "View Report",
+        "type": "link"
+      },
+      {
+        "asDropdown": true,
+        "icon": "external link",
+        "includeVars": true,
+        "keepTime": true,
+        "tags": [
+          "BPA"
+        ],
+        "targetBlank": false,
+        "title": "BPA",
+        "tooltip": "",
+        "type": "dashboards",
+        "url": ""
+      }
+    ],
+    "panels": [
+      {
+        "aliasColors": {},
+        "breakPoint": "50%",
+        "cacheTimeout": null,
+        "combine": {
+          "label": "Others",
+          "threshold": 0
+        },
+        "datasource": "AIOps_BPAMetadata",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "fontSize": "80%",
+        "format": "string",
+        "gridPos": {
+          "h": 8,
+          "w": 5,
+          "x": 0,
+          "y": 0
+        },
+        "id": 7,
+        "interval": null,
+        "legend": {
+          "applySeriesName": false,
+          "percentage": true,
+          "regexPattern": "",
+          "show": true,
+          "values": true
+        },
+        "legendType": "Under graph",
+        "links": [],
+        "maxDataPoints": 3,
+        "nullPointMode": "connected",
+        "options": {
+          "options": {
+            "aliasColors": {},
+            "breakPoint": "50%",
+            "cacheTimeout": null,
+            "combine": {
+              "label": "Others",
+              "threshold": 0
+            },
+            "decimals": 0,
+            "fontSize": "80%",
+            "format": "string",
+            "interval": null,
+            "legend": {
+              "applySeriesName": false,
+              "dataList": [],
+              "header": "",
+              "hideEmpty": false,
+              "percentage": true,
+              "percentageDecimals": 0,
+              "regexData": [],
+              "regexPattern": "",
+              "show": true,
+              "sideWidth": 0,
+              "sort": null,
+              "sortDesc": null,
+              "values": true
+            },
+            "legendType": "Under graph",
+            "links": [],
+            "maxDataPoints": 3,
+            "nullPointMode": "connected",
+            "pieType": "donut",
+            "piechartDrilldownData": [],
+            "seriesnameSuggestion": [
+              "{__series_name}"
+            ],
+            "strokeWidth": 1,
+            "targets": [
+              {
+                "additionalColumns": [],
+                "bucketAggs": [
+                  {
+                    "$$hashKey": "object:300",
+                    "field": "@timestamp",
+                    "id": "2",
+                    "settings": {
+                      "interval": "auto",
+                      "min_doc_count": 0,
+                      "trimEdges": 0
+                    },
+                    "type": "date_histogram"
+                  }
+                ],
+                "datasourceType": "AIOps_Elasticsearch",
+                "hasJoin": false,
+                "metrics": [
+                  {
+                    "$$hashKey": "object:298",
+                    "alias": "Successful Transactions",
+                    "field": "res_status",
+                    "id": "1",
+                    "inlineScript": "(_value<500)?1:0;",
+                    "meta": {},
+                    "settings": {
+                      "missing": 0,
+                      "script": {
+                        "inline": "(_value<500)?1:0;"
+                      }
+                    },
+                    "type": "sum"
+                  },
+                  {
+                    "$$hashKey": "object:327",
+                    "alias": "Server Errors",
+                    "field": "res_status",
+                    "id": "3",
+                    "inlineScript": "(_value>499)?1:0;",
+                    "meta": {},
+                    "settings": {
+                      "missing": 0,
+                      "script": {
+                        "inline": "(_value>499)?1:0;"
+                      }
+                    },
+                    "type": "sum"
+                  }
+                ],
+                "primaryIndex": "ao_aum_captured_data_2.0*",
+                "refId": "A",
+                "secondaryIndex": "",
+                "secondaryMapCol": "",
+                "secondaryReplaceCol": "",
+                "timeField": "@timestamp"
+              }
+            ],
+            "valueName": "sum",
+            "valueNameLabel": "total"
+          }
+        },
+        "pieType": "donut",
+        "piechartDrilldownData": [],
+        "pluginVersion": "11.11.11",
+        "seriesnameSuggestion": [
+          "{__series_name}"
+        ],
+        "strokeWidth": 1,
+        "targets": [
+          {
+            "additionalColumns": [],
+            "bucketAggs": [
+              {
+                "$$hashKey": "object:300",
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "auto",
+                  "min_doc_count": 0,
+                  "trimEdges": 0
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "datasourceType": "AIOps_Elasticsearch",
+            "hasJoin": false,
+            "metrics": [
+              {
+                "$$hashKey": "object:298",
+                "alias": "Successful Transactions",
+                "field": "res_status",
+                "id": "1",
+                "inlineScript": "(_value<500)?1:0;",
+                "meta": {},
+                "settings": {
+                  "missing": 0,
+                  "script": {
+                    "inline": "(_value<500)?1:0;"
+                  }
+                },
+                "type": "sum"
+              },
+              {
+                "$$hashKey": "object:327",
+                "alias": "Server Errors",
+                "field": "res_status",
+                "id": "3",
+                "inlineScript": "(_value>499)?1:0;",
+                "meta": {},
+                "settings": {
+                  "missing": 0,
+                  "script": {
+                    "inline": "(_value>499)?1:0;"
+                  }
+                },
+                "type": "sum"
+              }
+            ],
+            "primaryIndex": "ao_aum_captured_data_2.0*",
+            "refId": "A",
+            "secondaryIndex": "",
+            "secondaryMapCol": "",
+            "secondaryReplaceCol": "",
+            "timeField": "@timestamp"
+          }
+        ],
+        "title": "Success Rate",
+        "transparent": true,
+        "type": "grafana-piechart-panel",
+        "valueName": "total",
+        "description": "Share of captured transactions with an HTTP response status below 500 (\"Successful Transactions\") vs. 500 or above (\"Server Errors\"), for the selected Application. Source: BPA WebServer Extension's raw captured-transaction feed (AIOps_BPAMetadata datasource, Elasticsearch index ao_aum_captured_data_2*) -- one document per HTTP request/response actually captured by mod_caplugin, not an aggregated metric-catalog rollup."
+      },
+      {
+        "cards": {
+          "cardPadding": null,
+          "cardRound": null
+        },
+        "color": {
+          "cardColor": "#b4ff00",
+          "colorScale": "sqrt",
+          "colorScheme": "interpolateOranges",
+          "exponent": 0.5,
+          "mode": "spectrum"
+        },
+        "dataFormat": "timeseries",
+        "datasource": "AIOps_BPAMetadata",
+        "description": "Distribution of server-side response time (server_time, ms) per transaction, bucketed over time -- the darker the color, the more transactions landed in that response-time range. Source: BPA WebServer Extension's raw captured-transaction feed (AIOps_BPAMetadata datasource, Elasticsearch index ao_aum_captured_data_2*) -- one document per HTTP request/response actually captured by mod_caplugin, not an aggregated metric-catalog rollup.",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 10,
+          "x": 5,
+          "y": 0
+        },
+        "heatmap": {},
+        "hideZeroBuckets": false,
+        "highlightCards": true,
+        "id": 9,
+        "legend": {
+          "show": true
+        },
+        "options": {
+          "axes": {
+            "dataFormat": "timeseries",
+            "reverseYBuckets": false,
+            "xAxis": {
+              "show": true
+            },
+            "yAxis": {
+              "format": "short",
+              "logBase": 1,
+              "show": true
+            },
+            "yBucketBoundMode": "auto",
+            "yBucketSize": 5
+          },
+          "display": {
+            "buckets": {
+              "hideZero": false
+            },
+            "color": {
+              "cardColor": "#b4ff00",
+              "colorScale": "sqrt",
+              "colorScheme": "interpolateOranges",
+              "exponent": 0.5,
+              "mode": "spectrum"
+            },
+            "legend": {
+              "show": true
+            },
+            "regex": {
+              "pattern": ""
+            },
+            "tooltip": {
+              "show": true,
+              "showHistogram": false
+            }
+          }
+        },
+        "pluginVersion": "11.11.11",
+        "reverseYBuckets": false,
+        "targets": [
+          {
+            "additionalColumns": [],
+            "bucketAggs": [
+              {
+                "$$hashKey": "object:866",
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "5m",
+                  "min_doc_count": 0,
+                  "trimEdges": 0
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "datasourceType": "AIOps_Elasticsearch",
+            "hasJoin": false,
+            "metrics": [
+              {
+                "$$hashKey": "object:864",
+                "field": "server_time",
+                "id": "1",
+                "meta": {},
+                "settings": {},
+                "type": "avg"
+              }
+            ],
+            "primaryIndex": "ao_aum_captured_data_2.0*",
+            "queryType": "randomWalk",
+            "refId": "A",
+            "secondaryIndex": "",
+            "secondaryMapCol": "",
+            "secondaryReplaceCol": "",
+            "timeField": "@timestamp"
+          }
+        ],
+        "timeFrom": null,
+        "timeShift": null,
+        "title": "Average Response Time (ms)",
+        "tooltip": {
+          "show": true,
+          "showHistogram": false
+        },
+        "transparent": true,
+        "type": "heatmap",
+        "xAxis": {
+          "show": true
+        },
+        "xBucketNumber": null,
+        "xBucketSize": null,
+        "yAxis": {
+          "decimals": null,
+          "format": "short",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true,
+          "splitFactor": null
+        },
+        "yBucketBound": "auto",
+        "yBucketNumber": null,
+        "yBucketSize": 5
+      },
+      {
+        "aliasColors": {},
+        "bars": false,
+        "dashLength": 10,
+        "dashes": false,
+        "datasource": "AIOps_BPAMetadata",
+        "description": "Executed responses per interval for the selected Application. Source: BPA WebServer Extension's raw captured-transaction feed (AIOps_BPAMetadata datasource, Elasticsearch index ao_aum_captured_data_2*) -- one document per HTTP request/response actually captured by mod_caplugin, not an aggregated metric-catalog rollup.",
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": []
+        },
+        "fill": 1,
+        "fillGradient": 5,
+        "gridPos": {
+          "h": 8,
+          "w": 9,
+          "x": 15,
+          "y": 0
+        },
+        "id": 10,
+        "legend": {
+          "avg": false,
+          "current": false,
+          "max": false,
+          "min": false,
+          "show": true,
+          "total": false,
+          "values": false
+        },
+        "lines": true,
+        "linewidth": 1,
+        "nullPointMode": "null",
+        "options": {
+          "aliasColors": {},
+          "axes": {
+            "xaxis": {
+              "buckets": null,
+              "mode": "time",
+              "name": null,
+              "show": true,
+              "values": []
+            },
+            "yaxes": [
+              {
+                "format": "short",
+                "label": null,
+                "logBase": 1,
+                "max": null,
+                "min": null,
+                "show": true
+              },
+              {
+                "format": "short",
+                "label": null,
+                "logBase": 1,
+                "max": null,
+                "min": null,
+                "show": true
+              }
+            ],
+            "yaxis": {
+              "align": false,
+              "alignLevel": null
+            }
+          },
+          "dashLength": 10,
+          "dashes": false,
+          "display": {
+            "bars": false,
+            "fill": 1,
+            "fillGradient": 5,
+            "lines": true,
+            "linewidth": 1,
+            "nullPointMode": "null",
+            "percentage": false,
+            "pointradius": 2,
+            "points": false,
+            "stack": false,
+            "steppedLine": false,
+            "tooltip": {
+              "shared": true,
+              "sort": 0,
+              "value_type": "individual"
+            }
+          },
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "thresholds": [],
+          "timeRegions": [],
+          "xaxis": {
+            "buckets": null,
+            "max": null,
+            "min": null,
+            "mode": "time",
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        "percentage": false,
+        "pluginVersion": "11.11.11",
+        "pointradius": 2,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "targets": [
+          {
+            "additionalColumns": [],
+            "bucketAggs": [
+              {
+                "$$hashKey": "object:866",
+                "field": "@timestamp",
+                "id": "2",
+                "settings": {
+                  "interval": "5m",
+                  "min_doc_count": 0,
+                  "trimEdges": 0
+                },
+                "type": "date_histogram"
+              }
+            ],
+            "datasourceType": "AIOps_Elasticsearch",
+            "hasJoin": false,
+            "metrics": [
+              {
+                "$$hashKey": "object:864",
+                "field": "server_time",
+                "id": "1",
+                "meta": {},
+                "settings": {},
+                "type": "count"
+              }
+            ],
+            "primaryIndex": "ao_aum_captured_data_2.0*",
+            "queryType": "randomWalk",
+            "refId": "A",
+            "secondaryIndex": "",
+            "secondaryMapCol": "",
+            "secondaryReplaceCol": "",
+            "timeField": "@timestamp"
+          }
+        ],
+        "thresholds": [],
+        "timeFrom": null,
+        "timeRegions": [],
+        "timeShift": null,
+        "title": "Response Count",
+        "tooltip": {
+          "shared": true,
+          "sort": 0,
+          "value_type": "individual"
+        },
+        "transparent": true,
+        "type": "graph",
+        "xaxis": {
+          "buckets": null,
+          "mode": "time",
+          "name": null,
+          "show": true,
+          "values": []
+        },
+        "yaxes": [
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          {
+            "format": "short",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          }
+        ],
+        "yaxis": {
+          "align": false,
+          "alignLevel": null
+        }
+      },
+      {
+        "datasource": "AIOps_BPAMetadata",
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "align": null,
+              "filterable": false
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Server Errors"
+              },
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "rgba(254, 254, 254, 0)",
+                        "transformMode": "",
+                        "transformValue": "",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "transformMode": "",
+                        "transformValue": "",
+                        "value": 1
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "BT Name"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 295
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "ART (ms) 95%"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": null
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "ART (ms) 90%"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": null
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 24,
+          "x": 0,
+          "y": 8
+        },
+        "id": 5,
+        "legend": {},
+        "options": {
+          "showHeader": true,
+          "sortBy": []
+        },
+        "pluginVersion": "7.5.14",
+        "targets": [
+          {
+            "additionalColumns": [],
+            "bucketAggs": [
+              {
+                "$$hashKey": "object:137",
+                "fake": true,
+                "field": "app_alias",
+                "id": "6",
+                "settings": {
+                  "min_doc_count": 1,
+                  "order": "desc",
+                  "orderBy": "_term",
+                  "size": "500"
+                },
+                "type": "terms"
+              }
+            ],
+            "datasourceType": "AIOps_Elasticsearch",
+            "hasJoin": false,
+            "metrics": [
+              {
+                "$$hashKey": "object:75",
+                "alias": "",
+                "field": "server_time",
+                "id": "1",
+                "meta": {},
+                "settings": {},
+                "type": "avg"
+              },
+              {
+                "$$hashKey": "object:316",
+                "field": "bt_name",
+                "id": "8",
+                "meta": {},
+                "settings": {},
+                "type": "cardinality"
+              },
+              {
+                "$$hashKey": "object:401",
+                "alias": "",
+                "field": "server_time",
+                "id": "9",
+                "meta": {},
+                "settings": {
+                  "missing": 0,
+                  "percents": [
+                    "90",
+                    "95",
+                    "99"
+                  ]
+                },
+                "type": "percentiles"
+              },
+              {
+                "$$hashKey": "object:1282",
+                "field": "res_status",
+                "id": "10",
+                "inlineScript": "(_value>499)?1:0;",
+                "meta": {},
+                "settings": {
+                  "script": {
+                    "inline": "(_value>499)?1:0;"
+                  }
+                },
+                "type": "sum"
+              },
+              {
+                "$$hashKey": "object:66",
+                "field": "select field",
+                "id": "12",
+                "type": "count"
+              },
+              {
+                "$$hashKey": "object:1570",
+                "alias": "Unique Client IPs",
+                "field": "req_metadata_client_ip",
+                "id": "13",
+                "meta": {},
+                "settings": {},
+                "type": "cardinality"
+              }
+            ],
+            "primaryIndex": "ao_aum_captured_data_2.0*",
+            "primaryMapCol": "app_alias",
+            "query": "app_alias:${application}",
+            "queryType": "randomWalk",
+            "refId": "A",
+            "secondaryIndex": "",
+            "secondaryMapCol": "",
+            "secondaryReplaceCol": "",
+            "timeField": "@timestamp"
+          }
+        ],
+        "timeFrom": null,
+        "title": "Performance Overview ",
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {
+                "Average": 2,
+                "Count": 6,
+                "Sum": 7,
+                "Unique Count": 1,
+                "app_alias": 0,
+                "p90.0 server_time": 3,
+                "p95.0 server_time": 4,
+                "p99.0 server_time": 5
+              },
+              "renameByName": {
+                "Average": "ART (ms)",
+                "Average res_size": "Ave Response Size",
+                "Average server_time": "ART (ms)",
+                "Count": "Total Response Count",
+                "Sum": "Server Errors",
+                "Sum res_size": "Response Volume (KB)",
+                "Sum res_status": "Server Errors",
+                "Unique Count": "BTs Tracked",
+                "app_alias": "Application",
+                "bt_name": "BT Name",
+                "p90.0 server_time": "ART (ms) 90%",
+                "p95.0 server_time": "ART (ms) 95%",
+                "p99.0 server_time": "ART (ms) 99%",
+                "res_status": "HTTP Status"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Success Transactions",
+              "binary": {
+                "left": "Total Response Count",
+                "operator": "-",
+                "reducer": "sum",
+                "right": "Server Errors"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Success Value",
+              "binary": {
+                "left": "Success Transactions",
+                "operator": "/",
+                "reducer": "sum",
+                "right": "Total Response Count"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              },
+              "replaceFields": false
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Successful %",
+              "binary": {
+                "left": "Success Value",
+                "operator": "*",
+                "reducer": "sum",
+                "right": "100"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              }
+            }
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Success Transactions": true,
+                "Success Value": true
+              },
+              "indexByName": {
+                "ART (ms)": 3,
+                "ART (ms) 90%": 4,
+                "ART (ms) 95%": 5,
+                "ART (ms) 99%": 6,
+                "Application": 0,
+                "BTs Tracked": 1,
+                "Server Errors": 8,
+                "Success Transactions": 9,
+                "Success Value": 10,
+                "Successful %": 2,
+                "Total Response Count": 7
+              },
+              "renameByName": {}
+            }
+          }
+        ],
+        "transparent": true,
+        "type": "table",
+        "description": "Per-Business-Transaction rollup for the dashboard's selected time range: average response time (ART) and its 90th/95th/99th percentiles, average response size, total response volume (KB), total response count, and server error count (HTTP 5xx). Source: BPA WebServer Extension's raw captured-transaction feed (AIOps_BPAMetadata datasource, Elasticsearch index ao_aum_captured_data_2*) -- one document per HTTP request/response actually captured by mod_caplugin, not an aggregated metric-catalog rollup."
+      },
+      {
+        "datasource": "AIOps_BPAMetadata",
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "align": null,
+              "filterable": false
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Server Errors"
+              },
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "rgba(254, 254, 254, 0)",
+                        "transformMode": "",
+                        "transformValue": "",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "transformMode": "",
+                        "transformValue": "",
+                        "value": 1
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "BT Name"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 295
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "ART (ms) 95%"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": null
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "ART (ms) 90%"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": null
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 24,
+          "x": 0,
+          "y": 15
+        },
+        "id": 4,
+        "legend": {},
+        "options": {
+          "showHeader": true,
+          "sortBy": []
+        },
+        "pluginVersion": "7.5.14",
+        "targets": [
+          {
+            "additionalColumns": [],
+            "bucketAggs": [
+              {
+                "$$hashKey": "object:137",
+                "fake": true,
+                "field": "app_alias",
+                "id": "6",
+                "settings": {
+                  "min_doc_count": 1,
+                  "order": "desc",
+                  "orderBy": "_term",
+                  "size": "500"
+                },
+                "type": "terms"
+              }
+            ],
+            "datasourceType": "AIOps_Elasticsearch",
+            "hasJoin": false,
+            "metrics": [
+              {
+                "$$hashKey": "object:75",
+                "alias": "",
+                "field": "server_time",
+                "id": "1",
+                "meta": {},
+                "settings": {},
+                "type": "avg"
+              },
+              {
+                "$$hashKey": "object:316",
+                "field": "bt_name",
+                "id": "8",
+                "meta": {},
+                "settings": {},
+                "type": "cardinality"
+              },
+              {
+                "$$hashKey": "object:401",
+                "alias": "",
+                "field": "server_time",
+                "id": "9",
+                "meta": {},
+                "settings": {
+                  "missing": 0,
+                  "percents": [
+                    "90",
+                    "95",
+                    "99"
+                  ]
+                },
+                "type": "percentiles"
+              },
+              {
+                "$$hashKey": "object:1282",
+                "field": "res_status",
+                "id": "10",
+                "inlineScript": "(_value>499)?1:0;",
+                "meta": {},
+                "settings": {
+                  "script": {
+                    "inline": "(_value>499)?1:0;"
+                  }
+                },
+                "type": "sum"
+              },
+              {
+                "$$hashKey": "object:66",
+                "field": "select field",
+                "id": "12",
+                "type": "count"
+              },
+              {
+                "$$hashKey": "object:1643",
+                "alias": "Unique Client IPs",
+                "field": "req_metadata_client_ip",
+                "id": "13",
+                "meta": {},
+                "settings": {},
+                "type": "cardinality"
+              }
+            ],
+            "primaryIndex": "ao_aum_captured_data_2*",
+            "primaryMapCol": "app_alias",
+            "query": "app_alias:${application}",
+            "queryType": "randomWalk",
+            "refId": "A",
+            "secondaryIndex": "",
+            "secondaryMapCol": "",
+            "secondaryReplaceCol": "",
+            "timeField": "@timestamp"
+          }
+        ],
+        "timeFrom": "24h",
+        "title": "Performance Overview (Last 24 Hours)",
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {
+                "Average": 2,
+                "Count": 6,
+                "Sum": 7,
+                "Unique Count": 1,
+                "app_alias": 0,
+                "p90.0 server_time": 3,
+                "p95.0 server_time": 4,
+                "p99.0 server_time": 5
+              },
+              "renameByName": {
+                "Average": "ART (ms)",
+                "Average res_size": "Ave Response Size",
+                "Average server_time": "ART (ms)",
+                "Count": "Total Response Count",
+                "Sum": "Server Errors",
+                "Sum res_size": "Response Volume (KB)",
+                "Sum res_status": "Server Errors",
+                "Unique Count": "BTs Tracked",
+                "app_alias": "Application",
+                "bt_name": "BT Name",
+                "p90.0 server_time": "ART (ms) 90%",
+                "p95.0 server_time": "ART (ms) 95%",
+                "p99.0 server_time": "ART (ms) 99%",
+                "res_status": "HTTP Status"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Success Transactions",
+              "binary": {
+                "left": "Total Response Count",
+                "operator": "-",
+                "reducer": "sum",
+                "right": "Server Errors"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Success Value",
+              "binary": {
+                "left": "Success Transactions",
+                "operator": "/",
+                "reducer": "sum",
+                "right": "Total Response Count"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              },
+              "replaceFields": false
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Successful %",
+              "binary": {
+                "left": "Success Value",
+                "operator": "*",
+                "reducer": "sum",
+                "right": "100"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              }
+            }
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Success Transactions": true,
+                "Success Value": true
+              },
+              "indexByName": {
+                "ART (ms)": 3,
+                "ART (ms) 90%": 4,
+                "ART (ms) 95%": 5,
+                "ART (ms) 99%": 6,
+                "Application": 0,
+                "BTs Tracked": 1,
+                "Server Errors": 8,
+                "Success Transactions": 9,
+                "Success Value": 10,
+                "Successful %": 2,
+                "Total Response Count": 7
+              },
+              "renameByName": {}
+            }
+          }
+        ],
+        "transparent": true,
+        "type": "table",
+        "description": "Same per-Business-Transaction rollup as \"Performance Overview\" above, but fixed to a rolling 24-hour window regardless of the dashboard's own time-range picker (panel-level time override). Source: BPA WebServer Extension's raw captured-transaction feed (AIOps_BPAMetadata datasource, Elasticsearch index ao_aum_captured_data_2*) -- one document per HTTP request/response actually captured by mod_caplugin, not an aggregated metric-catalog rollup."
+      },
+      {
+        "datasource": "AIOps_BPAMetadata",
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "align": null,
+              "filterable": false
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Server Errors"
+              },
+              "properties": [
+                {
+                  "id": "custom.displayMode",
+                  "value": "color-background"
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "rgba(254, 254, 254, 0)",
+                        "transformMode": "",
+                        "transformValue": "",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "transformMode": "",
+                        "transformValue": "",
+                        "value": 1
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "BT Name"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": 295
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "ART (ms) 95%"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": null
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "ART (ms) 90%"
+              },
+              "properties": [
+                {
+                  "id": "custom.width",
+                  "value": null
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 19,
+          "w": 24,
+          "x": 0,
+          "y": 22
+        },
+        "id": 3,
+        "legend": {},
+        "options": {
+          "showHeader": true,
+          "sortBy": []
+        },
+        "pluginVersion": "7.5.14",
+        "targets": [
+          {
+            "additionalColumns": [],
+            "bucketAggs": [
+              {
+                "$$hashKey": "object:137",
+                "fake": true,
+                "field": "app_alias",
+                "id": "6",
+                "settings": {
+                  "min_doc_count": 1,
+                  "order": "desc",
+                  "orderBy": "_term",
+                  "size": "500"
+                },
+                "type": "terms"
+              }
+            ],
+            "datasourceType": "AIOps_Elasticsearch",
+            "hasJoin": false,
+            "metrics": [
+              {
+                "$$hashKey": "object:75",
+                "alias": "",
+                "field": "server_time",
+                "id": "1",
+                "meta": {},
+                "settings": {},
+                "type": "avg"
+              },
+              {
+                "$$hashKey": "object:316",
+                "field": "bt_name",
+                "id": "8",
+                "meta": {},
+                "settings": {},
+                "type": "cardinality"
+              },
+              {
+                "$$hashKey": "object:401",
+                "alias": "",
+                "field": "server_time",
+                "id": "9",
+                "meta": {},
+                "settings": {
+                  "missing": 0,
+                  "percents": [
+                    "90",
+                    "95",
+                    "99"
+                  ]
+                },
+                "type": "percentiles"
+              },
+              {
+                "$$hashKey": "object:1282",
+                "field": "res_status",
+                "id": "10",
+                "inlineScript": "(_value>499)?1:0;",
+                "meta": {},
+                "settings": {
+                  "script": {
+                    "inline": "(_value>499)?1:0;"
+                  }
+                },
+                "type": "sum"
+              },
+              {
+                "$$hashKey": "object:66",
+                "field": "select field",
+                "id": "12",
+                "type": "count"
+              },
+              {
+                "$$hashKey": "object:1788",
+                "alias": "Unique Client IPs",
+                "field": "req_metadata_client_ip",
+                "id": "13",
+                "meta": {},
+                "settings": {},
+                "type": "cardinality"
+              }
+            ],
+            "primaryIndex": "ao_aum_captured_data_2*",
+            "primaryMapCol": "app_alias",
+            "query": "app_alias:${application}",
+            "queryType": "randomWalk",
+            "refId": "A",
+            "secondaryIndex": "",
+            "secondaryMapCol": "",
+            "secondaryReplaceCol": "",
+            "timeField": "@timestamp"
+          }
+        ],
+        "timeFrom": "7d",
+        "timeShift": null,
+        "title": "Performance Overview (Last 7 days)",
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {
+                "Average": 2,
+                "Count": 6,
+                "Sum": 7,
+                "Unique Count": 1,
+                "app_alias": 0,
+                "p90.0 server_time": 3,
+                "p95.0 server_time": 4,
+                "p99.0 server_time": 5
+              },
+              "renameByName": {
+                "Average": "ART (ms)",
+                "Average res_size": "Ave Response Size",
+                "Average server_time": "ART (ms)",
+                "Count": "Total Response Count",
+                "Sum": "Server Errors",
+                "Sum res_size": "Response Volume (KB)",
+                "Sum res_status": "Server Errors",
+                "Unique Count": "BTs Tracked",
+                "app_alias": "Application",
+                "bt_name": "BT Name",
+                "p90.0 server_time": "ART (ms) 90%",
+                "p95.0 server_time": "ART (ms) 95%",
+                "p99.0 server_time": "ART (ms) 99%",
+                "res_status": "HTTP Status"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Success Transactions",
+              "binary": {
+                "left": "Total Response Count",
+                "operator": "-",
+                "reducer": "sum",
+                "right": "Server Errors"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              }
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Success Value",
+              "binary": {
+                "left": "Success Transactions",
+                "operator": "/",
+                "reducer": "sum",
+                "right": "Total Response Count"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              },
+              "replaceFields": false
+            }
+          },
+          {
+            "id": "calculateField",
+            "options": {
+              "alias": "Successful %",
+              "binary": {
+                "left": "Success Value",
+                "operator": "*",
+                "reducer": "sum",
+                "right": "100"
+              },
+              "mode": "binary",
+              "reduce": {
+                "reducer": "sum"
+              }
+            }
+          },
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "Success Transactions": true,
+                "Success Value": true
+              },
+              "indexByName": {
+                "ART (ms)": 3,
+                "ART (ms) 90%": 4,
+                "ART (ms) 95%": 5,
+                "ART (ms) 99%": 6,
+                "Application": 0,
+                "BTs Tracked": 1,
+                "Server Errors": 8,
+                "Success Transactions": 9,
+                "Success Value": 10,
+                "Successful %": 2,
+                "Total Response Count": 7
+              },
+              "renameByName": {}
+            }
+          }
+        ],
+        "type": "table",
+        "description": "Same per-Business-Transaction rollup as \"Performance Overview\" above, but fixed to a rolling 7-day window regardless of the dashboard's own time-range picker (panel-level time override). Source: BPA WebServer Extension's raw captured-transaction feed (AIOps_BPAMetadata datasource, Elasticsearch index ao_aum_captured_data_2*) -- one document per HTTP request/response actually captured by mod_caplugin, not an aggregated metric-catalog rollup."
+      }
+    ],
+    "schemaVersion": 27,
+    "style": "dark",
+    "tags": [
+      "bpa-demo",
+      "BPA"
+    ],
+    "templating": {
+      "list": [
+        {
+          "allValue": null,
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": "AIOps_BPAMetadata",
+          "definition": "{\n   \"find\":\"terms\",\n   \"field\":\"app_alias\",\n   \"size\":1000\n}",
+          "description": null,
+          "error": null,
+          "excludeTime": false,
+          "hide": 0,
+          "includeAll": true,
+          "includeNone": false,
+          "label": "Application(s)",
+          "multi": true,
+          "name": "application",
+          "options": [],
+          "primaryIndex": "",
+          "query": "{\n   \"find\":\"terms\",\n   \"field\":\"app_alias\",\n   \"size\":1000\n}",
+          "refresh": 2,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 5,
+          "tagValuesQuery": "",
+          "tags": [],
+          "tagsQuery": "",
+          "type": "query",
+          "useTags": false
+        }
+      ]
+    },
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "BPA-Demo \u00b7 Application Overview",
+    "uid": null
+  }
+}
