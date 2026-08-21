@@ -92,6 +92,31 @@
 # prior behavior, which is why re-running `create` after the identity
 # change did not pick up this fix on its own).
 #
+# Bug fixed 2026-08-21: all 5 php-tier metric groupings (php-resp-time,
+# php-error-rate, php-concurrency, php-db-resp-time, php-db-query-storm)
+# had zero live matches. Root cause: AGENT_SOURCE_PATTERN[php] required a
+# trailing `(/usr/sbin/apache2)` on the source triplet's agent segment --
+# true when this pattern was written, but the 2026-07-15 UnknownAgent fix
+# (APMENV_INTROSCOPE_AGENT_AGENTAUTONAMINGENABLED=false +
+# APMENV_INTROSCOPE_REMOTEAGENT_PROBE_AGENT_NAME, see CLAUDE.md's "PHP
+# probe injection" section) disabled the IA's remote-agent auto-naming,
+# and that auto-naming turns out to be exactly what appended the running
+# process's executable path to the identity. Confirmed live via `nass
+# query-metadata`: the current source is the bare
+# `SuperDomain|bpa-demo-docker|php-probes|bpa-demo-docker`, with no
+# `(/usr/sbin/apache2)` anywhere in the catalog, stale or otherwise. Not
+# related to the front-controller/clean-URL revert (see CLAUDE.md's
+# "Front controller" section) -- a user question about that revert's
+# effect on bpa-demo-management-module.sh surfaced this as a separate,
+# pre-existing regression from the earlier identity fix that nothing had
+# re-verified against these five patterns since. Fixed by making the
+# suffix optional (`(\(/usr/sbin/apache2\))?$`) rather than deleting it
+# outright, so the pattern still matches if auto-naming is ever
+# re-enabled. The same stale literal was also found and fixed the same
+# day in bpa-demo-service.sh's PHP_PROBE_AGENT_PATTERN and the
+# response-time/error-rate SLI templates and the agent-health dashboard
+# template -- see each file's own history for its part of the fix.
+#
 # Usage:
 #   dxo2-scripts/bpa-demo-agent-alerts.sh create   - create the 12 metric
 #                                            groupings + alerts. Safe to
@@ -273,7 +298,7 @@ declare -rA ALERT_ERROR=(
 # 4-segment identity than the two agents `agent list` shows.
 declare -rA AGENT_SOURCE_PATTERN=(
     [infra]='SuperDomain\|bpa-demo-[^|]+\|bpa-demo-[^|]+\|bpa-demo-[^|]+(%\d+)?$'
-    [php]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?\(/usr/sbin/apache2\)$'
+    [php]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?$'
     [browser]='SuperDomain\|Experience Collector Host\|DxC Agent\|Logstash-APM-Plugin$'
 )
 

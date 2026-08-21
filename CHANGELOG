@@ -5,6 +5,91 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-21 @ 12:20 - [Fix - php-tier metric groupings/content query had zero live matches, unrelated to the front-controller revert]:
+  User asked whether bpa-demo-management-module.sh still creates the
+  management module accurately given the earlier front-controller revert
+  (some alerts matching, metric groupings apparently empty). Investigated
+  live via the newly-updated dx-do v7.2.1 CLI (real tenant, real auth):
+  - bpa-demo-management-module.sh's own metric grouping is NOT empty --
+    confirmed via metricgrouping list-metrics (7 live matches) and
+    nass query-metric-data (fresh, non-zero, actively-updating data on
+    Frontends|Apps|bpa-demo-docker|URLs|/index.php:Average Response Time
+    (ms)). This resolves the "open question" flagged in CLAUDE.md/
+    TOBEDONE.md during the front-controller revert: the PHP probe's
+    per-URL response-time metric is NOT gated by the same "Frontend
+    start" mechanism as browser-agent injection. What DID change: the
+    URL segment comes from SCRIPT_NAME (not REQUEST_URI), so every page
+    now collapses into one shared "/index.php" bucket instead of
+    distinct per-page ones -- real per-page granularity is gone, the
+    aggregate signal is not.
+  - The genuinely empty metric groupings the user was seeing are
+    bpa-demo-agent-alerts.sh's five PHP-tier ones (php-resp-time,
+    php-error-rate, php-concurrency, php-db-resp-time,
+    php-db-query-storm) plus bpa-demo-service.sh's PHP-probe content
+    group -- all confirmed 0 live matches. Root cause is unrelated to
+    the front-controller revert: these hardcoded a trailing
+    "(/usr/sbin/apache2)" on the agent source pattern, which stopped
+    appearing once the 2026-07-15 UnknownAgent fix disabled the IA's
+    remote-agent auto-naming (confirmed via nass query-metadata: the
+    live source is the bare SuperDomain|bpa-demo-docker|php-probes|
+    bpa-demo-docker, no such suffix anywhere in the catalog, stale or
+    current). Fixed by making the suffix optional
+    ("(\\(/usr/sbin/apache2\\))?$") rather than deleting it, in
+    bpa-demo-agent-alerts.sh, bpa-demo-service.sh, both response-time/
+    error-rate SLI templates, and all 4 occurrences in the agent-health
+    dashboard template. Re-ran each script's self-heal (agent-alerts.sh
+    create, service.sh create, dashboard.sh create) and verified live:
+    all 5 metric groupings now show 1 live match each, the Service's
+    content query preview returned 40 matched entities, and a fresh
+    dashboard export shows the corrected pattern.
+  - Found but NOT fixed, flagged in TOBEDONE.md instead: bpa-demo-
+    universe.sh has its own, older, unrelated stale-identity bug (still
+    hardcodes pre-DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX literal identities
+    as EXACT metric sources -- this script was simply missed in the
+    2026-07-10 batch identity fix that touched every other dxo2-scripts/
+    file). Discovered as a side effect of grepping for the apache2
+    suffix, not something this investigation was asked to fix.
+  - Also found and flagged, not yet investigated: the v7.2.1 dx-do CLI
+    (tools/ was updated from v6.4.0 to v7.2.1 on 2026-08-20/21, see that
+    entry below) exposes an "sli" command surface that looks
+    structurally different from v6.4.0's export/import-only one --
+    sli list-groups, sli set-group-filter, sli set-sli-filter (dry-run
+    by default, structured field/condition filter args). This may
+    finally allow pushing the long-standing SLI 2767 filter fix and the
+    SLO layer to the live resources instead of requiring manual console
+    entry, but this was not investigated -- flagged in TOBEDONE.md as a
+    promising lead, not a confirmed fix. The v7.2.1 CLI also dropped the
+    "metric" command group entirely (metric data/data-metric/id/
+    attributes) in favor of "nass query-metric-data"/"nass
+    query-metadata" -- all live verification in this entry used the new
+    commands; the dx-done-metric skill's documented "metric data"
+    syntax is now stale for this CLI version.
+  Updated CLAUDE.md's "PHP probe injection" section to resolve the open
+  question with the confirmed finding, and added dated "Bug fixed
+  2026-08-21" header entries to bpa-demo-agent-alerts.sh and
+  bpa-demo-service.sh matching this project's established documentation
+  convention.
+
+------------------------------------------------------------------------------
+2026-08-21 @ 11:47 - [Chore - tools/dx-do-linux-x64 updated v6.4.0 -> v7.2.1]:
+  User asked to update to the latest dx-do-linux-x64. tools/ is fully
+  git-ignored (local-only), so this touched no tracked file directly, but
+  is recorded here since it materially changed the command surface used
+  by the fix in the entry above. Downloaded from the public mirror
+  (github.com/kialambroca/dx-do-dist, release 7.2.1, published
+  2026-08-12) -- the canonical internal host was network-reachable this
+  time but its API returned 401 (no credentials configured here), same
+  fallback reasoning as the previous update. SHA256-verified against the
+  release's own SHA256SUMS asset before swapping. Old binary kept as
+  tools/dx-do-linux-x64.v6.4.0.bak. Confirmed working via --version,
+  --help, and a live "auth current" call against the real tenant.
+  v7.2.1 removed the "metric" command group entirely (metric data/
+  data-metric/id/attributes) in favor of "nass query-metric-data"/
+  "nass query-metadata", and the "sli" group gained set-sli-filter/
+  set-group-filter/list-groups/status -- see the entry above for where
+  this mattered.
+
+------------------------------------------------------------------------------
 2026-08-20 @ 14:39 - [Feat - optional troubleshooting override for wily_php_agent.so]:
   User asked for a way to swap in a standalone wily_php_agent.so binary
   (e.g. a patched build from Broadcom support) instead of the one baked
