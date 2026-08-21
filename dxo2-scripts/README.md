@@ -52,7 +52,7 @@ command and remove them manually (each script's header comment says which).
 | `bpa-demo-agent-alerts.sh` | 12 Metric Groupings + Alerts across three telemetry sources, all attached to the same `"BPA-Demo"` Management Module -- five for the Infrastructure Agent's DB Monitor extension (availability, connection refusals, connection pool pressure, buffer pool cache hit rate, slow query rate), five for the PHP probe agent (app response time, error rate, concurrency, DB backend response time, DB backend query volume), and two for the browser/RUM pipeline (page load time, page hits per interval -- attributed to a `Logstash-APM-Plugin` identity that never shows up in `dx-done agent list`, scoped in anyway via an explicit `sourceNamePattern` since `managementmodule update` is broken on this dx-do version). Depends on `bpa-demo-management-module.sh create` having been run first. Thresholds are measured from live metric windows, not guessed -- see the script's header comment for the readings behind each one. |
 | `bpa-demo-universe.sh` | The `"BPA Demo universe"` **APM Universe** (`dx-do apm-universe` -- see `bpa-demo-services-universe.sh` for the other, separate universe type the tenant also needs) -- a topology/metric-data scope populated with 3 explicit metric-source agent paths, covering all 4 of the app's named telemetry identities: the Infrastructure Agent, the PHP probe agent, and the BPA WebServer Agent (which covers both the "BPA agent" and the "Browser agent" -- see the Alerts section above for why there's no fourth, independent Browser Agent entity). Unlike a Service, a Universe has no content-query membership mechanism over the CLI -- sources are added one at a time via `apm-universe add-metric-source`, and `create` self-heals by adding any of the 3 that are missing. `apm-universe create` does not honor `dry-run` (silently ignored, creates for real immediately) -- see the script's header comment for this and other CLI landmines found while writing it. **Known limitation:** the Triage/Topology console view is driven by a different, legacy-shaped filter (`views.tas`) that `add-metric-source` never touches -- see `BUGS` for the full writeup; fixing it needs a manual console step. |
 | `bpa-demo-services-universe.sh` | The `"BPA Demo"` **O2/Platform Universe** (`dx-do o2-universe` -- a.k.a. "Services Universe" in the console; a different resource from the APM Universe above, with its own id space) -- created because the tenant needs both universe types until the product merges them. `o2-universe create` accepts no scoping parameters at all (extras are silently ignored), so a CLI-created Universe is always unscoped (`{"filter": {"op": "ALL"}}` on both its `tas` and `nass` views) -- **confirmed to crash the console's edit UI** when opened in that state (2026-07-07; see `dx-do-o2-universe-issue.md`). There is no `update`/`add-view` command to narrow it afterward either, so this script deliberately does **not** fall back to `o2-universe create` when its state file is missing/stale -- it fails with instructions for manual console creation instead (pick a Service scope in the console's own creation wizard, which avoids the crash entirely). The currently-tracked instance (`VIEW618`) was created that way. `delete` still uses `apm-universe delete`, which works across both universe types since `o2-universe` has no `delete` command of its own. |
-| `bpa-demo-sli.sh` | The `"BPA-Demo Frontend Response Time"` **SLI** (Service Level Indicator, `dx-do sli` -- see the SLIs section below) bound to the `"BPA-Demo"` Service. `sli` has no native create/delete: `create` runs `sli import` against a tracked JSON template (`templates/bpa-demo-response-time-sli.json`), and `delete` runs `sli exclude-service` (unbinds the service; the SLI definition itself is never deleted -- there is no command for that). Raw SLI only for now, no SLO/error-budget/alert layer -- see the script's header comment for why. |
+| `bpa-demo-sli.sh` | Three **SLI groups** (Service Level Indicators, `dx-do sli` -- see the SLIs section below) bound to the `"BPA-Demo"` Service: Frontend Response Time, Frontend Error Rate, Client-Side Page Load Time. Each has an SLO (rolling-percentage/error-budget) and an alert on the SLO's rolling percentage. Uses `dx-do` v7.2.1's structured `sli create-group`/`add-slo`/`add-alert`/`set-group-filter` surface -- no JSON templates, no file-based import. `delete` runs `sli delete-group`, which really does delete the SLI, its SLO, and its alerts (unlike the old CLI's service-unbind-only `exclude-service`). |
 | `bpa-demo-agent-health-dashboard.sh` | The `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder: one traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. Includes a "Deployment" dropdown variable (`docker`/`k8s`, defaults to "All") so the Infrastructure Agent/PHP Probe panels can be scoped to one deployment or show both together -- see "2026-07-10" below for why that's needed and two bugs found shipping it. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert; `dashboard-import`'s documented `preserveUid=true overwrite=true` upsert doesn't work on this build -- `overwrite=` is silently ignored), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
 
 ## Alerts
@@ -104,32 +104,44 @@ Browser Agent/BA snippet, relayed into APM by the BPA plugin).
 An SLI (Service Level Indicator) is a different resource type from the
 Alerts above: instead of a threshold on a raw agent metric, it's a metric
 *computed and written onto the Service's own topology vertex*, tagged
-`is_sli: true`. `dx-do`'s `sli` command group has no native create/delete --
-a new SLI is made by `sli import`-ing a raw SLI export JSON file bound to a
-target service (`serviceName=`); the unbind counterpart is `sli
-exclude-service` (there is no `sli delete`).
+`is_sli: true`. As of `dx-do` v7.2.1, `sli` has a real, structured
+command surface (`create-group`, `add-sli`, `add-slo`, `add-alert`,
+`set-group-filter`, `delete-group`, all dry-run by default) -- see
+`dx-do help slis` for the full SLI-group/SLI/SLO/alert model. This
+replaced the older `sli export`/`import`-only surface (no update, refused
+on name collision) after the tenant's entire SLI subsystem was found to
+have been reset on 2026-08-21 -- see CLAUDE.md's dxo2-scripts section and
+TOBEDONE.md's SLI/SLO section for the investigation.
 
-| SLI | Computes | Bound to |
+`bpa-demo-sli.sh` creates 3 independent SLI groups, each with 1 SLI + 1
+SLO (objective/rolling-percentage/error-budget) + 1 alert (on the SLO's
+rolling percentage), all bound to the `BPA-Demo` Service:
+
+| SLI group | Computes | SLO objective |
 |---|---|---|
-| BPA-Demo Frontend Response Time | Average of every `Frontends\|Apps\|BPA-Demo\|URLs\|<page>:Average Response Time (ms)` metric from the PHP probe agent, via a `REGEX` specifier that excludes nested `Called Backends\|...SQL...` sub-metrics -- page load time, not blended with DB query time. Surfaces the `trouble` use case's slowdown regardless of which page the trouble user visits. | `BPA-Demo` Service |
+| BPA-Demo Frontend Response Time | Average of every `Frontends\|Apps\|bpa-demo-*\|URLs\|<page>:Average Response Time (ms)` from the PHP probe agent | `LE 200`ms, 98% target, rolling 1-day |
+| BPA-Demo Frontend Error Rate | Average of every `Frontends\|Apps\|bpa-demo-*\|URLs\|<page>:Errors Per Interval` from the PHP probe agent | `LE 2`, 98% target, rolling 1-day |
+| BPA-Demo Client-Side Page Load Time | Average of every `Business Segment\|BPA Demo\|<page>:Average Page Load Time (ms)` from the Browser Agent (`Logstash-APM-Plugin` identity) | `LE 300`ms, 98% target, rolling 1-day |
 
-Raw SLI only (`sliId 2767` in this tenant, 52 live matched metrics at
-creation). No SLO (rolling-percentage/error-budget) or alert layer yet --
-the tenant's two existing SLI examples with a full SLO pipeline use
-`attributeType` numeric codes and an `errorbudget` threshold whose exact
-semantics differ between the two examples in ways that couldn't be fully
-verified from the outside; see `bpa-demo-sli.sh`'s header comment for the
-full reasoning. Treat the SLO layer as a follow-up once those semantics are
-confirmed.
+Every alert fires caution below 98% / danger below 90% of the SLO's
+rolling percentage. The Page Load Time group currently registers
+`sliStatusCode 5` ("no metrics matching") -- not a bug, browser-agent
+auto-injection is currently reverted (see CLAUDE.md's "PHP probe
+injection" section), so there's no live client-side data at all right
+now; it lights up on its own once/if that resumes.
 
-The import payload's `createdBy`/`created_by` attribution is not hardcoded
-to a specific tenant user: the tracked template
-(`templates/bpa-demo-response-time-sli.json`) carries a
-`__DXO2_TENANT_USER_EMAIL__` placeholder, and `bpa-demo-sli.sh create`
-substitutes it at runtime from `DXO2_TENANT_USER_EMAIL` in `.config` (see
-`.config.example`) -- required so a different tenant user running this
-script gets their own login attributed, since the original author's login
-may not exist in someone else's tenant.
+**Landmine found while building this:** the `regex` filter condition is
+silently broken by a trailing `$` anchor -- `foo$` matches zero metrics
+with no error, `foo` (same pattern, no anchor) matches correctly. The
+match is effectively start-anchored/prefix-style already; omit trailing
+`$` entirely on any `sli` filter pattern. See `bpa-demo-sli.sh`'s header
+comment for the full writeup, including a second landmine (the PHP
+probe's app-level metric aggregates aren't visible in the SLI
+subsystem's service-scoped view, only per-URL ones are).
+
+`create` is safe to re-run: for an existing group it re-applies the group
+filter (`set-group-filter` is idempotent) and adds the SLO/alert only if
+missing, rather than erroring on the old CLI's name-collision refusal.
 
 ## Dashboards
 

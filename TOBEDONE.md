@@ -57,32 +57,29 @@ process's path). All had zero live matches. Fixed by making the suffix
 optional in both scripts plus the response-time/error-rate SLI templates
 and the agent-health dashboard template; re-ran each script's self-heal
 and confirmed live matches returned via `metricgrouping list-metrics` and
-a re-exported dashboard. The two SLI templates were fixed for future
-reapplication only — pushing the fix to the *live* SLI resources (2767,
-2768) needs the same manual-console workaround already documented for
-SLI 2767's other issue below, **unless** the newly-installed `dx-do`
-v7.2.1 CLI's new `sli set-sli-filter`/`sli set-group-filter` commands
-(absent in the v6.4.0 CLI this project used until now) can do it — not
-yet investigated, see the new item under "SLI / SLO" below.
+a re-exported dashboard. The two old SLI templates were superseded
+entirely by the 2026-08-21 SLI/SLO rebuild below (raw CLI flags now, no
+template files at all) rather than patched in place.
 
-### `bpa-demo-universe.sh` — separate, older stale-identity bug, not yet fixed
+### Resolved 2026-08-21 — `bpa-demo-universe.sh`'s own, separate stale-identity bug fixed
 
-Found the same day as the item above, while grepping for the
-`(/usr/sbin/apache2)` literal, but a genuinely different root cause: this
-script's `METRIC_SOURCES` array still hardcodes the *pre-`DEPLOYMENT_NAME`/
-`DEPLOYMENT_POSTFIX`* literal identities (`bpa-demo-host`,
-`bpa-demo-php-probe`, `bpa-demo-infra-agent(/usr/sbin/apache2)`) as
-`EXACT` metric sources — these have never matched anything live since the
-2026-07-10 deployment-identity change, and this script was simply missed
-in that day's batch fix across the other `dxo2-scripts/` files (which all
-have their own dated "Bug fixed 2026-07-10" header entries; this one
-doesn't). Unlike the items above, not yet fixed — flagging for a
-follow-up pass rather than fixing opportunistically, since it wasn't part
-of what was being investigated. Fix shape would mirror the others:
-switch the two dead `EXACT` sources to wildcarded `REGEX` ones (the
-script's own header notes `metricSourceType` supports `REGEX`, just never
-used it) and re-run `create` to add them alongside the still-good third
-source.
+Found while grepping for the `(/usr/sbin/apache2)` literal above, but a
+genuinely different root cause: this script's `METRIC_SOURCES` array
+still hardcoded the *pre-`DEPLOYMENT_NAME`/`DEPLOYMENT_POSTFIX`* literal
+identities (`bpa-demo-host`, `bpa-demo-php-probe`,
+`bpa-demo-infra-agent(/usr/sbin/apache2)`) as `EXACT` metric sources —
+confirmed via `apm-universe export` that neither had ever actually been
+added to the live Universe; this script was simply missed in the
+2026-07-10 batch fix every other `dxo2-scripts/` file got. Fixed by
+switching both to wildcarded `REGEX` patterns (reusing the ones already
+fixed in `bpa-demo-agent-alerts.sh`/`bpa-demo-service.sh`). Also fixed a
+second bug found live while verifying: the self-heal's presence check
+didn't account for JSON backslash-escaping and kept re-adding duplicate
+`REGEX` specifiers on every re-run — fixed by escaping before the check.
+`apm-universe` has no "remove metric source" command, so the pre-existing
+stale `EXACT` entries and two duplicate `REGEX` pairs added during
+testing remain in the live Universe — harmless (the specifier list is
+`OR`'d) but not cleaned up.
 
 ---
 
@@ -101,84 +98,54 @@ out, or whether they need manual pruning.
 
 ## SLI / SLO
 
-### The tenant's entire SLI subsystem has been reset — sliId 873/2767/2768/2769 are all gone
+### Resolved 2026-08-21 — SLI/SLO monitoring rebuilt from scratch under the new SLI-group model
 
-Investigated 2026-08-21 whether `dx-do` v7.2.1's new `sli` command group
-(`list-groups`, `set-group-filter`, `set-sli-filter`, `status`, etc. —
-structurally quite different from v6.4.0's `export`/`import`-only surface,
-see the CHANGELOG entry for that CLI update) could finally push the
-filter/SLO fixes below to the *live* SLI resources instead of just the
-templates. It cannot, for a more fundamental reason than a CLI
-limitation: **the resources themselves no longer exist.**
+The tenant's entire SLI subsystem was found to have been reset —
+`sliId` 873/2767/2768/2769 (the old raw-`sli export`/`import`-era
+resources) were all gone: `sli list-groups` returned `[]` tenant-wide,
+`sli export` on both a project id and the tenant's own unrelated
+pre-existing example returned an identical null response, and the old
+SLI-derived metrics had vanished from the catalog entirely. The
+underlying `BPA-Demo` service and its metrics were unaffected — this was
+specifically an SLI-layer reset (cause not determined: a genuine SaaS-side
+subsystem migration, given how different the new model looks, or
+something tenant-specific).
 
-- `sli list-groups` (no filter, tenant-wide) returns `[]` — zero SLI
-  groups anywhere in the tenant, not just for BPA-Demo.
-- `sli export sliGroupId=2767` and `sli export sliGroupId=873` (the
-  tenant's own pre-existing "CEmperf DB Errors" example, unrelated to
-  this project) both return the identical null/invalid-shaped response —
-  neither numeric id resolves to a real group.
-- `nass query-metadata` for `attribute=BPA-Demo.*` (the SLI-derived
-  metric naming convention the `help slis` model documents — `is_sli:
-  true` metrics named after the SLI, materialized on the service vertex)
-  returns zero metrics. The old SLIs' derived data is gone from the
-  catalog entirely, not just hidden from list-groups.
-- The underlying service and its metrics are fine — `sli filter-test
-  serviceName=BPA-Demo` (read-only) returns dozens of real, live-matching
-  metric paths. This is specifically an SLI-layer reset, not a
-  service/metric problem.
+At the user's request, rebuilt fresh under `dx-do` v7.2.1's real,
+structurally different `sli` command surface (`create-group`/`add-slo`/
+`add-alert`/`set-group-filter`, all dry-run-by-default write commands —
+see `dx-do help slis`). `dxo2-scripts/bpa-demo-sli.sh` was rewritten from
+scratch (the old script and its three now-schema-incompatible JSON
+templates deleted) to create and self-heal all three SLI groups purely
+via CLI flags, no files needed:
 
-Not determined: whether this was a genuine SaaS-side SLI subsystem
-migration/deprecation (the new "SLI group" model in `help slis` looks
-like a real platform redesign, not just a CLI reshuffle), a tenant-side
-admin action, or something else. Whatever the cause, every item below
-this one describing "SLI 2767's filter" or "the SLO layer" refers to
-resources that no longer exist — they're kept here as historical record
-of what was configured and why, not as outstanding work against live
-resources.
+| SLI group | sliGroupId | SLO objective | Alert |
+|---|---|---|---|
+| BPA-Demo Frontend Response Time | 2955 | `LE 200`ms, 98% target, rolling 1-day | caution <98%, danger <90% of SLO percentage |
+| BPA-Demo Frontend Error Rate | 2956 | `LE 2`, 98% target, rolling 1-day | same |
+| BPA-Demo Client-Side Page Load Time | 2957 | `LE 300`ms, 98% target, rolling 1-day | same |
 
-**If SLI/SLO monitoring is wanted again**, it needs to be built fresh
-under the new model, which is a genuine improvement over the old
-one: `sli create-group` + `sli add-sli` use the same structured
-`sliFilter.<field>.<condition>` filter mechanism the console's own "filter
-then refine" UI uses, so the filter-mixing bug documented below
-(replace-not-AND) may not even reproduce under the new model — and
-`sli add-slo`/`sli add-alert` are real, scriptable commands, unlike the
-old "manual console entry only" SLO/alert-wiring limitation. This has
-not been attempted; it's a fresh-build decision, not a fix, and needs
-the user's sign-off before creating new tenant-visible resources.
+This closes out every previously-open item in this section: the SLI
+2767 filter-mixing bug (the new CLI's structured `groupFilter.*` atoms
+AND correctly across fields, confirmed via `sli filter-test` — the old
+console "filter then refine" replace-not-AND bug doesn't reproduce), the
+SLO layer never reaching 2768/2769's live resources (now built directly
+via `sli add-slo`), and no alert ever being wired to an SLO (now built via
+`sli add-alert`, targeting the SLO's rolling percentage — an improvement
+over the original three SLIs, none of which ever had this). See
+`bpa-demo-sli.sh`'s own header comment for two new landmines found while
+building this (a `regex` filter condition silently broken by a trailing
+`$` anchor; the PHP probe's app-level metric aggregates not being visible
+in the SLI subsystem's service-scoped view) and `CLAUDE.md`'s
+dxo2-scripts section / `DX-O2_MANUAL_CONFIGURATION.md` for the full
+history.
 
-### Historical record: SLI 2767 ("BPA-Demo Frontend Response Time") filter was never fully correct
-
-The console's "filter then refine" approach appeared to **replace** the
-first filter's condition rather than AND it with the second — the live
-specifier only carried the second filter's pattern
-(`Frontends\|Apps\|bpa-demo.*`), with no restriction to
-`Average Response Time (ms)` specifically. Confirmed via `nass query` at
-the time: it still averaged in `Errors Per Interval`, `Responses Per
-Interval`, `Stall Count`, and `Concurrent Invocations` alongside the real
-response-time values — mixing incompatible units into one "average." See
-`DX-O2_MANUAL_CONFIGURATION.md`'s SLI section for the full detail this was
-never resolved before the resource itself disappeared (see the item
-above).
-
-### Historical record: SLO layer was never pushed to 2768/2769's live resources
-
-`sliId 2767` had a real, working SLO (comparator → rolling percentage →
-error budget) configured by hand in the console. The identical structure
-was added to the templates for `sliId 2768` (Error Rate) and `2769` (Page
-Load Time), with thresholds pulled from already-measured alert baselines
-— but `sli import ... dry-run=true` confirmed at the time that this could
-not be pushed to the live v6.4.0-era resources via CLI. Moot now that
-those resources are gone (see the item above) — the threshold values
-(`LE 2` errors/interval, `LE 300`ms page load, both `GE 98%` error budget)
-remain useful reference for a fresh build.
-
-### Historical record: no alert was ever wired to any SLO's error budget
-
-The tenant's own richest example (`sliId 873`, "CEmperf DB Errors" —
-itself also now gone, see the item above) chained all the way to an alert
-on the error-budget breach. None of this project's 3 SLIs had that last
-step before the reset.
+The Client-Side Page Load Time group currently registers `sliStatusCode
+5` ("no metrics matching") — not a new problem, browser-agent
+auto-injection is still reverted (see the "PHP application" section
+above), so there's no live client-side data at all right now; it lights
+up on its own if that ever resumes, same as the original SLI 2769's own
+lifelong `totalMetrics: 0` before the reset.
 
 ---
 
