@@ -437,6 +437,16 @@ create_one() {
     info "Alert created: ${alert_id}"
 }
 
+## Check whether a metric grouping id actually exists under MM_ID.
+## Returns 0 if it does, 1 if not (a plain existence probe -- no output).
+#
+# @param string $1
+#   The metricGroupingId to probe.
+grouping_exists() {
+    local -r mg_id="$1"
+    "${DX_DO_BIN}" metricgrouping detail metricGroupingId="${mg_id}" managementModuleId="${MM_ID}" >/dev/null 2>&1
+}
+
 ## Re-apply the current attributeNamePattern/sourceNamePattern to an
 ## already-created metric grouping that has zero live matches (e.g. after a
 ## deployment identity change broke a previously-working pattern -- see "Bug
@@ -448,6 +458,29 @@ heal_one() {
     local -r key="$1"
     local -r agent="${ALERT_AGENT[${key}]}"
     local -r mg_id="${MG_IDS[${key}]}"
+
+    # Bug fixed 2026-08-21: a recorded mg_id can be a genuinely dead
+    # reference, not just "zero live matches" -- e.g. if
+    # bpa-demo-management-module.sh's parent Management Module was ever
+    # deleted and recreated (a fresh `create` there mints a brand new
+    # MM_ID), every child Metric Grouping/Alert this script created under
+    # the old one is cascade-deleted along with it, orphaning this
+    # script's own state file. `metricgrouping update` on a nonexistent
+    # grouping 404s, and that 404 previously propagated straight through
+    # `run_dx_do`'s pipefail-checked pipeline with no `||` fallback,
+    # killing the whole script under `set -e` after healing only the
+    # first key -- which is what made `create` appear to say "already
+    # exists" (really: "already created" per stale local state, then a
+    # fatal crash) while `delete` simultaneously said the opposite ("does
+    # not exist") for the very same ids. Detect the dead-reference case
+    # up front and recreate from scratch instead of trying to update
+    # something that isn't there.
+    if ! grouping_exists "${mg_id}"; then
+        info "'${key}' (${mg_id}) no longer exists (its parent Management Module was likely deleted and recreated) -- recreating from scratch."
+        create_one "${key}"
+        save_state
+        return 0
+    fi
 
     local metrics_json
     metrics_json=$("${DX_DO_BIN}" metricgrouping list-metrics metricGroupingId="${mg_id}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null || true)
@@ -562,9 +595,21 @@ cmd_delete() {
 
     # Delete alerts before metric groupings -- the server rejects a
     # grouping delete while any alert still references it.
+    #
+    # Checked existence first, rather than attempting the delete and
+    # catching a failure, since 2026-08-21: a recorded id can be a fully
+    # dead reference (its parent Management Module was deleted and
+    # recreated since -- see heal_one()'s header comment), and every
+    # delete attempt against a dead id 404s with a raw multi-line Axios
+    # error dump that reads as "the script can't delete this" even though
+    # the outcome (nothing to delete) is perfectly fine.
     local key
     for key in "${ALERT_KEYS[@]}"; do
         [[ -n "${ALERT_IDS[${key}]:-}" ]] || continue
+        if ! "${DX_DO_BIN}" alert detail alertId="${ALERT_IDS[${key}]}" managementModuleId="${MM_ID}" >/dev/null 2>&1; then
+            info "Alert '${key}' (${ALERT_IDS[${key}]}) already gone -- nothing to delete."
+            continue
+        fi
         info "Deleting Alert '${key}' (${ALERT_IDS[${key}]})..."
         run_dx_do alert delete \
             alertId="${ALERT_IDS[${key}]}" \
@@ -575,6 +620,10 @@ cmd_delete() {
 
     for key in "${ALERT_KEYS[@]}"; do
         [[ -n "${MG_IDS[${key}]:-}" ]] || continue
+        if ! grouping_exists "${MG_IDS[${key}]}"; then
+            info "Metric Grouping '${key}' (${MG_IDS[${key}]}) already gone -- nothing to delete."
+            continue
+        fi
         info "Deleting Metric Grouping '${key}' (${MG_IDS[${key}]})..."
         run_dx_do metricgrouping delete \
             metricGroupingId="${MG_IDS[${key}]}" \
