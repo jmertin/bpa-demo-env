@@ -117,6 +117,34 @@
 # response-time/error-rate SLI templates and the agent-health dashboard
 # template -- see each file's own history for its part of the fix.
 #
+# Bug fixed 2026-08-21: `create` and `delete` gave contradictory results
+# (create said "already exists," delete said "does not exist") for the
+# same 12 ids. Root cause: the parent "BPA-Demo" Management Module had
+# been deleted and recreated at some point (mm-3562 -> mm-45705),
+# cascade-deleting all 12 child Metric Groupings/Alerts this script had
+# created under the old one; .state/bpa-demo-agent-alerts.env never
+# detected this and kept referencing the dead ids. `create` reported
+# "already created" from stale local state, then crashed with exit 255
+# after healing only 1 of 12 keys -- heal_one()'s metricgrouping update
+# call had no `||` fallback (unlike its sibling list-metrics call), so a
+# 404 from updating a grouping whose parent MM no longer exists
+# propagated straight through `set -euo pipefail` and killed the script.
+# `delete` technically completed for all 24 resources (each already
+# caught by an existing `|| info "already gone."` fallback) but printed
+# a noisy raw Axios 404 dump for every one, reasonably read as "can't
+# delete." Fixed by adding a grouping_exists() existence-probe helper;
+# heal_one() now checks it first and falls through to create_one()
+# (recreate from scratch) instead of attempting a doomed update on a
+# nonexistent resource; cmd_delete()'s two delete loops now check
+# existence first and print a clean "already gone" message instead of
+# attempting the delete and catching the resulting error noise. Verified
+# live: `delete` against the broken state completed cleanly (24 "already
+# gone" messages, no crash) and cleared the stale state file; `create`
+# from that clean state recreated all 12 resources fresh under mm-45705
+# with no crash, and 3 spot-checked groupings confirmed real live
+# matches. Not investigated: why the parent Management Module was
+# deleted and recreated in the first place.
+#
 # Usage:
 #   dxo2-scripts/bpa-demo-agent-alerts.sh create   - create the 12 metric
 #                                            groupings + alerts. Safe to

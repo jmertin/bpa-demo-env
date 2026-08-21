@@ -121,9 +121,16 @@ via CLI flags, no files needed:
 
 | SLI group | sliGroupId | SLO objective | Alert |
 |---|---|---|---|
-| BPA-Demo Frontend Response Time | 2955 | `LE 200`ms, 98% target, rolling 1-day | caution <98%, danger <90% of SLO percentage |
-| BPA-Demo Frontend Error Rate | 2956 | `LE 2`, 98% target, rolling 1-day | same |
-| BPA-Demo Client-Side Page Load Time | 2957 | `LE 300`ms, 98% target, rolling 1-day | same |
+| BPA-Demo Frontend Response Time | 2958 | `LE 200`ms, 98% target, rolling 1-day | caution <98%, danger <90% of SLO percentage |
+| BPA-Demo Frontend Error Rate | 2959 | `LE 2`, 98% target, rolling 1-day | same |
+| BPA-Demo Client-Side Page Load Time | 2960 | `LE 300`ms, 98% target, rolling 1-day | same |
+
+(Corrected 2026-08-21, found during an unrelated doc-verification pass: the
+original ids recorded here were 2955/2956/2957. The live tenant's
+`.state/bpa-demo-sli.env` and `sli list-groups` show 2958/2959/2960 as the
+three groups that actually exist today -- the originals are gone, not
+duplicated. See `bpa-demo-sli.sh`'s own header comment and `CLAUDE.md`'s
+dxo2-scripts section for the full finding.)
 
 This closes out every previously-open item in this section: the SLI
 2767 filter-mixing bug (the new CLI's structured `groupFilter.*` atoms
