@@ -5,6 +5,64 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-21 @ 12:39 - [Fix + Finding - bpa-demo-universe.sh's own stale-identity bug fixed; the tenant's SLI subsystem has been reset]:
+  User asked to handle the two items flagged at the end of the entry
+  below: (1) bpa-demo-universe.sh's separate, older stale-identity bug,
+  and (2) whether the newly-updated dx-do v7.2.1 CLI's new sli
+  set-sli-filter/set-group-filter commands could finally push the
+  long-stuck SLI fixes to the live resources.
+  (1) bpa-demo-universe.sh: confirmed via apm-universe export that its
+  first two METRIC_SOURCES (pre-DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX
+  literals bpa-demo-host/bpa-demo-php-probe/bpa-demo-infra-agent) had
+  never actually been added to the live Universe -- this script was
+  simply missed in the 2026-07-10 batch fix every other dxo2-scripts/
+  file got. The live Universe's names array had separately accumulated
+  some deployment-correct-ish entries via manual console edits outside
+  this script at some point, but even those still carried the dead
+  (/usr/sbin/apache2) suffix and, for Kubernetes, UnknownAgent. Fixed by
+  switching the first two sources from per-deployment EXACT literals to
+  wildcarded REGEX patterns (reusing the patterns already fixed in
+  bpa-demo-agent-alerts.sh/bpa-demo-service.sh) and re-ran create.
+  Found and fixed a second bug live while verifying: the self-heal's
+  presence check used grep -qF against the raw export JSON text, which
+  works for EXACT names but not REGEX patterns -- JSON string escaping
+  doubles every backslash on the wire, so a pattern's literal \| never
+  substring-matches the printed \\|, and re-running create kept
+  re-adding duplicate REGEX specifiers every time (confirmed live: two
+  duplicate pairs added during testing before this was caught). Fixed
+  by escaping the pattern's backslashes before the presence check;
+  re-verified a subsequent create reports both as already present with
+  no further duplication. apm-universe has no "remove metric source"
+  command, so both the pre-existing stale EXACT entries and the two
+  duplicate REGEX pairs added during testing remain in the live
+  Universe -- harmless (the specifier list is OR'd) but not cleaned up;
+  only a from-scratch recreation would remove them, which this fix
+  deliberately does not do.
+  (2) SLI investigation: the new sli command group cannot push the old
+  filter/SLO fixes live, for a more fundamental reason than a CLI
+  limitation -- the resources no longer exist. sli list-groups (no
+  filter, tenant-wide) returns []; sli export sliGroupId=2767 and
+  sliGroupId=873 (the tenant's own unrelated pre-existing example) both
+  return an identical null/invalid response; nass query-metadata for
+  attribute=BPA-Demo.* (the is_sli:true derived-metric naming
+  convention dx-do help slis documents) returns zero metrics. The
+  underlying BPA-Demo service and its metrics are unaffected -- sli
+  filter-test serviceName=BPA-Demo returns dozens of real matches --
+  this is specifically an SLI-layer reset, not a service/metric
+  problem. Not determined whether this is a genuine SaaS-side platform
+  migration (the new "SLI group" model looks like a real redesign, not
+  just a CLI reshuffle) or something tenant-specific. Not acted on
+  further -- rebuilding SLI/SLO monitoring under the new model would be
+  a fresh creation of new tenant-visible resources, which needs the
+  user's sign-off, not something to do unilaterally while investigating
+  whether the old ones were reachable.
+  Updated CLAUDE.md's dxo2-scripts narrative (bpa-demo-service.sh,
+  bpa-demo-agent-alerts.sh, bpa-demo-universe.sh, and a new dated entry
+  after the SLI/SLO section) and rewrote TOBEDONE.md's SLI/SLO section
+  to mark the old sliId-specific items as historical record rather than
+  outstanding work against live resources.
+
+------------------------------------------------------------------------------
 2026-08-21 @ 12:20 - [Fix - php-tier metric groupings/content query had zero live matches, unrelated to the front-controller revert]:
   User asked whether bpa-demo-management-module.sh still creates the
   management module accurately given the earlier front-controller revert

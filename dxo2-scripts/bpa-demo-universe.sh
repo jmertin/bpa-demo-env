@@ -14,12 +14,12 @@
 #
 # Structure created:
 #   Universe "BPA Demo universe"
-#     3 metric sources (EXACT agent paths), covering all 4 of the app's
-#     known telemetry-producing identities:
-#       1. Infrastructure Agent (MySQL/MariaDB DB Monitor extension)
-#            SuperDomain|bpa-demo-host|bpa-demo|bpa-demo-infra-agent
-#       2. PHP probe agent (frontend URLs + DB backend calls)
-#            SuperDomain|bpa-demo-php-probe|php-probes|bpa-demo-infra-agent(/usr/sbin/apache2)
+#     3 metric sources, covering all 4 of the app's known
+#     telemetry-producing identities:
+#       1. Infrastructure Agent (MySQL/MariaDB DB Monitor extension), REGEX
+#            SuperDomain\|bpa-demo-[^|]+\|bpa-demo-[^|]+\|bpa-demo-[^|]+$
+#       2. PHP probe agent (frontend URLs + DB backend calls), REGEX
+#            SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?$
 #       3. BPA WebServer Agent -- covers BOTH the "BPA agent" and the
 #          "Browser agent" the app reports. Per this session's own
 #          investigation (see CLAUDE.md's dxo2-scripts section and
@@ -35,11 +35,40 @@
 #          agent paths, and this one isn't one).
 #            SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin
 #
-# All three source paths were already confirmed live/real earlier in this
-# project's history (via `dx-done agent list`/`metric data` for the first
-# two; via direct `metricgrouping`/`service` dry-run+live testing for the
-# third, since it never appears in `agent list`). This script does not
-# re-verify them -- it trusts that prior verification.
+# The BPA WebServer Agent path was confirmed live/real earlier in this
+# project's history (via direct `metricgrouping`/`service` dry-run+live
+# testing, since it never appears in `agent list`). This script does not
+# re-verify it -- it trusts that prior verification.
+#
+# Bug fixed 2026-08-21: the first two sources were EXACT entries hardcoding
+# the pre-`DEPLOYMENT_NAME`/`DEPLOYMENT_POSTFIX` identity literals
+# (`bpa-demo-host`/`bpa-demo-php-probe`/`bpa-demo-infra-agent`) -- this
+# script was simply missed in the 2026-07-10 batch fix that touched every
+# other `dxo2-scripts/` file for the same identity change (see CLAUDE.md's
+# "Deployment identity" section). Confirmed via `apm-universe export` that
+# neither literal had ever actually been added to the live Universe (the
+# `add-metric-source` calls silently no-op'd forever, since the
+# self-heal's own `grep -qF` presence check also never matched, so `create`
+# kept trying and failing to add them every run without erroring). The
+# live Universe's `names` array had separately accumulated some
+# deployment-correct entries via manual console edits at some point
+# outside this script (confirmed via its `_UPDATED_BY`/`_UPDATED_AT`
+# metadata) -- but even those were a stale mix, still carrying the
+# `(/usr/sbin/apache2)` suffix and, for the Kubernetes deployment,
+# `UnknownAgent` (both dead since the 2026-07-15 UnknownAgent fix -- see
+# `bpa-demo-agent-alerts.sh`'s and `bpa-demo-service.sh`'s own 2026-08-21
+# entries for that unrelated but same-day-discovered bug). Fixed by
+# switching the first two sources to wildcarded `REGEX` patterns (reusing
+# the exact patterns already fixed in those two scripts) instead of
+# per-deployment `EXACT` literals, so one entry each covers every
+# deployment's real identity, present or future. `apm-universe` has no
+# "remove metric source" command, so the stale/mixed EXACT entries from
+# before this fix remain in the Universe's `names` array -- harmless
+# (an OR'd specifier list tolerates dead entries fine, same as the stale
+# metric-catalog entries documented elsewhere in this project) but not
+# cleaned up; a from-scratch Universe recreation would be the only way to
+# actually remove them, which this script deliberately does not do on its
+# own.
 #
 # The companion "BPA-Demo" Service (dxo2-scripts/bpa-demo-service.sh) is a
 # separate resource covering the same telemetry via a content QUERY
@@ -106,12 +135,17 @@ readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
 readonly STATE_FILE="${STATE_DIR}/bpa-demo-universe.env"
 
-# The 3 real agent paths covering all 4 named telemetry-producing
-# identities (BPA WebServer Agent covers both "BPA agent" and "Browser
-# agent" -- see header comment).
+# The 3 metric sources covering all 4 named telemetry-producing identities
+# (BPA WebServer Agent covers both "BPA agent" and "Browser agent" -- see
+# header comment). The first two are wildcarded REGEX so one entry each
+# covers every deployment's real identity (docker/k8s/future) instead of
+# a per-deployment EXACT literal a future identity change could break
+# again -- see "Bug fixed 2026-08-21" above. The third is a fixed,
+# non-deployment-specific literal, so it stays EXACT.
+readonly METRIC_SOURCE_TYPES=(REGEX REGEX EXACT)
 readonly METRIC_SOURCES=(
-    'SuperDomain|bpa-demo-host|bpa-demo|bpa-demo-infra-agent'
-    'SuperDomain|bpa-demo-php-probe|php-probes|bpa-demo-infra-agent(/usr/sbin/apache2)'
+    'SuperDomain\|bpa-demo-[^|]+\|bpa-demo-[^|]+\|bpa-demo-[^|]+$'
+    'SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?$'
     'SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin'
 )
 
@@ -210,16 +244,26 @@ cmd_create() {
     local export_json
     export_json=$(run_dx_do apm-universe export universeId="${UNIVERSE_ID}")
 
-    local source
-    for source in "${METRIC_SOURCES[@]}"; do
-        if printf '%s' "${export_json}" | grep -qF "${source}"; then
-            info "Metric source already present: ${source}"
+    local i source source_type source_json_escaped
+    for i in "${!METRIC_SOURCES[@]}"; do
+        source="${METRIC_SOURCES[${i}]}"
+        source_type="${METRIC_SOURCE_TYPES[${i}]}"
+        # export's raw JSON text doubles every backslash (JSON string
+        # escaping), so a REGEX pattern's literal backslashes never
+        # substring-match the exported text as-is -- bug found live
+        # 2026-08-21: this caused an unconditional re-add (duplicate
+        # REGEX specifier) on every re-run for both REGEX sources below,
+        # since the EXACT-only presence check predates REGEX sources
+        # existing here at all. Escape to match what's actually on the wire.
+        source_json_escaped="${source//\\/\\\\}"
+        if printf '%s' "${export_json}" | grep -qF "${source_json_escaped}"; then
+            info "Metric source already present (${source_type}): ${source}"
             continue
         fi
-        info "Adding missing metric source: ${source}"
+        info "Adding missing metric source (${source_type}): ${source}"
         run_dx_do apm-universe add-metric-source \
             universeId="${UNIVERSE_ID}" \
-            metricSourceType=EXACT \
+            metricSourceType="${source_type}" \
             metricSource="${source}"
     done
 

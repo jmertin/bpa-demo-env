@@ -101,68 +101,84 @@ out, or whether they need manual pruning.
 
 ## SLI / SLO
 
-### `dx-do` v7.2.1 may have unlocked SLI editing that v6.4.0 couldn't do — not yet investigated
+### The tenant's entire SLI subsystem has been reset — sliId 873/2767/2768/2769 are all gone
 
-Every "needs manual console entry, no CLI path" conclusion below (and in
-`DX-O2_MANUAL_CONFIGURATION.md`) was reached against `dx-do` v6.4.0's `sli`
-command group (`export`/`import`/`exclude-service`/`include-service`/`list`
-only — no update, and `import` refuses outright on a name collision).
-`tools/` was updated to v7.2.1 on 2026-08-20/21, and that version's `sli`
-group looks structurally different: `sli list-groups`, `sli
-set-group-filter`, `sli set-sli-filter` (dry-run by default, structured
-`sliFilter.<field>.<condition>` args — equals/contains/not_contains/
-ends_with/regex), `sli status`. Whether these operate on the SLI groups
-this project's `bpa-demo-sli.sh`-created resources (2767, 2768, 2769)
-belong to, and whether they can finally push the filter/SLO fixes below
-to the *live* resources instead of just the templates, has not been
-checked — this is a promising lead, not a confirmed fix. Start with
-`sli list-groups` and `sli status` (read-only) before touching
-`set-sli-filter`/`set-group-filter` with `dry-run=false`.
+Investigated 2026-08-21 whether `dx-do` v7.2.1's new `sli` command group
+(`list-groups`, `set-group-filter`, `set-sli-filter`, `status`, etc. —
+structurally quite different from v6.4.0's `export`/`import`-only surface,
+see the CHANGELOG entry for that CLI update) could finally push the
+filter/SLO fixes below to the *live* SLI resources instead of just the
+templates. It cannot, for a more fundamental reason than a CLI
+limitation: **the resources themselves no longer exist.**
 
-### SLI 2767 ("BPA-Demo Frontend Response Time") filter still not fully correct
+- `sli list-groups` (no filter, tenant-wide) returns `[]` — zero SLI
+  groups anywhere in the tenant, not just for BPA-Demo.
+- `sli export sliGroupId=2767` and `sli export sliGroupId=873` (the
+  tenant's own pre-existing "CEmperf DB Errors" example, unrelated to
+  this project) both return the identical null/invalid-shaped response —
+  neither numeric id resolves to a real group.
+- `nass query-metadata` for `attribute=BPA-Demo.*` (the SLI-derived
+  metric naming convention the `help slis` model documents — `is_sli:
+  true` metrics named after the SLI, materialized on the service vertex)
+  returns zero metrics. The old SLIs' derived data is gone from the
+  catalog entirely, not just hidden from list-groups.
+- The underlying service and its metrics are fine — `sli filter-test
+  serviceName=BPA-Demo` (read-only) returns dozens of real, live-matching
+  metric paths. This is specifically an SLI-layer reset, not a
+  service/metric problem.
 
-The console's "filter then refine" approach appears to **replace** the
+Not determined: whether this was a genuine SaaS-side SLI subsystem
+migration/deprecation (the new "SLI group" model in `help slis` looks
+like a real platform redesign, not just a CLI reshuffle), a tenant-side
+admin action, or something else. Whatever the cause, every item below
+this one describing "SLI 2767's filter" or "the SLO layer" refers to
+resources that no longer exist — they're kept here as historical record
+of what was configured and why, not as outstanding work against live
+resources.
+
+**If SLI/SLO monitoring is wanted again**, it needs to be built fresh
+under the new model, which is a genuine improvement over the old
+one: `sli create-group` + `sli add-sli` use the same structured
+`sliFilter.<field>.<condition>` filter mechanism the console's own "filter
+then refine" UI uses, so the filter-mixing bug documented below
+(replace-not-AND) may not even reproduce under the new model — and
+`sli add-slo`/`sli add-alert` are real, scriptable commands, unlike the
+old "manual console entry only" SLO/alert-wiring limitation. This has
+not been attempted; it's a fresh-build decision, not a fix, and needs
+the user's sign-off before creating new tenant-visible resources.
+
+### Historical record: SLI 2767 ("BPA-Demo Frontend Response Time") filter was never fully correct
+
+The console's "filter then refine" approach appeared to **replace** the
 first filter's condition rather than AND it with the second — the live
-specifier only carries the second filter's pattern
+specifier only carried the second filter's pattern
 (`Frontends\|Apps\|bpa-demo.*`), with no restriction to
-`Average Response Time (ms)` specifically. Confirmed via `nass query`: it
-still averages in `Errors Per Interval`, `Responses Per Interval`,
-`Stall Count`, and `Concurrent Invocations` alongside the real response-time
-values — mixing incompatible units into one "average."
+`Average Response Time (ms)` specifically. Confirmed via `nass query` at
+the time: it still averaged in `Errors Per Interval`, `Responses Per
+Interval`, `Stall Count`, and `Concurrent Invocations` alongside the real
+response-time values — mixing incompatible units into one "average." See
+`DX-O2_MANUAL_CONFIGURATION.md`'s SLI section for the full detail this was
+never resolved before the resource itself disappeared (see the item
+above).
 
-**Open question:** does the console require both Source/Metric condition
-pairs to live in the *same* filter group to be ANDed, rather than a filter
-+ a separate "refine" action? See `DX-O2_MANUAL_CONFIGURATION.md`'s SLI
-section for the full detail. Needs another console pass to actually
-resolve, not just document.
+### Historical record: SLO layer was never pushed to 2768/2769's live resources
 
-### SLO layer not pushed to any of the 3 SLIs' live resources
-
-`sliId 2767` has a real, working SLO (comparator → rolling percentage →
+`sliId 2767` had a real, working SLO (comparator → rolling percentage →
 error budget) configured by hand in the console. The identical structure
-was added to the **templates** for `sliId 2768` (Error Rate) and `2769`
-(Page Load Time), with thresholds pulled from already-measured alert
-baselines — but confirmed via `sli import ... dry-run=true` that this
-cannot be pushed to the live resources via CLI (same name-collision
-refusal as the filter fix). Needs manual console entry for both — see
-`DX-O2_MANUAL_CONFIGURATION.md` for the exact threshold values
-(`LE 2` errors/interval, `LE 300`ms page load, both `GE 98%` error budget).
+was added to the templates for `sliId 2768` (Error Rate) and `2769` (Page
+Load Time), with thresholds pulled from already-measured alert baselines
+— but `sli import ... dry-run=true` confirmed at the time that this could
+not be pushed to the live v6.4.0-era resources via CLI. Moot now that
+those resources are gone (see the item above) — the threshold values
+(`LE 2` errors/interval, `LE 300`ms page load, both `GE 98%` error budget)
+remain useful reference for a fresh build.
 
-### No alert wired to any SLO's error budget
+### Historical record: no alert was ever wired to any SLO's error budget
 
-The tenant's own richest example (`sliId 873`, "CEmperf DB Errors") chains
-all the way to an alert on the error-budget breach. None of our 3 SLIs have
-that last step yet, even once/if the SLO layer above gets applied.
-
-### SLI/SLO scripts are one-off imports, not self-healing
-
-`bpa-demo-sli.sh` only manages `sliId 2767`. The two newer SLIs
-(2768/2769) were created via one-off `sli import` calls, not a proper
-create/check/delete script — deliberately, since the user is still
-fine-tuning both in the console and a script would go stale immediately
-(the same trap the *first* SLI's own template fell into). Worth
-formalizing into a script once the filters/SLOs are settled, if repeatable
-creation on a fresh tenant is ever needed.
+The tenant's own richest example (`sliId 873`, "CEmperf DB Errors" —
+itself also now gone, see the item above) chained all the way to an alert
+on the error-budget breach. None of this project's 3 SLIs had that last
+step before the reset.
 
 ---
 
