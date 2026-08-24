@@ -5,6 +5,30 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 13:05 - [Fix - package-helm-bundle.sh now pre-fills the bundled .config.example's IMAGE_TAG]:
+  User reported: whoever deploys a Helm bundle has to manually know and
+  type in the correct IMAGE_TAG, since .config.example ships with a
+  generic "1.0.0" placeholder and the real .config (with the actual
+  pushed b<N> tag) is deliberately never bundled -- risking a stale or
+  wrong image being deployed if that value isn't communicated out of
+  band correctly.
+  Fixed in build-scripts/package-helm-bundle.sh: added
+  patch_config_example_image_tag(), which reads only IMAGE_TAG (nothing
+  else -- no credentials) from this checkout's real .config, if one
+  exists, and patches just that one line of the staged .config.example
+  via a `^IMAGE_TAG=`-anchored sed substitution. Reuses the same
+  defensive "don't fail if .config doesn't exist yet" pattern
+  default_output_path() already had for the output filename. The
+  generated README.txt now says explicitly whether IMAGE_TAG was
+  pre-filled (and with what value) or must be filled in manually.
+  Verified live both ways: with .config present (IMAGE_TAG=1.0.0b18),
+  the bundled .config.example and README.txt both reflect the real tag,
+  and grep confirmed IMAGE_PREFIX and the surrounding comment block
+  (which also mentions "IMAGE_TAG" in prose) were untouched; with
+  .config temporarily moved aside, the bundle falls back to the shipped
+  placeholder with no error, unchanged from before this fix.
+
+------------------------------------------------------------------------------
 2026-08-24 @ 11:20 - [Fix - bpa-demo-services-universe.sh rewritten for dx-do's o2-universe -> service-universe API replacement]:
   User reported the dx-do maintainer had shipped an API-level fix for
   the long-standing o2-universe console-crash bug (documented in
