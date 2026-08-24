@@ -5,6 +5,20 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 15:35 - [Docs - .config.example notes that a populated APMIA_BROWSER_SNIPPET was most likely set by bpa-demo-axa-app.sh]:
+  User asked for a comment clarifying the provenance of a populated
+  APMIA_BROWSER_SNIPPET value, so a future reader of .config.example
+  isn't left guessing where it came from. Added a comment block above
+  the variable pointing at dxo2-scripts/bpa-demo-axa-app.sh's `create`
+  command and dxo2-scripts/README.md's AXA section, and reiterating
+  that the snippet is safe to commit (a client-side tag, not a secret).
+  Verified the script's patch logic doesn't disturb it: re-ran
+  bpa-demo-axa-app.sh create and confirmed via git diff that only the
+  APMIA_BROWSER_SNIPPET= value line changed, since the patch regex is
+  anchored to that literal line prefix and never touches `#` comment
+  lines above it.
+
+------------------------------------------------------------------------------
 2026-08-24 @ 15:10 - [Feat - bpa-demo-axa-app.sh: create the "BPA Demo AXA" AXA application and sync its BrowserAgent snippet into .config.example]:
   User asked for a new script to create a DX O2 AXA (Application
   Experience Analytics) application called "BPA Demo AXA" via dx-do and

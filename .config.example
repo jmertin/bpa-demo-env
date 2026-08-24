@@ -138,6 +138,14 @@ MYSQL_MONITOR="true"
 #
 # Example:
 #   APMIA_BROWSER_SNIPPET='<script src="https://example.apm.broadcom.com/snippet.js"></script>'
+#
+# If a snippet is already present below (not the empty '' default), it has
+# most likely been populated by dxo2-scripts/bpa-demo-axa-app.sh's `create`
+# command, which creates the "BPA Demo AXA" DX O2 AXA application and syncs
+# its BrowserAgent snippet here automatically -- see that script's header
+# comment and dxo2-scripts/README.md's AXA section. Safe to commit: unlike
+# every other value in this file, a BA snippet is a client-side <script> tag
+# meant to be embedded in every page (visible via view-source), not a secret.
 APMIA_BROWSER_SNIPPET='<script type="text/javascript" id="ca_eum_ba" src="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/bajs?agent=browser" data-profileUrl="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/profile?agent=browser" data-tenantID="CA629949-9D34-4BA7-B198-0335025F4AF3" data-appID="BPA Demo AXA" data-appVersion="1.0" data-use-axa-appname="true" data-appKey="4ab13890-9fa3-11f1-b11a-cb298d633a77" async ></script>'
 
 # ── Traffic generator ────────────────────────────────────────────────────────
