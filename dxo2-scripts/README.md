@@ -55,6 +55,7 @@ command and remove them manually (each script's header comment says which).
 | `bpa-demo-sli.sh` | Three **SLI groups** (Service Level Indicators, `dx-do sli` -- see the SLIs section below) bound to the `"BPA-Demo"` Service: Frontend Response Time, Frontend Error Rate, Client-Side Page Load Time. Each has an SLO (rolling-percentage/error-budget) and an alert on the SLO's rolling percentage. Uses `dx-do` v7.2.1's structured `sli create-group`/`add-slo`/`add-alert`/`set-group-filter` surface -- no JSON templates, no file-based import. `delete` runs `sli delete-group`, which really does delete the SLI, its SLO, and its alerts (unlike the old CLI's service-unbind-only `exclude-service`). |
 | `bpa-demo-agent-health-dashboard.sh` | The `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder: one traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. Includes a "Deployment" dropdown variable (`docker`/`k8s`, defaults to "All") so the Infrastructure Agent/PHP Probe panels can be scoped to one deployment or show both together -- see "2026-07-10" below for why that's needed and two bugs found shipping it. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert; `dashboard-import`'s documented `preserveUid=true overwrite=true` upsert doesn't work on this build -- `overwrite=` is silently ignored), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
 | `bpa-demo-application-dashboards.sh` | Three more **Dashboards** in the existing `"BPA-Demo"` folder -- `"BPA-Demo · Application Overview"`, `"BPA-Demo · Application Drilldown"`, `"BPA-Demo · Transaction Details Drilldown"` -- templated from dashboards the user exported by hand from the console (`jm-dashboards/bpa/`), not authored from scratch. Unlike every other dashboard/alert/SLI in this project, these query the BPA WebServer Extension's raw captured-transaction Elasticsearch index (`AIOps_BPAMetadata` datasource, `ao_aum_captured_data_2*`) directly -- per-request rows (`app_alias`, `bt_name`, `res_status`, `server_time`, client/server IPs, `transaction_id`, ...), not a NASS metric-catalog aggregate. Same create/check/delete shape and dashboard-import/export-edit-update upsert pattern as `bpa-demo-agent-health-dashboard.sh` (array-driven over all three). See the Dashboards section below for what each one shows. |
+| `bpa-demo-axa-app.sh` | The `"BPA Demo AXA"` **AXA application** (`dx-do axa` -- Application Experience Analytics, DX O2's mobile/browser Real User Monitoring surface; a different resource type from every other telemetry source in this project) -- created because the demo's `APMIA_BROWSER_SNIPPET` needs an AXA application to generate a BrowserAgent snippet for, normally a console-only step (DX O2 Settings -> Manage Mobile/Browser Web Monitoring -> App to Monitor -> Web App). `create` self-heals by name, then fetches the resulting BrowserAgent snippet (`axa get-application-snippet`) and patches it directly into the checked-in `.config.example`'s `APMIA_BROWSER_SNIPPET` line -- safe to commit since the snippet is a client-side `<script>` tag meant to be embedded in every page, not a secret like the rest of `.config`. Named `"BPA Demo AXA"`, not plain `"BPA Demo"`, to disambiguate from the many other tenant resources already using that exact name (the Service, both Universe types, the Management Module, the SLI groups). See the AXA section below. |
 
 ## Alerts
 
@@ -369,3 +370,68 @@ in place by uid (version 1 -> 2, no duplicates) instead of re-importing;
 `dashboard-export` after the upsert confirmed `tags`, `templating`, and
 every panel's `description` survived the export -> edit -> update
 round-trip.
+
+## AXA
+
+`dx-do axa` (Application Experience Analytics) is DX O2's mobile/browser
+Real User Monitoring surface -- a genuinely different resource type from
+every other telemetry source this project's scripts manage (Services,
+Universes, Management Modules/Metric Groupings/Alerts, SLI groups,
+Dashboards). An AXA **application** definition is what a BrowserAgent
+(BA) snippet is generated *for* -- the exact `<script>` tag this
+project's `APMIA_BROWSER_SNIPPET` config variable carries (see
+`CLAUDE.md`'s ".config required variables" and "PHP probe injection"
+sections). Normally obtained by hand via DX O2 Settings -> Manage
+Mobile/Browser Web Monitoring -> App to Monitor -> Web App.
+
+`bpa-demo-axa-app.sh create` does that step via the CLI instead: creates
+(self-healing by name) the `"BPA Demo AXA"` application, fetches its
+BrowserAgent snippet via `axa get-application-snippet`, and patches it
+directly into the checked-in `.config.example`'s `APMIA_BROWSER_SNIPPET`
+line -- unlike every other value in `.config`/`.config.example`, the
+snippet is safe to commit: it's a client-side tag meant to be embedded in
+every page and visible via view-source, not a credential. Named
+`"BPA Demo AXA"` rather than plain `"BPA Demo"` to avoid colliding with
+the many other tenant resources already using that exact name (the
+Service, both Universe types, the Management Module, the SLI groups --
+none of which are AXA applications, but `axa list-applications` has no
+type qualifier to disambiguate by if the names collided).
+
+Two landmines found live while writing this:
+- `axa create-application` has no `dry-run` parameter at all (confirmed
+  via `dx-do help describe group=axa command=create-application`) and
+  rejects duplicate names outright -- `create` here always checks `axa
+  list-applications` for an existing entry by name first, rather than
+  calling create and handling the rejection, unlike the dry-run-gated
+  `service-universe create`/`sli create-group` elsewhere in this
+  project.
+- `axa get-application-snippet` silently ignores `output.format=json`
+  (prints "ignoring extra args" and always returns pretty-printed,
+  multi-line HTML with leading whitespace per attribute line) --
+  `fetch_snippet()` strips the usual progress-noise lines plus blank
+  lines, then collapses the remaining HTML to the single-line form this
+  project's `.config` already uses elsewhere via
+  `' '.join(text.split())`. The patch itself writes the snippet to a
+  temp file and passes file paths into a single-quoted (non-
+  interpolating) python heredoc, rather than embedding the raw snippet
+  text into inline python source via bash string interpolation -- the
+  snippet's many `/`, `:`, and `"` characters make sed-delimiter or
+  shell-string-interpolation approaches fragile, the same class of bug
+  `entrypoint.sh`'s `bundle.properties` patching hit and solved by
+  picking `@` as a delimiter unlikely to appear in a value.
+
+`create` is safe to re-run: always re-fetches and re-syncs the snippet
+into `.config.example` even if the application already existed, so it
+also serves as a "resync the template" operation after any tenant-side
+change. `delete` additionally resets `.config.example`'s
+`APMIA_BROWSER_SNIPPET` back to the empty placeholder, since the
+snippet would otherwise reference a deleted application.
+
+Verified live: `create` created the application (key
+`4ab13890-...`), and `.config.example`'s `APMIA_BROWSER_SNIPPET` line
+was patched with a single-line snippet identical in shape to the
+existing, separately/manually-created `"BPA Demo"` AXA application's own
+snippet already live in this tenant's real `.config` -- confirmed via
+`git diff .config.example` that only that one line changed. Re-running
+`create` is idempotent (`axa list-applications` confirms exactly one
+`"BPA Demo AXA"` entry, no duplicate).
