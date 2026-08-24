@@ -29,7 +29,18 @@
 #                                script produces.
 #   - .config.example           A template only. The real .config (real
 #                                registry/database credentials) is NEVER
-#                                read, copied, or otherwise bundled.
+#                                read, copied, or otherwise bundled --
+#                                except for its IMAGE_TAG value, which is
+#                                patched into the bundled .config.example
+#                                verbatim (not a secret, and the whole
+#                                point of this bundle is to deploy an
+#                                already-built, already-pushed image; see
+#                                patch_config_example_image_tag()). Without
+#                                this, whoever deploys the bundle has no
+#                                way to know which b<N> tag was actually
+#                                pushed and has to be told out of band --
+#                                or worse, guesses wrong and deploys a
+#                                stale image.
 #   - README.txt                Generated fresh each run with the exact
 #                                extract-and-deploy steps for the target
 #                                host.
@@ -103,11 +114,45 @@ default_output_path() {
     printf '%s' "${ROOT_DIR}/dist/bpa-demo-helm-bundle-${tag}.tar.gz"
 }
 
+## Patch the bundled .config.example's IMAGE_TAG to match this checkout's
+## real .config, if one exists -- so whoever deploys the bundle doesn't
+## have to be told out of band (or guess) which b<N> tag was actually
+## pushed to the registry. Only IMAGE_TAG is ever read from .config here;
+## nothing else, and .config itself is never copied into the bundle (see
+## this script's header comment). Prints the tag that was patched in, or
+## nothing if .config doesn't exist yet in this checkout -- in which case
+## the shipped .config.example placeholder is left untouched, same as
+## before this fix existed.
+# Arguments: path to the staged .config.example file.
+patch_config_example_image_tag() {
+    local -r config_example="$1"
+    [[ -f "${ROOT_DIR}/.config" ]] || return 0
+
+    local tag
+    # shellcheck disable=SC1091
+    tag="$(source "${ROOT_DIR}/.config" 2>/dev/null || true; printf '%s' "${IMAGE_TAG:-}")"
+    [[ -n "${tag}" ]] || return 0
+
+    sed -i.bak "s/^IMAGE_TAG=.*/IMAGE_TAG=\"${tag}\"/" "${config_example}"
+    rm -f "${config_example}.bak"
+    printf '%s' "${tag}"
+}
+
 ## Write the target-host instructions into the staged bundle.
-# Arguments: stage directory.
+# Arguments: stage directory, the tag patch_config_example_image_tag
+#   resolved (empty string if it didn't find one).
 write_readme() {
     local -r stage_dir="$1"
-    cat > "${stage_dir}/README.txt" <<'EOF'
+    local -r patched_tag="${2:-}"
+
+    local image_tag_note
+    if [[ -n "${patched_tag}" ]]; then
+        image_tag_note="IMAGE_TAG is already pre-filled below with \"${patched_tag}\" -- the exact tag that was pushed to the registry when this bundle was built. Double-check it still matches what you expect to deploy if you're not sure this is the most recent bundle."
+    else
+        image_tag_note="IMAGE_TAG is NOT pre-filled -- no .config existed in the checkout this bundle was built from, so you must fill it in yourself with the exact tag that was pushed to the registry."
+    fi
+
+    cat > "${stage_dir}/README.txt" <<EOF
 BPA-Demo Helm deployment bundle
 ================================
 
@@ -121,15 +166,18 @@ On the target host (needs helm 3.12+ and kubectl 1.28+, pointed at the
 target cluster):
 
   1. cp .config.example .config
-  2. Edit .config: fill in REGISTRY/IMAGE_PREFIX/IMAGE_TAG to match the
-     already-pushed images, plus MARIADB_*, APP_NAMESPACE, APP_HOSTNAME,
-     TLS_CLUSTER_ISSUER, INGRESS_CLASS_NAME, KUBECONFIG, and (optionally)
-     the APMIA_*/DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX DX O2 variables. See the
+  2. Edit .config: fill in REGISTRY/IMAGE_PREFIX, MARIADB_*,
+     APP_NAMESPACE, APP_HOSTNAME, TLS_CLUSTER_ISSUER, INGRESS_CLASS_NAME,
+     KUBECONFIG, and (optionally) the
+     APMIA_*/DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX DX O2 variables. See the
      comments in .config.example for what each one does.
+
+     ${image_tag_note}
+
   3. build-scripts/deploy.sh
 
 That's it -- deploy.sh renders a transient values.local.yaml from .config,
-runs `helm upgrade --install`, and deletes the transient file immediately
+runs \`helm upgrade --install\`, and deletes the transient file immediately
 after. Re-running it later applies whatever changed in .config as an
 upgrade to the same release.
 
@@ -155,7 +203,15 @@ stage_bundle() {
     info "Staging .config.example..." >&2
     cp "${ROOT_DIR}/.config.example" "${stage_dir}/"
 
-    write_readme "${stage_dir}"
+    local patched_tag
+    patched_tag="$(patch_config_example_image_tag "${stage_dir}/.config.example")"
+    if [[ -n "${patched_tag}" ]]; then
+        info "Pre-filled .config.example's IMAGE_TAG with '${patched_tag}' from this checkout's .config." >&2
+    else
+        info "No .config found in this checkout -- .config.example ships with its default IMAGE_TAG placeholder; whoever deploys this bundle must fill it in manually." >&2
+    fi
+
+    write_readme "${stage_dir}" "${patched_tag}"
 
     # Verify the vhost.conf symlink was actually dereferenced into a real,
     # non-empty file -- fail loudly here rather than silently ship a bundle
