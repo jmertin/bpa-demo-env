@@ -5,6 +5,36 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 13:40 - [Docs - fixed a stale mod_rewrite comment in index.php; investigated a reported live redirect]:
+  User reported the Kubernetes/Helm deployment redirects to /shop,
+  /admin etc., suspecting leftover code from the reverted "URL path
+  approach" workaround for the PHP probe's browser-agent injection gate
+  (see CLAUDE.md's "Front controller" section -- that workaround was
+  fully reverted 2026-08-19, commits b1bf4a4/e82fcda, tags
+  revert-to-php-app/query-param-only-routing).
+  Searched the entire current repo for any surviving redirect/RewriteRule
+  logic: src/apache-php/config/vhost.conf (no RewriteRule directives at
+  all), helm/php-demo/templates/ingress.yaml (plain host + path:/ prefix,
+  no rewrite annotations), build-scripts/deploy.sh, src/apache-php/
+  entrypoint.sh, the Dockerfile, and every header('Location: ...') call
+  in app/src/ (all use the index.php?page=... form, none redirect to a
+  bare path). Found none -- the current codebase is clean.
+  Found one real but purely cosmetic leftover: app/src/index.php's own
+  top-of-file comment still said "Apache mod_rewrite maps clean URLs
+  (/shop, /basket, /product, etc.) to this file with ?page=<slug>" --
+  describing the old, reverted architecture. The actual routing code
+  below it was already correct (query-string only); only the comment
+  was stale, apparently missed when the revert updated every link/
+  redirect elsewhere in the app. Fixed to describe the current,
+  no-rewrite behavior.
+  Since no redirect logic exists in the current repo, the user's live
+  symptom is most likely a stale deployment (an old Helm bundle built
+  before the revert, or a Kubernetes release not yet `helm upgrade`d
+  against the current chart) rather than a code bug -- following up
+  with the user to confirm which, since that determines the fix (rebuild
+  the bundle vs. redeploy vs. something not yet found).
+
+------------------------------------------------------------------------------
 2026-08-24 @ 13:05 - [Fix - package-helm-bundle.sh now pre-fills the bundled .config.example's IMAGE_TAG]:
   User reported: whoever deploys a Helm bundle has to manually know and
   type in the correct IMAGE_TAG, since .config.example ships with a
