@@ -5,6 +5,60 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 15:10 - [Feat - bpa-demo-axa-app.sh: create the "BPA Demo AXA" AXA application and sync its BrowserAgent snippet into .config.example]:
+  User asked for a new script to create a DX O2 AXA (Application
+  Experience Analytics) application called "BPA Demo AXA" via dx-do and
+  update the config template with the resulting snippet, for use in the
+  demo environment. This is the first script in this project to manage
+  an AXA resource -- a genuinely different type from every other
+  telemetry source here (Services, Universes, Management
+  Modules/Metric Groupings/Alerts, SLI groups, Dashboards).
+  Named "BPA Demo AXA" (not plain "BPA Demo") to avoid colliding with
+  the many other tenant resources already using that exact name --
+  confirmed via `axa list-applications` that a separately/manually-
+  created "BPA Demo" AXA application already exists (its snippet is
+  what's currently live in the real, gitignored .config); left it
+  untouched, this script creates and manages its own independent one.
+  Added dxo2-scripts/bpa-demo-axa-app.sh:
+  - create: self-heals by name via `axa list-applications` (axa
+    create-application has no dry-run at all and rejects duplicate
+    names outright -- confirmed via `dx-do help describe`), creates via
+    `axa create-application applicationName="BPA Demo AXA" secure=false`
+    if missing, then always (re-)fetches the BrowserAgent snippet via
+    `axa get-application-snippet` and patches it into .config.example's
+    APMIA_BROWSER_SNIPPET line -- so create also serves as a "resync
+    the template" operation on every re-run, even if the application
+    already existed.
+  - check: prints the application's definition and current snippet,
+    and whether .config.example is in sync.
+  - delete: deletes the application (irreversible, no dry-run on the
+    API side -- prompts for confirmation unless -y/--yes) and resets
+    .config.example's APMIA_BROWSER_SNIPPET back to the empty
+    placeholder, since the snippet would otherwise reference a deleted
+    application.
+  Two landmines found live: (1) `axa get-application-snippet` silently
+  ignores output.format=json and always returns pretty-printed,
+  multi-line HTML -- fetch_snippet() strips progress noise and blank
+  lines, then collapses the rest to the single-line form this
+  project's .config already uses elsewhere. (2) the snippet's many /,
+  :, and " characters make sed-delimiter or shell-string-interpolation
+  patching fragile -- the same class of bug entrypoint.sh's
+  bundle.properties patching hit and solved with an unlikely delimiter;
+  solved here instead by writing the snippet to a temp file and passing
+  file paths into a single-quoted (non-interpolating) python heredoc,
+  never embedding the raw value into inline python source.
+  The snippet itself is safe to commit into .config.example (unlike
+  every other value there) -- it's a client-side <script> tag meant to
+  be embedded in every page and visible via view-source, not a secret.
+  Verified live: created the application (key 4ab13890-...), confirmed
+  via `git diff .config.example` that only the APMIA_BROWSER_SNIPPET
+  line changed, confirmed `bash -n .config.example` still parses as
+  valid shell, and re-ran create to confirm idempotency (`axa
+  list-applications` shows exactly one "BPA Demo AXA" entry).
+  Documented in dxo2-scripts/README.md (new Scripts row + new AXA
+  section) and CLAUDE.md's dxo2-scripts narrative.
+
+------------------------------------------------------------------------------
 2026-08-24 @ 14:30 - [Confirmed - stale-Helm-bundle redirect root cause verified live by the user, fresh bundle resolves it]:
   Follow-up to the entry below. User confirmed the redirect-to-404 was
   caused by deploying a Helm bundle built before the 2026-08-19

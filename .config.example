@@ -138,7 +138,7 @@ MYSQL_MONITOR="true"
 #
 # Example:
 #   APMIA_BROWSER_SNIPPET='<script src="https://example.apm.broadcom.com/snippet.js"></script>'
-APMIA_BROWSER_SNIPPET=''
+APMIA_BROWSER_SNIPPET='<script type="text/javascript" id="ca_eum_ba" src="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/bajs?agent=browser" data-profileUrl="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/profile?agent=browser" data-tenantID="CA629949-9D34-4BA7-B198-0335025F4AF3" data-appID="BPA Demo AXA" data-appVersion="1.0" data-use-axa-appname="true" data-appKey="4ab13890-9fa3-11f1-b11a-cb298d633a77" async ></script>'
 
 # ── Traffic generator ────────────────────────────────────────────────────────
 # Synthetic user traffic for the demo shop (see traffic-generator/README.md).
