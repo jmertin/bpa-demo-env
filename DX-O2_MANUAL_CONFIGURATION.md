@@ -14,43 +14,28 @@ exceptions.
 
 ---
 
-## O2/Platform ("Services") Universe — initial creation (`bpa-demo-services-universe.sh`)
+## O2/Platform ("Services") Universe — superseded, no longer a console-only exception (2026-08-24)
 
-### Why this is manual
+Historical note: this section used to document a required manual console
+step (create the first Universe by hand through the wizard) because
+`dx-do o2-universe create` always produced an **unscoped** Universe
+(its `tas` view filter was the bare `{"op": "ALL"}`, missing the fields
+a `SERVICE`-scoped filter carries) — confirmed to **crash the console's
+own edit UI** when opened in that state, with no `o2-universe update`
+command to narrow the filter afterward either. It no longer applies.
 
-`dx-do o2-universe create` always produces an **unscoped** Universe (its
-`tas` view filter is the bare `{"op": "ALL"}`, missing the fields a
-`SERVICE`-scoped filter carries) — confirmed to **crash the console's own
-edit UI** when opened in that state. There is no `o2-universe update` (the
-command group is only `create, export, list, services`) to narrow the
-filter afterward either, so a CLI-created Universe can't be fixed once
-created — only avoided in the first place.
-
-`bpa-demo-services-universe.sh create` deliberately does **not** fall back
-to `o2-universe create` when its state file is missing/stale, since that
-call is confirmed to always produce a console-breaking result. It fails
-with these instructions instead.
-
-### Steps taken
-
-1. In the console: **New Universe** (Services/Platform Universe, not the
-   APM Universe type).
-2. Label: `"BPA Demo"`.
-3. Scope **both** the `tas` view and the `nass` view to
-   **Service → "BPA-Demo"** up front, in the creation wizard — this is the
-   step that avoids the unscoped-shape crash entirely (the wizard always
-   produces the `SERVICE`-scoped filter shape; only the raw API call skips
-   it).
-4. Note the resulting `viewId` (`VIEW###`) via
-   `dx-do o2-universe list output.format=json` and record it in
-   `dxo2-scripts/.state/bpa-demo-services-universe.env` as
-   `UNIVERSE_ID=<id>` (git-ignored — this file only exists per-tenant).
-
-Once created this way, `bpa-demo-services-universe.sh create`'s self-heal
-check (`o2-universe export` on the recorded id) works normally for
-`check`/`delete` too — only a fresh from-scratch `create` would hit the
-crash-prone unscoped path again. The currently-tracked instance is
-`VIEW618`.
+The `dx-do` maintainer replaced `o2-universe` outright with
+`service-universe`, whose `create`/`update` both take `serviceNames=`
+and produce a correctly `SERVICE`-scoped filter from the start —
+verified live via a `dry-run=true` preview before ever touching the
+tenant for real. `dxo2-scripts/bpa-demo-services-universe.sh` was
+rewritten to use it and its `create` fallback (creating a fresh,
+correctly-scoped Universe with no console step) was restored. See that
+script's own header comment, `dxo2-scripts/dx-do-o2-universe-issue.md`'s
+2026-08-24 resolution update, and `CLAUDE.md`'s dxo2-scripts section for
+the full history. The tenant's previously-tracked `VIEW618` no longer
+exists (not investigated why); the script now tracks `VIEW621`, an
+already-correctly-scoped Universe adopted rather than duplicated.
 
 ---
 
