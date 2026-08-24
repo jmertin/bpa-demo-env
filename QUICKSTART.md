@@ -155,14 +155,12 @@ previously-broken definition instead of just no-op'ing), `check`, and
 `bpa-demo-management-module.sh` having been run first;
 `bpa-demo-agent-health-dashboard.sh` reuses the alerts both of those create.
 
-**One exception:** `bpa-demo-services-universe.sh create` cannot create its
-Universe from nothing — `o2-universe create` always produces an unscoped
-Universe that crashes the console's own edit UI. The *first* one must be
-created by hand in the console (New Universe, scope both views to the
-`"BPA-Demo"` Service); after that, `create` finds and self-heals it like
-the rest. See the script's own header comment and
-[DX-O2_MANUAL_CONFIGURATION.md](DX-O2_MANUAL_CONFIGURATION.md) for the
-exact steps.
+`bpa-demo-services-universe.sh create` can now create its Universe from
+nothing — as of 2026-08-24, `dx-do`'s `service-universe create` (which
+replaced the older, buggy `o2-universe` command group) correctly scopes
+a new Universe to the `"BPA-Demo"` Service at creation time, so the
+console-only workaround this used to require is gone. See the script's
+own header comment for the fix history.
 
 A handful of other tenant-side settings similarly have no CLI path at all
 (mainly around SLI filter/SLO tuning) and must be configured by hand in the
