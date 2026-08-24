@@ -227,17 +227,25 @@ create time or after). **Fix requires a manual console step** — exact menu
 path not confirmed yet (no console access when this was investigated). See
 `BUGS` for the full writeup.
 
-### O2/Platform ("Services") Universe — CLI-created instances are permanently broken
+### Resolved 2026-08-24 — O2/Platform ("Services") Universe: `o2-universe` replaced by `service-universe`, console-crash bug fixed API-side
 
-Documented as a Broadcom/dx-do product limitation, not something to fix in
-this repo: `o2-universe create` always produces an unscoped Universe whose
-console detail/edit page 404s, with no CLI path to add a scope after the
-fact. Worked around for our own Universe by creating it through the
-console's wizard instead (`VIEW618`, scoped to `BPA-Demo` from the start)
-— but this is a workaround, not a fix, and anyone else creating an
-o2-universe via `dx-do` will hit the same dead end. Full reproduction +
-suggested fixes for the dx-do maintainer:
-`dxo2-scripts/dx-do-o2-universe-issue.md`.
+Previously documented as a Broadcom/dx-do product limitation: `o2-universe
+create` always produced an unscoped Universe whose console detail/edit
+page crashed/404s, with no CLI path to add a scope after the fact
+(worked around by creating `VIEW618` through the console's wizard
+instead). The `dx-do` maintainer has since replaced `o2-universe`
+outright with `service-universe`, a full CRUD surface (`create`/
+`update`/`delete`/`get`/`list`/`export`, dry-run by default) whose
+`create`/`update` both take `serviceNames=` and produce a correctly
+`SERVICE`-scoped filter — verified live via a `dry-run=true` preview
+before touching the tenant for real. `dxo2-scripts/bpa-demo-services-universe.sh`
+was rewritten to use it, restoring the `create` fallback that had been
+deliberately disabled since 2026-07-07 and adding a filter-drift
+self-heal via `update`. `VIEW618` no longer exists in the tenant (not
+investigated why); adopted the existing `VIEW621` (already correctly
+scoped) as the tracked instance instead of creating a duplicate. See
+`dxo2-scripts/dx-do-o2-universe-issue.md`'s 2026-08-24 resolution update
+and `CLAUDE.md`'s dxo2-scripts section for the full writeup.
 
 ---
 

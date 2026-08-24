@@ -210,3 +210,51 @@ watch for a signature change in `o2-universe create`'s required
 parameters (a `services=`/scope-shaped param finally being honored rather
 than silently ignored, per the "ignoring extra args" behavior documented
 above).
+
+## Resolved 2026-08-24: `o2-universe` replaced outright by `service-universe`
+
+The user reported the maintainer had shipped an API-level fix and asked
+for this script to be re-checked. `o2-universe` no longer appears in
+`dx-do`'s command-group list at all -- it's been replaced by
+`service-universe`, a full CRUD surface (`create`, `update`, `delete`,
+`get`, `list`, `export`, `add-access`, `remove-access`) that resolves
+every issue documented above:
+
+1. **Scoping at creation, confirmed live.** `service-universe create
+   label="..." serviceNames="BPA-Demo" dry-run=false` produces exactly
+   the correctly-`SERVICE`-scoped shape this issue asked for --
+   verified via a `dry-run=true` preview (the default) before ever
+   touching the tenant for real:
+   ```json
+   "tas":  { "filter": { "filter": {
+               "op": "SERVICE", "values": ["BPA-Demo"],
+               "includeServiceHierarchy": true, "excludeSubServices": false
+             } } }
+   "nass": { "filter": { "serviceFilter": { "op": "SERVICE", "values": ["BPA-Demo"] } } }
+   ```
+   Identical in shape to the console-wizard-created `VIEW618`/`VIEW621`
+   examples referenced throughout this issue.
+2. **`update` now exists** (`viewId=`, `label=`, `description=`,
+   `serviceNames=`, `inactive=`, all optional except `viewId=`, dry-run
+   by default) -- a Universe's scope can be corrected after creation
+   without recreating it.
+3. **`delete` now exists natively** (`viewId=` + `label=` required to
+   match, as a typo-proof confirmation -- same pattern as `dashboard
+   folder-delete`), so the `apm-universe delete`-on-an-o2-universe-id
+   cross-group workaround this issue's Workaround section documented is
+   no longer needed.
+4. **Consistent `viewId=` naming** across every subcommand -- the old
+   `create`-uses-`name=`-but-`export`-uses-`universeViewId=`
+   inconsistency this issue implicitly worked around is gone.
+
+`bpa-demo-services-universe.sh` was rewritten to use `service-universe`
+throughout, self-heals a drifted `serviceNames` filter via `update`
+instead of refusing, and its `create` fallback (disabled since the
+2026-07-07 workaround) is restored. The live tenant's existing
+`VIEW618`-successor Universe (`VIEW621`, label "BPA Demo service
+universe" -- `VIEW618` itself no longer exists; not investigated when or
+why) was adopted as the tracked instance rather than creating a
+duplicate, since `service-universe get` confirmed it was already
+correctly `SERVICE`-scoped. See that script's own header comment and
+`CLAUDE.md`'s dxo2-scripts section for the live-verification detail.
+This issue is closed -- no outstanding action for the `dx-do` maintainer.

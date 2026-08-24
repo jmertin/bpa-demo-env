@@ -5,6 +5,52 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 11:20 - [Fix - bpa-demo-services-universe.sh rewritten for dx-do's o2-universe -> service-universe API replacement]:
+  User reported the dx-do maintainer had shipped an API-level fix for
+  the long-standing o2-universe console-crash bug (documented in
+  dxo2-scripts/dx-do-o2-universe-issue.md since 2026-07-07) and asked
+  for this script to be re-checked.
+  Confirmed: `o2-universe` no longer exists as a dx-do command group at
+  all -- replaced outright by `service-universe`, a full CRUD surface
+  (create/update/delete/get/list/export, all dry-run by default) that
+  fixes every documented limitation:
+  - create/update both take serviceNames= (comma-separated) and produce
+    a correctly SERVICE-scoped filter on both the tas and nass views --
+    verified live via a `create ... dry-run=true` preview (the default)
+    before ever touching the tenant for real; the shape matches the
+    console-wizard-created VIEW618/VIEW621 examples exactly.
+  - update is a new command -- a drifted serviceNames filter can now be
+    corrected without recreating the Universe.
+  - delete is now native (viewId= + label= required to match, a
+    typo-proof confirmation like dashboard folder-delete) -- the old
+    cross-group `apm-universe delete` workaround is no longer needed.
+  - Consistent viewId= naming across every subcommand, replacing the
+    old create-uses-name=-but-export-uses-universeViewId= inconsistency.
+  Rewrote dxo2-scripts/bpa-demo-services-universe.sh end to end: create
+  now self-heals both by label (if the state file is lost) and by
+  filter correctness (re-applies serviceNames via `update` if a tracked
+  Universe's SERVICE filter is ever found to have drifted or gone
+  missing), restoring the create-from-scratch fallback that had been
+  deliberately disabled since the 2026-07-07 crash finding. check/delete
+  both moved to the new service-universe commands.
+  VIEW618 (the script's previously-tracked instance) no longer exists in
+  the tenant -- not investigated when or why. Adopted the tenant's
+  existing VIEW621 (label "BPA Demo service universe", created the same
+  day as the original VIEW618 workaround, already correctly
+  SERVICE-scoped to "BPA-Demo") as the tracked instance instead of
+  creating a duplicate -- confirmed via `service-universe get` before
+  adopting it, and confirmed no stray Universe was left behind by the
+  verification dry-run.
+  Verified live: `create` found and adopted VIEW621 via label self-heal;
+  `check` prints its full definition; re-running `create` is idempotent
+  (no duplicate, no unnecessary update call since the filter was already
+  correct).
+  Closed out dxo2-scripts/dx-do-o2-universe-issue.md with a resolution
+  update; updated CLAUDE.md's dxo2-scripts narrative, TOBEDONE.md's
+  Universes/Topology section, and dxo2-scripts/README.md's Scripts table
+  to match.
+
+------------------------------------------------------------------------------
 2026-08-21 @ 17:15 - [Docs - corrected stale SLI group ids found during a documentation-accuracy audit]:
   User asked to verify all recent changes were documented in the right
   places. While checking the SLI subsystem (following up on the
