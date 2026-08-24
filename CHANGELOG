@@ -5,6 +5,31 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 14:30 - [Confirmed - stale-Helm-bundle redirect root cause verified live by the user, fresh bundle resolves it]:
+  Follow-up to the entry below. User confirmed the redirect-to-404 was
+  caused by deploying a Helm bundle built before the 2026-08-19
+  front-controller revert -- its frozen files/vhost.conf still carried
+  the old `RewriteRule ^$ /shop [R=302,L]`, and with the old per-page
+  wrapper file that used to serve /shop gone post-revert, the redirect
+  landed on a 404.
+  Built a fresh bundle via `build-scripts/package-helm-bundle.sh`
+  (dist/bpa-demo-helm-bundle-1.0.0b18.tar.gz) and verified before
+  handing it over: `grep -c RewriteRule` on the bundled vhost.conf
+  returns 0, and the bundled file is byte-identical to
+  src/apache-php/config/vhost.conf. User redeployed with this fresh
+  bundle via `helm upgrade` (build-scripts/deploy.sh) and confirmed the
+  fix runs -- no image rebuild was needed, since vhost.conf is rendered
+  into the ConfigMap fresh from the chart on every upgrade, not baked
+  into the image.
+  Documented as a permanent incident note (not just this one fix) in
+  CLAUDE.md's "Front controller" section: any previously-built Helm
+  bundle must be regenerated before redeploying after an app-code- or
+  vhost-affecting change, since package-helm-bundle.sh freezes a real,
+  dereferenced copy of vhost.conf at bundle-build time by design (for
+  target-host portability), with no staleness warning if that bundle is
+  reused later.
+
+------------------------------------------------------------------------------
 2026-08-24 @ 13:40 - [Docs - fixed a stale mod_rewrite comment in index.php; investigated a reported live redirect]:
   User reported the Kubernetes/Helm deployment redirects to /shop,
   /admin etc., suspecting leftover code from the reverted "URL path

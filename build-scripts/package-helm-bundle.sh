@@ -52,6 +52,22 @@
 # assumes local Docker access (build.sh, push.sh, compose.sh,
 # package-app.sh).
 #
+# CAUTION -- bundles go stale silently, confirmed live 2026-08-24: this
+# script dereferences helm/php-demo/files/vhost.conf (a symlink to
+# src/apache-php/config/vhost.conf) into a real, frozen file copy at
+# bundle-build time, by design -- the whole point is a bundle with no
+# dangling links, deployable on a host with no access to the rest of the
+# repo. That also means a previously-built bundle keeps whatever
+# vhost.conf/chart content was current when it was built, forever, with
+# no warning. A user redeployed a bundle built before the 2026-08-19
+# front-controller revert and got the old, since-removed root-redirect
+# behavior back (RewriteRule ^$ /shop [R=302,L], 404ing since the page it
+# redirected to no longer exists post-revert) -- see CLAUDE.md's "Front
+# controller" section for the full incident. Re-run this script to
+# produce a fresh bundle before redeploying anytime the source repo's
+# helm/ chart, vhost.conf, or IMAGE_TAG has changed since the bundle you
+# have was built.
+#
 # Usage:
 #   build-scripts/package-helm-bundle.sh [-o|--output <path>] [-h|--help]
 #
