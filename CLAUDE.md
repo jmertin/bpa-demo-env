@@ -23,7 +23,7 @@ build-scripts/package-helm-bundle.sh  # bundle helm/ + deploy.sh for a separate 
 
 There is no test suite and no linter. Verify changes by running the app locally with `compose.sh up -d`.
 
-All scripts source `.config` from the project root (copy from `.config.example`; never commit `.config`).
+All scripts source `.config` from the project root (copy from `.config.example`; never commit `.config`). **Load order, added 2026-08-24:** every `load_config()` (`build.sh`, `push.sh`, `package-app.sh`, `compose.sh`, `deploy.sh`) sources `.config.example` first, then `.config` second, so a `.config` that predates a newer release still gets sensible defaults for any variable `.config.example` has since added — `.config` only needs to contain the values you actually want to override. Verified live: a variable removed from a test copy of `.config` fell back to `.config.example`'s default, while a variable present in both still took `.config`'s value. Deliberately **not** applied to `package-helm-bundle.sh`'s two narrow, single-variable `IMAGE_TAG` reads (`default_output_path()`, `patch_config_example_image_tag()`) — those aren't the general "load all config" pattern, and changing their documented no-`.config`-at-all fallback (`"untagged"`) to `.config.example`'s `"1.0.0"` would be an unrelated behavior change outside what this fix addresses (a stale-but-present `.config` missing newer variables, not a missing `.config` entirely).
 
 ---
 

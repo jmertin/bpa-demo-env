@@ -83,8 +83,18 @@ check_prerequisites() {
 ## Load and validate the .config file.
 load_config() {
     local -r config_file="${ROOT_DIR}/.config"
+    local -r config_example="${ROOT_DIR}/.config.example"
     [[ -f "${config_file}" ]] || \
         fatal ".config not found in project root. Copy .config.example to .config."
+
+    # Load .config.example first so a not-yet-updated .config still gets
+    # sensible defaults for any variable a newer .config.example added that
+    # .config doesn't know about yet -- .config is sourced second, so its
+    # real values override these defaults wherever it actually sets them.
+    if [[ -f "${config_example}" ]]; then
+        # shellcheck source=../.config.example
+        source "${config_example}"
+    fi
     # shellcheck source=../.config
     source "${config_file}"
 
