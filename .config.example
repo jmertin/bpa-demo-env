@@ -148,6 +148,45 @@ MYSQL_MONITOR="true"
 # meant to be embedded in every page (visible via view-source), not a secret.
 APMIA_BROWSER_SNIPPET='<script type="text/javascript" id="ca_eum_ba" src="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/bajs?agent=browser" data-profileUrl="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/profile?agent=browser" data-tenantID="CA629949-9D34-4BA7-B198-0335025F4AF3" data-appID="BPA Demo AXA" data-appVersion="1.0" data-use-axa-appname="true" data-appKey="4ab13890-9fa3-11f1-b11a-cb298d633a77" async ></script>'
 
+# ── APMIA fine tuning ─────────────────────────────────────────────────────────
+# Escape hatch for introscope.* Java Agent profile properties that don't
+# already have a dedicated .config variable above (APMIA_AGENT_NAME,
+# APMIA_LOG_LEVEL, MYSQL_MONITOR, etc.). Add as many APMENV_* lines as you
+# need below -- there is no fixed list, and none are set by default.
+#
+# Format:  APMENV_<PROPERTY_PATH_IN_UPPER_SNAKE_CASE>="<value>"
+#   Every underscore-separated segment after APMENV_ maps to one dot-separated
+#   segment of the target introscope.* property path, e.g.:
+#     APMENV_INTROSCOPE_AGENT_SOMEPROPERTY  ->  introscope.agent.someProperty
+#   This is the same native "APMIA Docker container" mechanism the dedicated
+#   APMIA_* variables above are themselves built on -- see CLAUDE.md's
+#   "APMENV_* identity mechanism" table for more worked examples.
+#
+# Any variable defined anywhere in this file whose name starts with APMENV_
+# (this section is just where convention says to put them -- the actual
+# build-scripts/ tooling scans the whole sourced file, not just this block)
+# is forwarded verbatim as an environment variable into the dx-o2-agent
+# container/sidecar, before the APMIA Infrastructure Agent process starts, so
+# the agent can read it via its own native APMENV_* startup mechanism:
+#   - Docker Compose: compose.sh collects every APMENV_* variable it finds
+#     and writes them to a generated env file that the dxo2 service's
+#     env_file: directive loads directly into the container. If a name
+#     collides with one of the fixed APMENV_* vars docker-compose.yml already
+#     sets explicitly (agent identity, DB Monitor, log level), the FIXED one
+#     wins -- Compose applies env_file values first, then explicit
+#     environment: entries override them.
+#   - Kubernetes/Helm: deploy.sh collects every APMENV_* variable here into
+#     dxo2.extraEnv in the generated values override, and the StatefulSet
+#     appends them to the dx-o2-agent container's env list after every fixed
+#     entry -- so here a colliding name overrides the FIXED one instead
+#     (Kubernetes takes the last-defined value when an env var name repeats).
+#   If you need to override something the dedicated APMIA_* variables above
+#   already manage, use that variable instead -- this section is for
+#   properties with no dedicated variable yet.
+#
+# Example (commented out):
+#   APMENV_INTROSCOPE_AGENT_SOMEPROPERTY="somevalue"
+
 # ── Traffic generator ────────────────────────────────────────────────────────
 # Synthetic user traffic for the demo shop (see traffic-generator/README.md).
 # Cycles through the full demo user roster (including trouble/empty_basket/

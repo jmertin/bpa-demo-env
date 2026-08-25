@@ -50,6 +50,25 @@ check_prerequisites() {
         fatal "docker compose plugin is not installed (requires Docker 20.10+)."
 }
 
+## Write every APMENV_*-prefixed variable found in the sourced .config into
+## ${ROOT_DIR}/.dxo2-fine-tuning.env (gitignored), which docker-compose.yml's
+## dxo2 service loads via env_file: -- letting the "APMIA fine tuning"
+## section in .config set arbitrary introscope.* profile properties that
+## have no dedicated .config variable of their own. Always (re)writes the
+## file, even with zero matches, since docker compose requires an env_file:
+## target to exist. Uses bash's ${!APMENV_@} to enumerate matching variable
+## NAMES (arbitrary/unknown ahead of time) and indirect expansion to read
+## each one's already shell-parsed value -- avoids re-parsing .config's raw
+## quoting a second time.
+write_apmenv_fine_tuning_file() {
+    local -r out="${ROOT_DIR}/.dxo2-fine-tuning.env"
+    : > "${out}"
+    local name
+    for name in "${!APMENV_@}"; do
+        printf '%s=%s\n' "${name}" "${!name}" >> "${out}"
+    done
+}
+
 ## Load .config and export variables consumed by docker-compose.yml.
 load_config() {
     local -r config_file="${ROOT_DIR}/.config"
@@ -100,6 +119,8 @@ load_config() {
     # docker-compose.yml can use the list/passthrough form (- APMIA_BROWSER_SNIPPET)
     # which passes the value straight to the container without YAML parsing.
     export APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET:-}"
+
+    write_apmenv_fine_tuning_file
 
     # Traffic generator – optional; defaults produce steady, moderate traffic.
     export TRAFFIC_ENABLED="${TRAFFIC_ENABLED:-true}"

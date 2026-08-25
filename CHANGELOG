@@ -5,6 +5,60 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 16:20 - [Feat - "APMIA fine tuning" section: arbitrary APMENV_* pass-through to the dx-o2-agent container]:
+  User asked for a new .config section holding arbitrary APMENV_*-prefixed
+  environment variables, forwarded to the dx-o2-agent container before the
+  APMIA agent starts, so any introscope.* Java Agent profile property can
+  be set even without a dedicated .config variable for it.
+  Added the "APMIA fine tuning" section to .config.example (and mirrored
+  it in the real, gitignored .config) explaining the
+  APMENV_<PROPERTY_PATH>="<value>" format and, honestly, the different
+  override-precedence behavior on each deployment platform. The actual
+  mechanism scans the WHOLE sourced .config file for names matching
+  bash's ${!APMENV_@} (arbitrary, not a fixed list) -- the section header
+  is a human convention, not something the tooling parses positionally.
+  - Docker Compose: added write_apmenv_fine_tuning_file() to compose.sh's
+    load_config(), which writes every matching variable to a generated,
+    gitignored .dxo2-fine-tuning.env; docker-compose.yml's dxo2 service
+    loads it via a new env_file: directive. Compose applies env_file:
+    before explicit environment: entries, so a name colliding with one
+    of the fixed APMENV_* vars docker-compose.yml already sets is
+    overridden BY the fixed one.
+  - Kubernetes/Helm: deploy.sh's generate_values() now collects every
+    matching variable into a dxo2.extraEnv list ({name, value} pairs,
+    YAML-single-quote-escaped) in the generated values override;
+    helm/php-demo/values.yaml gained a dxo2.extraEnv: [] default, and
+    statefulset.yaml's dx-o2-agent container appends a
+    {{- range .Values.dxo2.extraEnv }} block AFTER every fixed APMENV_*
+    entry -- here a colliding name overrides the fixed one instead,
+    since Kubernetes takes the last-defined value for a duplicate env
+    var name in a container spec.
+  This platform asymmetry (fixed wins on Compose, fine-tuning wins on
+  Kubernetes) is intentional and documented rather than unified --
+  making Compose match would require restructuring every existing fixed
+  APMENV_* mapping out of its environment: block, not worth it for what
+  is meant to be an escape hatch for properties with no dedicated
+  variable in the first place.
+  Verified: bash -n / python3 yaml.safe_load on every touched file;
+  ${!APMENV_@} enumeration and both output formats (Compose env_file
+  KEY=VALUE lines, Helm YAML list with '' single-quote escaping) tested
+  standalone with values containing embedded double quotes, an
+  apostrophe, and spaces -- both parse back to the exact original value.
+  Full end-to-end test: appended a temporary test APMENV_* line to the
+  real .config, ran `compose.sh config`, and confirmed via
+  `docker compose config`'s own merged output that the variable reached
+  the dxo2 service's resolved environment correctly; extracted and ran
+  deploy.sh's generate_values() standalone (real Helm/kubectl not
+  available in this environment) and confirmed the emitted values.yaml
+  parses correctly with dxo2.extraEnv populated (and correctly `null`,
+  not an error, when no APMENV_* variables are set). Test artifacts and
+  the temporary .config append were removed afterward; .config restored
+  byte-for-byte via git-free backup/diff.
+  Documented in CLAUDE.md: "APMENV_* identity mechanism" section (full
+  explanation + platform-precedence caveat), ".config required
+  variables" reference list, and "Docker Compose notes".
+
+------------------------------------------------------------------------------
 2026-08-24 @ 15:35 - [Docs - .config.example notes that a populated APMIA_BROWSER_SNIPPET was most likely set by bpa-demo-axa-app.sh]:
   User asked for a comment clarifying the provenance of a populated
   APMIA_BROWSER_SNIPPET value, so a future reader of .config.example
