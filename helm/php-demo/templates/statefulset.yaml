@@ -217,6 +217,14 @@ spec:
               value: {{ .Values.dxo2.btlHost | quote }}
             - name: APMIA_BTL_PORT
               value: {{ .Values.dxo2.btlPort | quote }}
+            # ── APMIA fine tuning (.config's APMENV_* section) ──────────────────
+            # Appended last so a colliding name overrides any fixed APMENV_*
+            # entry above -- Kubernetes takes the last-defined value when an
+            # env var name repeats in the same container spec.
+            {{- range .Values.dxo2.extraEnv }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
           ports:
             # Informational: the IA PHP collector socket and BTL listener ports.
             # Containers in the same pod communicate via 127.0.0.1 – no Service needed.

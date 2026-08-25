@@ -36,6 +36,12 @@
 #              TRAFFIC_ANONYMOUS_RATIO, TRAFFIC_CONCURRENT_SESSIONS,
 #              TRAFFIC_SLOWDOWN_PROBABILITY, TRAFFIC_SLOWDOWN_MIN_SECS,
 #              TRAFFIC_SLOWDOWN_MAX_SECS, TRAFFIC_LOG_LEVEL.
+#              Also optional: any number of APMENV_*-prefixed variables (see
+#              .config.example's "APMIA fine tuning" section) -- each becomes
+#              one dxo2.extraEnv {name, value} pair, appended to the
+#              dx-o2-agent container's env list after every fixed APMENV_*
+#              entry the chart already sets (agent identity, DB Monitor,
+#              log level), so a colliding name overrides the fixed one.
 set -euo pipefail
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -147,6 +153,26 @@ generate_values() {
     local mysql_monitor="${MYSQL_MONITOR:-true}"
     local mariadb_database="${MARIADB_DATABASE:-phpapp}"
 
+    # "APMIA fine tuning" section of .config (see .config.example): every
+    # APMENV_*-prefixed variable found there becomes one {name, value} pair
+    # under dxo2.extraEnv, which the StatefulSet appends to the dx-o2-agent
+    # container's env list after every fixed APMENV_* entry -- see that
+    # template's own comment for the resulting override precedence. Uses
+    # bash's ${!APMENV_@} to enumerate matching variable NAMES (arbitrary,
+    # unknown ahead of time) and indirect expansion to read each one's
+    # already shell-parsed value. Empty string when none are set, which
+    # yields a valid (null) `extraEnv:` key -- Helm's range over null is a
+    # no-op, not an error.
+    local apmenv_extra_env_yaml=""
+    local apmenv_name apmenv_value apmenv_value_yaml
+    for apmenv_name in "${!APMENV_@}"; do
+        apmenv_value="${!apmenv_name}"
+        apmenv_value_yaml="${apmenv_value//\'/\'\'}"
+        apmenv_extra_env_yaml+="    - name: ${apmenv_name}
+      value: '${apmenv_value_yaml}'
+"
+    done
+
     # Traffic generator – mirrors build-scripts/compose.sh's TRAFFIC_* defaults.
     local traffic_enabled="${TRAFFIC_ENABLED:-true}"
     local traffic_min_action_delay="${TRAFFIC_MIN_ACTION_DELAY_SECS:-1}"
@@ -220,7 +246,8 @@ dxo2:
   dbMonitor:
     enabled: ${mysql_monitor}
     instanceName: "${mariadb_database}"
-
+  extraEnv:
+${apmenv_extra_env_yaml}
 trafficGenerator:
   # deploy.sh always deploys the traffic-generator Deployment, matching how
   # compose.sh always includes the traffic container – TRAFFIC_ENABLED below

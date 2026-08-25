@@ -85,6 +85,16 @@ services:
       # (global_variables/global_status) instead of the default performance_schema
       # ones, which MariaDB does not implement -- see CLAUDE.md for details.
       APMENV_INTROSCOPE_AGENT_DBMONITOR_MYSQL_PROFILES_BPADB_VERSION:      "5_6x"
+    # "APMIA fine tuning" section of .config: compose.sh's load_config()
+    # collects every APMENV_* variable it finds there into this generated,
+    # gitignored file (see .config.example's "APMIA fine tuning" section).
+    # Compose loads env_file: values BEFORE the environment: block above, so
+    # a name that collides with one of the fixed APMENV_* entries above is
+    # overridden BY them, not the other way around -- use the dedicated
+    # .config variable instead if you need to override something already
+    # managed here.
+    env_file:
+      - .dxo2-fine-tuning.env
     volumes:
       # Mount read-write so Docker copies /opt/apmia from the image into the
       # named volume on first start (probe .so, BPA .so, pre-configured profile).

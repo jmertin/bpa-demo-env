@@ -220,6 +220,19 @@ dxo2:
   btlHost: "127.0.0.1"          # BTL: apache-php BPA plugin → dx-o2-agent
   btlPort: "8000"                # Default BTL listener port (BTL application.properties)
 
+  # ── APMIA fine tuning ────────────────────────────────────────────────────────
+  # deploy.sh populates this from every APMENV_* variable found in .config's
+  # "APMIA fine tuning" section (see .config.example) -- each becomes one
+  # {name, value} pair, appended to the dx-o2-agent container's env list
+  # AFTER every fixed APMENV_* entry above, so a colliding name overrides the
+  # fixed one (Kubernetes takes the last-defined value for a duplicate env
+  # var name). Empty by default; a bare `helm install` with no deploy.sh
+  # override sets no extra variables.
+  extraEnv: []
+  # extraEnv:
+  #   - name: APMENV_INTROSCOPE_AGENT_SOMEPROPERTY
+  #     value: "somevalue"
+
   resources:
     requests:
       memory: "792Mi"
