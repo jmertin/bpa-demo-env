@@ -5,6 +5,37 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-24 @ 17:05 - [Feat - load .config.example first, then .config, so a stale .config still gets new-release defaults]:
+  User's stated concern: .config won't always be updated to the latest
+  release, so a variable added to .config.example in a newer release
+  would simply be unset for anyone still running an older .config,
+  instead of falling back to a sensible default.
+  Fixed by changing load_config()'s source order in build.sh, push.sh,
+  package-app.sh, compose.sh, and deploy.sh: .config.example is now
+  sourced FIRST (non-fatal if somehow missing), then .config SECOND, so
+  .config's real values override .config.example's defaults wherever
+  it actually sets them, but anything .config doesn't set falls back to
+  .config.example instead of being silently unset.
+  Added a statement to the top of .config.example explaining this load
+  order and its consequence -- .config only needs to contain the values
+  you actually want to override.
+  Deliberately did NOT apply this to package-helm-bundle.sh's two
+  narrow, single-variable IMAGE_TAG reads (default_output_path(),
+  patch_config_example_image_tag()) -- those aren't the general
+  "load all config" pattern this fix addresses, and changing their
+  documented no-.config-at-all fallback ("untagged") to
+  .config.example's "1.0.0" would be an unrelated behavior change for a
+  different scenario (missing .config entirely, not a stale-but-present
+  one missing newer variables).
+  Verified: bash -n on all 5 scripts and .config.example; an isolated
+  test against copies of the real .config/.config.example confirmed a
+  variable removed from the stale .config copy correctly fell back to
+  .config.example's default, while a variable present in both still
+  took .config's override value; a real `compose.sh config` run against
+  the actual repo completed with no errors, confirming the change
+  didn't break normal operation.
+
+------------------------------------------------------------------------------
 2026-08-24 @ 16:20 - [Feat - "APMIA fine tuning" section: arbitrary APMENV_* pass-through to the dx-o2-agent container]:
   User asked for a new .config section holding arbitrary APMENV_*-prefixed
   environment variables, forwarded to the dx-o2-agent container before the

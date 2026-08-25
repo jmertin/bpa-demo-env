@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # Copy this file to .config and fill in real values.
 # .config is excluded from git via .gitignore and must NEVER be committed.
-# All build, push, deploy, and compose scripts read exclusively from this file.
+#
+# Every build/push/deploy/compose script loads THIS file first, as the
+# baseline set of defaults, then loads .config second so its real values
+# override them. This means a .config that hasn't been updated since an
+# older release still picks up sensible defaults for any variable this
+# file has added since -- rather than that variable silently being unset.
+# It also means .config only ever needs to contain the values you actually
+# want to override; anything it doesn't set falls back to what's defined
+# here.
 
 # ── Docker Registry ───────────────────────────────────────────────────────────
 REGISTRY="registry.example.com"
