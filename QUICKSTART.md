@@ -137,23 +137,32 @@ its standalone container (`traffic-generator/`) can generate this
 automatically — set up the full console-side view (Service, Management
 Module, Alerts, Universes, SLI, Dashboard) with the scripts in
 `dxo2-scripts/` — no AI assistant required, just the `dx-do` CLI (see
-`dxo2-scripts/README.md` for setup). Run them in this order:
+`dxo2-scripts/README.md` for setup). Every script requires a
+`<docker|k8s>` platform argument first — it identifies which
+deployment's telemetry the script's resources should track and exits
+immediately if omitted or invalid (see `dxo2-scripts/README.md`'s
+"Docker/Kubernetes separation" section). Run them in this order, once
+per platform you've actually deployed:
 
 ```bash
-dxo2-scripts/bpa-demo-service.sh create                  # "BPA-Demo" Service
-dxo2-scripts/bpa-demo-management-module.sh create        # MM + trouble-use-case alert
-dxo2-scripts/bpa-demo-agent-alerts.sh create              # 12 more alerts (DB, PHP, browser/RUM)
-dxo2-scripts/bpa-demo-universe.sh create                  # APM Universe (topology/metric scope)
-dxo2-scripts/bpa-demo-services-universe.sh create         # O2/Platform ("Services") Universe
-dxo2-scripts/bpa-demo-sli.sh create                       # "BPA-Demo Frontend Response Time" SLI
-dxo2-scripts/bpa-demo-agent-health-dashboard.sh create    # "BPA-Demo · Agent Health" Dashboard
+dxo2-scripts/bpa-demo-service.sh docker create                  # "BPA-Demo" Service
+dxo2-scripts/bpa-demo-management-module.sh docker create        # MM + trouble-use-case alert
+dxo2-scripts/bpa-demo-agent-alerts.sh docker create              # 12 more alerts (DB, PHP, browser/RUM)
+dxo2-scripts/bpa-demo-universe.sh docker create                  # APM Universe (topology/metric scope)
+dxo2-scripts/bpa-demo-services-universe.sh docker create         # O2/Platform ("Services") Universe
+dxo2-scripts/bpa-demo-sli.sh docker create                       # "BPA-Demo Frontend Response Time" SLI
+dxo2-scripts/bpa-demo-agent-health-dashboard.sh docker create    # "BPA-Demo · Agent Health" Dashboard
+
+# Repeat with `k8s` in place of `docker` for a Kubernetes/Helm deployment.
 ```
 
 Every script supports `create` (safe to re-run — self-heals a
 previously-broken definition instead of just no-op'ing), `check`, and
-`delete`. `bpa-demo-agent-alerts.sh` depends on
-`bpa-demo-management-module.sh` having been run first;
-`bpa-demo-agent-health-dashboard.sh` reuses the alerts both of those create.
+`delete`, all after the required platform argument. `bpa-demo-agent-alerts.sh`
+depends on `bpa-demo-management-module.sh` having been run first for
+the same platform; `bpa-demo-agent-health-dashboard.sh` reuses the
+alerts both of those create and is shared across platforms (the
+platform argument just sets its "Deployment" dropdown's default).
 
 `bpa-demo-services-universe.sh create` can now create its Universe from
 nothing — as of 2026-08-24, `dx-do`'s `service-universe create` (which

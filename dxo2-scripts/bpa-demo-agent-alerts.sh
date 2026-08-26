@@ -117,6 +117,30 @@
 # response-time/error-rate SLI templates and the agent-health dashboard
 # template -- see each file's own history for its part of the fix.
 #
+# Bug fixed 2026-08-26, reported by the user: the infra/php tiers'
+# AGENT_SOURCE_PATTERN and several ALERT_ATTR_PATTERN entries wildcarded
+# the deployment identity (`bpa-demo-[^|]+`) and/or the DB Monitor
+# connection hostname (`[^|]+`, "mariadb" for Compose vs "127.0.0.1" for
+# Kubernetes) so a single Metric Grouping/Alert matched BOTH deployments
+# at once -- a `trouble`-use-case spike or a DB outage on either
+# deployment fired the identical alert with no way to tell which one
+# caused it. Split into two independent sets of 10 Metric Groupings +
+# Alerts (the infra + php tiers double; the 2 browser-tier ones have no
+# per-platform identity today and stay shared, same as
+# bpa-demo-service.sh's fourth content group), one set per platform,
+# attached to that platform's own Management Module
+# (bpa-demo-management-module.sh's `<docker|k8s>` split):
+#
+#   docker -> attached to Management Module "BPA-Demo"
+#   k8s    -> attached to Management Module "BPA-Demo K8s"
+#
+# Literal (not wildcarded) identity and DB-hostname segments per platform:
+#   docker: bpa-demo-docker            / DB Monitor hostname "mariadb"
+#   k8s:    bpa-demo-k8s               / DB Monitor hostname "127.0.0.1"
+# (see CLAUDE.md's "Deployment identity" and DB Monitor `hostname`
+# property sections for why these two identities differ by platform in
+# the first place).
+#
 # Bug fixed 2026-08-21: `create` and `delete` gave contradictory results
 # (create said "already exists," delete said "does not exist") for the
 # same 12 ids. Root cause: the parent "BPA-Demo" Management Module had
@@ -146,25 +170,32 @@
 # deleted and recreated in the first place.
 #
 # Usage:
-#   dxo2-scripts/bpa-demo-agent-alerts.sh create   - create the 12 metric
+#   dxo2-scripts/bpa-demo-agent-alerts.sh <docker|k8s> create   - create
+#                                            that platform's 12 metric
 #                                            groupings + alerts. Safe to
 #                                            re-run: self-heals any
 #                                            already-created metric grouping
 #                                            with zero live matches.
-#   dxo2-scripts/bpa-demo-agent-alerts.sh check    - print whether each
-#                                            exists and its current
-#                                            definition.
-#   dxo2-scripts/bpa-demo-agent-alerts.sh delete   - delete all 12 alerts
-#                                            and metric groupings. Prompts
-#                                            for confirmation; pass
-#                                            -y|--yes to skip it.
+#   dxo2-scripts/bpa-demo-agent-alerts.sh <docker|k8s> check    - print
+#                                            whether each exists and its
+#                                            current definition.
+#   dxo2-scripts/bpa-demo-agent-alerts.sh <docker|k8s> delete   - delete
+#                                            that platform's 12 alerts and
+#                                            metric groupings. Prompts for
+#                                            confirmation; pass -y|--yes
+#                                            to skip it.
 #   dxo2-scripts/bpa-demo-agent-alerts.sh -h|--help - print this help.
 #
+# The <docker|k8s> platform argument is required and must come first -- the
+# script exits with an error if it's missing or not exactly one of those
+# two values, before doing anything else.
+#
 # Prerequisites:
-#   dxo2-scripts/bpa-demo-management-module.sh create must have been run
-#   first -- this script attaches all Metric Groupings to that script's
-#   "BPA-Demo" Management Module and reads its id from
-#   dxo2-scripts/.state/bpa-demo-management-module.env.
+#   dxo2-scripts/bpa-demo-management-module.sh <docker|k8s> create must
+#   have been run first for the SAME platform -- this script attaches all
+#   Metric Groupings to that platform's own Management Module and reads
+#   its id from
+#   dxo2-scripts/.state/bpa-demo-management-module-<docker|k8s>.env.
 #   tools/dx-do-<platform>              DX O2 CLI - see that script's own
 #                                        header comment for download/setup.
 #                                        Override the path with the DX_DO
@@ -175,17 +206,17 @@
 #                                        for how to generate this file.
 #
 # State:
-#   Persists the 12 (Metric Grouping id, Alert id) pairs to
-#   dxo2-scripts/.state/bpa-demo-agent-alerts.env (git-ignored) so
-#   check/delete can find them again -- see bpa-demo-management-module.sh's
-#   header comment for why (dx-do's classic-APM list commands don't
-#   reliably round-trip an id by name). If that file is lost, the
-#   resources still exist in the tenant -- each metric grouping's name is
-#   prefixed "BPA-Demo Infra -", "BPA-Demo PHP -", or "BPA-Demo Browser -";
-#   find and remove them via `dx-do metricgrouping list-by-managementmodule
-#   managementModuleId=<mm-id>` (delete each alert referencing a grouping
-#   before the grouping itself, or the server rejects the grouping
-#   delete).
+#   Persists each platform's 12 (Metric Grouping id, Alert id) pairs to
+#   dxo2-scripts/.state/bpa-demo-agent-alerts-<docker|k8s>.env
+#   (git-ignored) so check/delete can find them again -- see
+#   bpa-demo-management-module.sh's header comment for why (dx-do's
+#   classic-APM list commands don't reliably round-trip an id by name). If
+#   that file is lost, the resources still exist in the tenant -- each
+#   metric grouping's name is prefixed "BPA-Demo Infra -", "BPA-Demo PHP
+#   -", or "BPA-Demo Browser -"; find and remove them via `dx-do
+#   metricgrouping list-by-managementmodule managementModuleId=<mm-id>`
+#   (delete each alert referencing a grouping before the grouping itself,
+#   or the server rejects the grouping delete).
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -193,8 +224,6 @@ readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
-readonly STATE_FILE="${STATE_DIR}/bpa-demo-agent-alerts.env"
-readonly MM_STATE_FILE="${STATE_DIR}/bpa-demo-management-module.env"
 
 # Ordered alert keys -- index order is significant: it is the order MGs
 # and alerts are created in, and the order arrays below are indexed by.
@@ -258,17 +287,22 @@ declare -rA ALERT_NAME_MAP=(
     [browser-page-hits]='Browser RUM - Page Hits Spike'
 )
 
-declare -rA ALERT_ATTR_PATTERN=(
-    [infra-availability]='MySQL Databases\|[^|]+\|phpapp:Availability$'
-    [infra-conn-refused]='MySQL Databases\|[^|]+\|phpapp\|Connections:Connection Refusal Rate$'
-    [infra-conn-pressure]='MySQL Databases\|[^|]+\|phpapp\|Resource Utilization:Connection Usage Rate \(%\)$'
-    [infra-cache-hit]='MySQL Databases\|[^|]+\|phpapp\|InnoDB:Cache Hit Rate \(%\)$'
-    [infra-slow-query]='MySQL Databases\|[^|]+\|phpapp\|Efficiency\|Query:Slow query rate \(%\)$'
-    [php-resp-time]='Frontends\|Apps\|bpa-demo-[^|]+:Average Response Time \(ms\)$'
-    [php-error-rate]='Frontends\|Apps\|bpa-demo-[^|]+:Errors Per Interval$'
-    [php-concurrency]='Frontends\|Apps\|bpa-demo-[^|]+:Concurrent Invocations$'
-    [php-db-resp-time]='Backends\|phpapp on [^|]+-3306 \(MySQL DB\):Average Response Time \(ms\)$'
-    [php-db-query-storm]='Backends\|phpapp on [^|]+-3306 \(MySQL DB\):Responses Per Interval$'
+# Templates with __APP_ID__ (deployment identity) / __DB_HOST__ (DB
+# Monitor connection hostname) placeholders, resolved into the real,
+# per-platform ALERT_ATTR_PATTERN further down once the platform argument
+# is parsed. The 2 browser-tier entries have no per-platform identity
+# today (see this script's header) and carry no placeholder.
+declare -rA ALERT_ATTR_PATTERN_TEMPLATE=(
+    [infra-availability]='MySQL Databases\|__DB_HOST__\|phpapp:Availability$'
+    [infra-conn-refused]='MySQL Databases\|__DB_HOST__\|phpapp\|Connections:Connection Refusal Rate$'
+    [infra-conn-pressure]='MySQL Databases\|__DB_HOST__\|phpapp\|Resource Utilization:Connection Usage Rate \(%\)$'
+    [infra-cache-hit]='MySQL Databases\|__DB_HOST__\|phpapp\|InnoDB:Cache Hit Rate \(%\)$'
+    [infra-slow-query]='MySQL Databases\|__DB_HOST__\|phpapp\|Efficiency\|Query:Slow query rate \(%\)$'
+    [php-resp-time]='Frontends\|Apps\|__APP_ID__:Average Response Time \(ms\)$'
+    [php-error-rate]='Frontends\|Apps\|__APP_ID__:Errors Per Interval$'
+    [php-concurrency]='Frontends\|Apps\|__APP_ID__:Concurrent Invocations$'
+    [php-db-resp-time]='Backends\|phpapp on __DB_HOST__-3306 \(MySQL DB\):Average Response Time \(ms\)$'
+    [php-db-query-storm]='Backends\|phpapp on __DB_HOST__-3306 \(MySQL DB\):Responses Per Interval$'
     [browser-page-load]='Business Segment\|BPA Demo\|.*:Average Page Load Time \(ms\)$'
     [browser-page-hits]='Business Segment\|BPA Demo\|.*:Page Hits Per Interval$'
 )
@@ -323,10 +357,12 @@ declare -rA ALERT_ERROR=(
 # is false. $-anchored so the three sources' alerts never conflate. Note
 # that "browser" isn't a queryable `dx-done agent` entry (see header
 # comment) -- its metrics are real, just attributed to a different
-# 4-segment identity than the two agents `agent list` shows.
-declare -rA AGENT_SOURCE_PATTERN=(
-    [infra]='SuperDomain\|bpa-demo-[^|]+\|bpa-demo-[^|]+\|bpa-demo-[^|]+(%\d+)?$'
-    [php]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?$'
+# 4-segment identity than the two agents `agent list` shows. infra/php use
+# the __APP_ID__ placeholder (resolved per-platform further down); browser
+# has no per-platform identity today and stays a literal.
+declare -A AGENT_SOURCE_PATTERN_TEMPLATE=(
+    [infra]='SuperDomain\|__APP_ID__\|__APP_ID__\|__APP_ID__(%\d+)?$'
+    [php]='SuperDomain\|__APP_ID__\|php-probes\|__APP_ID__(%\d+)?(\(/usr/sbin/apache2\))?$'
     [browser]='SuperDomain\|Experience Collector Host\|DxC Agent\|Logstash-APM-Plugin$'
 )
 
@@ -371,7 +407,7 @@ check_prerequisites() {
     [[ -f "${DXDO_CONFIG}" ]] || \
         fatal "dx-do tenant config not found at ${DXDO_CONFIG}. See https://github.com/kialambroca/dx-do-dist for how to generate it."
     [[ -f "${MM_STATE_FILE}" ]] || \
-        fatal "Parent Management Module state not found at ${MM_STATE_FILE}. Run 'dxo2-scripts/bpa-demo-management-module.sh create' first."
+        fatal "Parent Management Module state not found at ${MM_STATE_FILE}. Run 'dxo2-scripts/bpa-demo-management-module.sh ${PLATFORM} create' first."
 }
 
 ## Run a dx-do command, stripping progress noise and defensively dropping any
@@ -510,16 +546,34 @@ heal_one() {
         return 0
     fi
 
-    local metrics_json
-    metrics_json=$("${DX_DO_BIN}" metricgrouping list-metrics metricGroupingId="${mg_id}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null || true)
-    local match_count
-    match_count=$(printf '%s' "${metrics_json}" | grep -c '"SuperDomain|' || true)
+    # Check the pattern itself, not just "any live matches" -- a resource
+    # migrated from a pre-split shared/wildcarded pattern (see "Bug fixed
+    # 2026-08-26" in this script's header) can still have live matches
+    # under the OLD wildcarded pattern (it matched every platform), which
+    # would otherwise make a match-count-only check falsely report healthy
+    # without ever picking up the new platform-specific literal.
+    local current_pattern
+    current_pattern=$("${DX_DO_BIN}" metricgrouping detail metricGroupingId="${mg_id}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null \
+        | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(d.get('specifier', {}).get('attributeNameSpecifier', {}).get('pattern', ''))
+except Exception:
+    pass
+" 2>/dev/null || true)
+    local match_count="0"
+    if [[ "${current_pattern}" == "${ALERT_ATTR_PATTERN[${key}]}" ]]; then
+        local metrics_json
+        metrics_json=$("${DX_DO_BIN}" metricgrouping list-metrics metricGroupingId="${mg_id}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null || true)
+        match_count=$(printf '%s' "${metrics_json}" | grep -c '"SuperDomain|' || true)
+    fi
     if [[ "${match_count}" -gt 0 ]]; then
-        info "'${key}' (${mg_id}) has ${match_count} live matches -- nothing to do."
+        info "'${key}' (${mg_id}) already has the current pattern and ${match_count} live matches -- nothing to do."
         return 0
     fi
 
-    info "'${key}' (${mg_id}) has ZERO live matches -- self-healing with the current attributeNamePattern/sourceNamePattern."
+    info "'${key}' (${mg_id}) has a stale pattern or ZERO live matches -- self-healing with the current attributeNamePattern/sourceNamePattern."
     run_dx_do metricgrouping update \
         metricGroupingId="${mg_id}" \
         managementModuleId="${MM_ID}" \
@@ -542,7 +596,7 @@ cmd_create() {
         for key in "${ALERT_KEYS[@]}"; do
             heal_one "${key}"
         done
-        info "Run '${SCRIPT_NAME} check' to see their current definitions."
+        info "Run '${SCRIPT_NAME} ${PLATFORM} check' to see their current definitions."
         return 0
     fi
 
@@ -566,7 +620,7 @@ cmd_check() {
     load_state
 
     if [[ "${#MG_IDS[@]}" -eq 0 ]]; then
-        info "No state file at ${STATE_FILE} -- '${SCRIPT_NAME} create' has not been run here."
+        info "No state file at ${STATE_FILE} -- '${SCRIPT_NAME} ${PLATFORM} create' has not been run here."
         info "The resources may still exist under a different state file/machine -- check 'dx-do metricgrouping list-by-managementmodule managementModuleId=${MM_ID}'."
         exit 1
     fi
@@ -664,7 +718,58 @@ cmd_delete() {
     info "Done."
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+case "${PLATFORM}" in
+    docker)
+        readonly APP_ID="bpa-demo-docker"
+        readonly DB_HOST="mariadb"
+        ;;
+    k8s)
+        readonly APP_ID="bpa-demo-k8s"
+        readonly DB_HOST="127\\.0\\.0\\.1"
+        ;;
+esac
+readonly STATE_FILE="${STATE_DIR}/bpa-demo-agent-alerts-${PLATFORM}.env"
+readonly MM_STATE_FILE="${STATE_DIR}/bpa-demo-management-module-${PLATFORM}.env"
+
+declare -A ALERT_ATTR_PATTERN=()
+declare -A AGENT_SOURCE_PATTERN=()
+for _key in "${ALERT_KEYS[@]}"; do
+    _pattern="${ALERT_ATTR_PATTERN_TEMPLATE[${_key}]}"
+    _pattern="${_pattern//__APP_ID__/${APP_ID}}"
+    _pattern="${_pattern//__DB_HOST__/${DB_HOST}}"
+    ALERT_ATTR_PATTERN[${_key}]="${_pattern}"
+done
+for _agent in infra php browser; do
+    _pattern="${AGENT_SOURCE_PATTERN_TEMPLATE[${_agent}]}"
+    _pattern="${_pattern//__APP_ID__/${APP_ID}}"
+    AGENT_SOURCE_PATTERN[${_agent}]="${_pattern}"
+done
+unset _key _pattern _agent
+readonly ALERT_ATTR_PATTERN
+readonly AGENT_SOURCE_PATTERN
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0

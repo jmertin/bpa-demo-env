@@ -53,24 +53,42 @@
 # there's no orphaned unscoped Universe to clean up from this script's
 # own history.
 #
+# Bug fixed 2026-08-26, reported by the user: this Universe was scoped to
+# the single, shared "BPA-Demo" Service, which itself mixed both
+# deployments' telemetry (see bpa-demo-service.sh's own 2026-08-26 fix).
+# Split into two independent Universes, one per platform, each scoped to
+# that platform's own Service:
+#
+#   docker -> Universe "BPA Demo service universe"     -- unchanged
+#                                                           name, scoped
+#                                                           to Service
+#                                                           "BPA-Demo"
+#   k8s    -> Universe "BPA Demo K8s service universe" -- new, scoped to
+#                                                           Service
+#                                                           "BPA-Demo K8s"
+#
 # Usage:
-#   dxo2-scripts/bpa-demo-services-universe.sh create   - create the
-#                                        Universe if it doesn't exist
-#                                        (self-heals by label if the
-#                                        state file is missing/stale), or
-#                                        re-apply the correct
-#                                        SERVICE-scoped serviceNames via
-#                                        `service-universe update` if it
-#                                        exists but has drifted. Safe to
-#                                        re-run.
-#   dxo2-scripts/bpa-demo-services-universe.sh check    - print whether it
-#                                        exists and its current
-#                                        definition.
-#   dxo2-scripts/bpa-demo-services-universe.sh delete   - delete the
-#                                        Universe. Prompts for
-#                                        confirmation; pass -y|--yes to
-#                                        skip it.
+#   dxo2-scripts/bpa-demo-services-universe.sh <docker|k8s> create   -
+#                                        create that platform's Universe
+#                                        if it doesn't exist (self-heals
+#                                        by label if the state file is
+#                                        missing/stale), or re-apply the
+#                                        correct SERVICE-scoped
+#                                        serviceNames via `service-universe
+#                                        update` if it exists but has
+#                                        drifted. Safe to re-run.
+#   dxo2-scripts/bpa-demo-services-universe.sh <docker|k8s> check    -
+#                                        print whether it exists and its
+#                                        current definition.
+#   dxo2-scripts/bpa-demo-services-universe.sh <docker|k8s> delete   -
+#                                        delete that platform's Universe.
+#                                        Prompts for confirmation; pass
+#                                        -y|--yes to skip it.
 #   dxo2-scripts/bpa-demo-services-universe.sh -h|--help - print this help.
+#
+# The <docker|k8s> platform argument is required and must come first -- the
+# script exits with an error if it's missing or not exactly one of those
+# two values, before doing anything else.
 #
 # Prerequisites:
 #   tools/dx-do-<platform>              DX O2 CLI - see
@@ -84,23 +102,20 @@
 #                                        verify the SERVICE filter values.
 #
 # State:
-#   Persists the Universe id (VIEW###) to
-#   dxo2-scripts/.state/bpa-demo-services-universe.env (git-ignored). If
-#   the state file is lost, `create`/`check` recover it automatically via
-#   `service-universe list` and a label match on "BPA Demo service
-#   universe" -- or find it manually the same way: `dx-do service-universe
-#   list output.format=json` (redirect to a file, not a pipe -- see the
-#   ~64KB pipe-truncation gotcha documented elsewhere in this directory).
+#   Persists each platform's Universe id (VIEW###) to
+#   dxo2-scripts/.state/bpa-demo-services-universe-<docker|k8s>.env
+#   (git-ignored). If the state file is lost, `create`/`check` recover it
+#   automatically via `service-universe list` and a label match -- or
+#   find it manually the same way: `dx-do service-universe list
+#   output.format=json` (redirect to a file, not a pipe -- see the ~64KB
+#   pipe-truncation gotcha documented elsewhere in this directory).
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly UNIVERSE_LABEL="BPA Demo service universe"
-readonly SERVICE_NAME="BPA-Demo"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
-readonly STATE_FILE="${STATE_DIR}/bpa-demo-services-universe.env"
 
 ## Print usage information.
 usage() {
@@ -228,7 +243,7 @@ cmd_create() {
         if [[ "$(filter_is_correct "${UNIVERSE_ID}")" == "1" ]]; then
             info "Universe '${UNIVERSE_LABEL}' (${UNIVERSE_ID}) already exists and is correctly scoped to '${SERVICE_NAME}' -- nothing to do."
             save_state
-            info "Run '${SCRIPT_NAME} check' to see its current definition."
+            info "Run '${SCRIPT_NAME} ${PLATFORM} check' to see its current definition."
             return 0
         fi
         info "Universe '${UNIVERSE_LABEL}' (${UNIVERSE_ID}) exists but its SERVICE filter is missing or doesn't include '${SERVICE_NAME}' -- self-healing with 'service-universe update'."
@@ -237,7 +252,7 @@ cmd_create() {
             "serviceNames=${SERVICE_NAME}" \
             dry-run=false
         save_state
-        info "Done. Run '${SCRIPT_NAME} check' to verify."
+        info "Done. Run '${SCRIPT_NAME} ${PLATFORM} check' to verify."
         return 0
     fi
 
@@ -266,7 +281,7 @@ cmd_check() {
     fi
 
     if [[ -z "${UNIVERSE_ID}" ]]; then
-        info "No state file at ${STATE_FILE} and no Universe named '${UNIVERSE_LABEL}' found via 'service-universe list' -- '${SCRIPT_NAME} create' has not been run."
+        info "No state file at ${STATE_FILE} and no Universe named '${UNIVERSE_LABEL}' found via 'service-universe list' -- '${SCRIPT_NAME} ${PLATFORM} create' has not been run."
         exit 1
     fi
 
@@ -319,7 +334,40 @@ cmd_delete() {
     info "Done."
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+case "${PLATFORM}" in
+    docker)
+        readonly UNIVERSE_LABEL="BPA Demo service universe"
+        readonly SERVICE_NAME="BPA-Demo"
+        ;;
+    k8s)
+        readonly UNIVERSE_LABEL="BPA Demo K8s service universe"
+        readonly SERVICE_NAME="BPA-Demo K8s"
+        ;;
+esac
+readonly STATE_FILE="${STATE_DIR}/bpa-demo-services-universe-${PLATFORM}.env"
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0

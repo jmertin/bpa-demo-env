@@ -139,22 +139,34 @@ MYSQL_MONITOR="true"
 # When set, the PHP probe injects the snippet into every HTML response automatically
 # (wily_php_agent.browseragent.autoInjection).  Leave empty to disable.
 #
+# Split into two variables (2026-08-26) -- Docker Compose and Kubernetes are
+# separate deployments and must report under separate AXA applications, or
+# every real browser session looks identical in DX O2 regardless of which
+# deployment it actually hit:
+#   APMIA_BROWSER_SNIPPET_DOCKER  -- used only by build-scripts/compose.sh
+#   APMIA_BROWSER_SNIPPET_K8S     -- used only by build-scripts/deploy.sh
+# Each is exposed to its own container(s) as the same APMIA_BROWSER_SNIPPET
+# environment variable the PHP probe's entrypoint patching already expects --
+# only which .config variable feeds it differs per platform.
+#
 # MUST use single quotes: the snippet value contains double-quotes (HTML attributes
 # in the <script> tag).  Double-quoting the variable would cause the shell to
 # interpret those inner double-quotes as string terminators, corrupting the value.
 # Single quotes preserve the content exactly as-is, including all double-quotes.
 #
 # Example:
-#   APMIA_BROWSER_SNIPPET='<script src="https://example.apm.broadcom.com/snippet.js"></script>'
+#   APMIA_BROWSER_SNIPPET_DOCKER='<script src="https://example.apm.broadcom.com/snippet.js"></script>'
 #
 # If a snippet is already present below (not the empty '' default), it has
 # most likely been populated by dxo2-scripts/bpa-demo-axa-app.sh's `create`
-# command, which creates the "BPA Demo AXA" DX O2 AXA application and syncs
-# its BrowserAgent snippet here automatically -- see that script's header
-# comment and dxo2-scripts/README.md's AXA section. Safe to commit: unlike
-# every other value in this file, a BA snippet is a client-side <script> tag
-# meant to be embedded in every page (visible via view-source), not a secret.
-APMIA_BROWSER_SNIPPET='<script type="text/javascript" id="ca_eum_ba" src="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/bajs?agent=browser" data-profileUrl="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/profile?agent=browser" data-tenantID="CA629949-9D34-4BA7-B198-0335025F4AF3" data-appID="BPA Demo AXA" data-appVersion="1.0" data-use-axa-appname="true" data-appKey="4ab13890-9fa3-11f1-b11a-cb298d633a77" async ></script>'
+# command, which creates that platform's own "BPA Demo AXA"/"BPA Demo AXA
+# K8s" DX O2 AXA application and syncs its BrowserAgent snippet here
+# automatically -- see that script's header comment and
+# dxo2-scripts/README.md's AXA section. Safe to commit: unlike every other
+# value in this file, a BA snippet is a client-side <script> tag meant to
+# be embedded in every page (visible via view-source), not a secret.
+APMIA_BROWSER_SNIPPET_DOCKER=''
+APMIA_BROWSER_SNIPPET_K8S=''
 
 # ── APMIA fine tuning ─────────────────────────────────────────────────────────
 # Escape hatch for introscope.* Java Agent profile properties that don't

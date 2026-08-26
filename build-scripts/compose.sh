@@ -124,11 +124,17 @@ load_config() {
     export APMIA_BTL_HOST="${APMIA_BTL_HOST:-127.0.0.1}"
     export APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
     export MYSQL_MONITOR="${MYSQL_MONITOR:-true}"
-    # APMIA_BROWSER_SNIPPET may contain double-quotes and other characters that
-    # are unsafe to interpolate directly into YAML.  Export it here so that
-    # docker-compose.yml can use the list/passthrough form (- APMIA_BROWSER_SNIPPET)
-    # which passes the value straight to the container without YAML parsing.
-    export APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET:-}"
+    # APMIA_BROWSER_SNIPPET_DOCKER is Compose's own half of the split
+    # per-platform AXA/BrowserAgent config (see .config.example's "DX O2
+    # Browser Agent auto-injection" section and dxo2-scripts/bpa-demo-axa-
+    # app.sh) -- deploy.sh reads APMIA_BROWSER_SNIPPET_K8S instead, so the
+    # two deployments never report under the same AXA application. Exported
+    # under the plain APMIA_BROWSER_SNIPPET name the container actually
+    # expects (docker-compose.yml's passthrough form, `- APMIA_BROWSER_SNIPPET`)
+    # -- only which .config variable feeds it differs per platform. May
+    # contain double-quotes and other characters unsafe to interpolate
+    # directly into YAML, which is exactly why the passthrough form exists.
+    export APMIA_BROWSER_SNIPPET="${APMIA_BROWSER_SNIPPET_DOCKER:-}"
 
     write_apmenv_fine_tuning_file
 

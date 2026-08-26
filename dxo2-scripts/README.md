@@ -23,11 +23,17 @@ each one is a self-contained, human-readable CLI.
 Every script in this directory follows the same shape:
 
 ```bash
-dxo2-scripts/<name>.sh create        # create the resource; safe to re-run
-dxo2-scripts/<name>.sh check         # print whether it exists + its definition
-dxo2-scripts/<name>.sh delete [-y]   # delete it (prompts unless -y/--yes)
-dxo2-scripts/<name>.sh -h|--help     # usage
+dxo2-scripts/<name>.sh <docker|k8s> create        # create the resource; safe to re-run
+dxo2-scripts/<name>.sh <docker|k8s> check         # print whether it exists + its definition
+dxo2-scripts/<name>.sh <docker|k8s> delete [-y]   # delete it (prompts unless -y/--yes)
+dxo2-scripts/<name>.sh -h|--help                  # usage
 ```
+
+**`<docker|k8s>` is a required platform argument, added 2026-08-26 at the
+user's request, and must come first.** Every script exits with an error
+before doing anything else (no tenant call, no `.config` read) if it's
+missing or isn't exactly `docker` or `k8s` -- see "Docker/Kubernetes
+separation" below for why and what each script actually does with it.
 
 `create` is idempotent: it checks for the resource first and warns instead
 of failing if it already exists. `delete` prompts for confirmation by
@@ -36,26 +42,74 @@ console access -- pass `-y`/`--yes` for non-interactive use.
 
 Scripts managing classic-APM resources (Management Modules, Metric
 Groupings, Alerts) persist the ids `create` returns to a local
-`.state/<script-name>.env` file (git-ignored) so `check`/`delete` can find
-them again -- `dx-do`'s list commands for these resource types return
-wrapped table output with no raw-JSON mode, so reliably re-discovering an
-id by name alone isn't practical. If the state file is lost, the resources
-still exist in the tenant; find them by name via the relevant `dx-do list`
-command and remove them manually (each script's header comment says which).
+`.state/<script-name>-<docker|k8s>.env` file (git-ignored) so `check`/`delete`
+can find them again -- `dx-do`'s list commands for these resource types
+return wrapped table output with no raw-JSON mode, so reliably
+re-discovering an id by name alone isn't practical. If the state file is
+lost, the resources still exist in the tenant; find them by name via the
+relevant `dx-do list` command and remove them manually (each script's
+header comment says which).
+
+## Docker/Kubernetes separation
+
+Added 2026-08-26: the user reported that Browser Agent/AXA telemetry (and,
+on inspection, several other resources across this directory) mixed both
+the Docker Compose and Kubernetes deployments' data together with no way
+to tell them apart in the console -- e.g. one shared Metric Grouping
+matched `bpa-demo-docker` *and* `bpa-demo-k8s` in a single wildcarded
+regex, so a `trouble`-use-case spike or a DB outage on either deployment
+fired the identical alert. Every script now takes the required
+`<docker|k8s>` platform argument documented above; what it actually does
+with it falls into two groups:
+
+- **Genuinely duplicated per platform** (`bpa-demo-service.sh`,
+  `bpa-demo-management-module.sh`, `bpa-demo-agent-alerts.sh`'s infra/php
+  tiers, `bpa-demo-universe.sh`, `bpa-demo-services-universe.sh`,
+  `bpa-demo-sli.sh`'s response-time/error-rate groups, `bpa-demo-axa-app.sh`):
+  the previously-wildcarded identity segment (`bpa-demo-[^|]+` or similar)
+  became a literal, platform-specific one (`bpa-demo-docker` /
+  `bpa-demo-k8s`), and the resource itself was duplicated -- one instance
+  per platform, tracked in separate state files. The pre-existing shared
+  instance was repointed to be the "docker" one (same name, corrected
+  pattern) rather than deleted and recreated; a new "k8s" instance was
+  created alongside it. Where the underlying `dx-do` API can't remove an
+  already-added entry (`apm-universe`'s metric sources), the old
+  wildcarded entry stays in place, harmlessly inert, alongside the new
+  literal one -- same "no remove command" limitation already documented
+  for that script before this change.
+- **Not duplicated -- already solved at the runtime/viewer level**
+  (`bpa-demo-agent-health-dashboard.sh`, `bpa-demo-application-dashboards.sh`):
+  these dashboards already had a Grafana template variable ("Deployment"
+  or "Application(s)") that lets a viewer pick one platform, both, or
+  either -- duplicating the whole dashboard would just be a second copy of
+  the identical thing. Here the platform argument instead sets that
+  variable's *default* selection at creation time, so a fresh viewer sees
+  one platform by default while still being free to pick otherwise.
+- **The two browser-tier alerts and one browser-tier SLI group
+  (`bpa-demo-agent-alerts.sh`, `bpa-demo-sli.sh`) and the Browser
+  Agent/BPA WebServer content group (`bpa-demo-service.sh`,
+  `bpa-demo-universe.sh`) are deliberately left shared** -- there is
+  still only one Browser Agent identity (`Logstash-APM-Plugin`) per
+  script today, so there is nothing to duplicate against yet. Splitting
+  `bpa-demo-axa-app.sh`'s AXA application in two (see the AXA section
+  below) may eventually make a real per-platform Browser Agent split
+  possible, once real browser traffic against both deployments confirms
+  whether the two AXA apps' data actually lands under distinguishable
+  paths -- not yet verified, so not yet acted on.
 
 ## Scripts
 
 | Script | Manages |
 |---|---|
-| `bpa-demo-service.sh` | The `"BPA-Demo"` DX O2 Service -- groups the php-probe's frontend URLs, the BPA Webserver Extension's business transactions, the BPA WebServer Agent's own reporting identity (`Experience Collector Host\|DxC Agent\|Logstash-APM-Plugin`, where the Browser Agent/BA snippet's page-load and page-hits timing actually lands), and the mysql backend database (both the php-probe's inferred dependency and the DB Monitor extension's own CI) under one console view. There is no separate content group for a "Browser Agent" entity -- the `Custom Business Application Agent (Virtual)` path that shows the same values isn't a real topology entity (confirmed empirically: no content-query attribute matches it), so the BPA WebServer Agent group already covers it. `create` is safe to re-run against a Service that predates this group -- it detects and adds anything missing rather than no-op'ing outright. |
-| `bpa-demo-management-module.sh` | The `"BPA-Demo"` APM Management Module, a Metric Grouping matching every tracked frontend URL's response time, and an Alert that catches the `trouble` use case (5000 sequential DB reads/request) via a response-time threshold. `empty_basket` and `locked` have no currently-observable APM signal to alert on -- see the script's header comment for why. `create` self-heals a Metric Grouping with zero live matches (see the script's "Bug fixed 2026-07-06" header comment -- a missing `SuperDomain\|` prefix on the inherited agent pattern silently matched nothing). |
-| `bpa-demo-agent-alerts.sh` | 12 Metric Groupings + Alerts across three telemetry sources, all attached to the same `"BPA-Demo"` Management Module -- five for the Infrastructure Agent's DB Monitor extension (availability, connection refusals, connection pool pressure, buffer pool cache hit rate, slow query rate), five for the PHP probe agent (app response time, error rate, concurrency, DB backend response time, DB backend query volume), and two for the browser/RUM pipeline (page load time, page hits per interval -- attributed to a `Logstash-APM-Plugin` identity that never shows up in `dx-done agent list`, scoped in anyway via an explicit `sourceNamePattern` since `managementmodule update` is broken on this dx-do version). Depends on `bpa-demo-management-module.sh create` having been run first. Thresholds are measured from live metric windows, not guessed -- see the script's header comment for the readings behind each one. |
-| `bpa-demo-universe.sh` | The `"BPA Demo universe"` **APM Universe** (`dx-do apm-universe` -- see `bpa-demo-services-universe.sh` for the other, separate universe type the tenant also needs) -- a topology/metric-data scope populated with 3 explicit metric-source agent paths, covering all 4 of the app's named telemetry identities: the Infrastructure Agent, the PHP probe agent, and the BPA WebServer Agent (which covers both the "BPA agent" and the "Browser agent" -- see the Alerts section above for why there's no fourth, independent Browser Agent entity). Unlike a Service, a Universe has no content-query membership mechanism over the CLI -- sources are added one at a time via `apm-universe add-metric-source`, and `create` self-heals by adding any of the 3 that are missing. `apm-universe create` does not honor `dry-run` (silently ignored, creates for real immediately) -- see the script's header comment for this and other CLI landmines found while writing it. **Known limitation:** the Triage/Topology console view is driven by a different, legacy-shaped filter (`views.tas`) that `add-metric-source` never touches -- see `BUGS` for the full writeup; fixing it needs a manual console step. |
-| `bpa-demo-services-universe.sh` | The `"BPA Demo service universe"` **O2/Platform Universe** (`dx-do service-universe` -- a.k.a. "Services Universe" in the console; a different resource from the APM Universe above, with its own id space) -- created because the tenant needs both universe types until the product merges them. Was blocked on a confirmed console-crash bug in the old `o2-universe` command group (see `dx-do-o2-universe-issue.md`) until the `dx-do` maintainer replaced that group outright with `service-universe` on 2026-08-24, a full CRUD surface (`create`/`update`/`delete`/`get`/`list`/`export`, dry-run by default) that fixes it: `create`/`update` take `serviceNames=` and produce a correctly `SERVICE`-scoped filter, and `delete` is now native (no more cross-group `apm-universe delete` workaround). `create` self-heals both by name (if the state file is lost) and by filter correctness (re-applies `serviceNames` via `update` if it's ever found to have drifted). The currently-tracked instance is `VIEW621`. |
-| `bpa-demo-sli.sh` | Three **SLI groups** (Service Level Indicators, `dx-do sli` -- see the SLIs section below) bound to the `"BPA-Demo"` Service: Frontend Response Time, Frontend Error Rate, Client-Side Page Load Time. Each has an SLO (rolling-percentage/error-budget) and an alert on the SLO's rolling percentage. Uses `dx-do` v7.2.1's structured `sli create-group`/`add-slo`/`add-alert`/`set-group-filter` surface -- no JSON templates, no file-based import. `delete` runs `sli delete-group`, which really does delete the SLI, its SLO, and its alerts (unlike the old CLI's service-unbind-only `exclude-service`). |
-| `bpa-demo-agent-health-dashboard.sh` | The `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder: one traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. Includes a "Deployment" dropdown variable (`docker`/`k8s`, defaults to "All") so the Infrastructure Agent/PHP Probe panels can be scoped to one deployment or show both together -- see "2026-07-10" below for why that's needed and two bugs found shipping it. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert; `dashboard-import`'s documented `preserveUid=true overwrite=true` upsert doesn't work on this build -- `overwrite=` is silently ignored), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
-| `bpa-demo-application-dashboards.sh` | Three more **Dashboards** in the existing `"BPA-Demo"` folder -- `"BPA-Demo · Application Overview"`, `"BPA-Demo · Application Drilldown"`, `"BPA-Demo · Transaction Details Drilldown"` -- templated from dashboards the user exported by hand from the console (`jm-dashboards/bpa/`), not authored from scratch. Unlike every other dashboard/alert/SLI in this project, these query the BPA WebServer Extension's raw captured-transaction Elasticsearch index (`AIOps_BPAMetadata` datasource, `ao_aum_captured_data_2*`) directly -- per-request rows (`app_alias`, `bt_name`, `res_status`, `server_time`, client/server IPs, `transaction_id`, ...), not a NASS metric-catalog aggregate. Same create/check/delete shape and dashboard-import/export-edit-update upsert pattern as `bpa-demo-agent-health-dashboard.sh` (array-driven over all three). See the Dashboards section below for what each one shows. |
-| `bpa-demo-axa-app.sh` | The `"BPA Demo AXA"` **AXA application** (`dx-do axa` -- Application Experience Analytics, DX O2's mobile/browser Real User Monitoring surface; a different resource type from every other telemetry source in this project) -- created because the demo's `APMIA_BROWSER_SNIPPET` needs an AXA application to generate a BrowserAgent snippet for, normally a console-only step (DX O2 Settings -> Manage Mobile/Browser Web Monitoring -> App to Monitor -> Web App). `create` self-heals by name, then fetches the resulting BrowserAgent snippet (`axa get-application-snippet`) and patches it directly into the checked-in `.config.example`'s `APMIA_BROWSER_SNIPPET` line -- safe to commit since the snippet is a client-side `<script>` tag meant to be embedded in every page, not a secret like the rest of `.config`. Named `"BPA Demo AXA"`, not plain `"BPA Demo"`, to disambiguate from the many other tenant resources already using that exact name (the Service, both Universe types, the Management Module, the SLI groups). See the AXA section below. |
+| `bpa-demo-service.sh` | The per-platform `"BPA-Demo"`/`"BPA-Demo K8s"` DX O2 Service -- groups the php-probe's frontend URLs, the BPA Webserver Extension's business transactions, the BPA WebServer Agent's own reporting identity (`Experience Collector Host\|DxC Agent\|Logstash-APM-Plugin`, where the Browser Agent/BA snippet's page-load and page-hits timing actually lands, shared across both platforms), and the mysql backend database under one console view. There is no separate content group for a "Browser Agent" entity -- the `Custom Business Application Agent (Virtual)` path that shows the same values isn't a real topology entity (confirmed empirically: no content-query attribute matches it), so the BPA WebServer Agent group already covers it. `create` is safe to re-run against a Service that predates this group -- it detects and adds anything missing rather than no-op'ing outright. |
+| `bpa-demo-management-module.sh` | The per-platform `"BPA-Demo"`/`"BPA-Demo K8s"` APM Management Module, a Metric Grouping matching that platform's tracked frontend URL response time, and an Alert that catches the `trouble` use case (5000 sequential DB reads/request) via a response-time threshold. `empty_basket` and `locked` have no currently-observable APM signal to alert on -- see the script's header comment for why. `create` self-heals a Metric Grouping whose pattern is stale or has zero live matches. |
+| `bpa-demo-agent-alerts.sh` | 12 Metric Groupings + Alerts per platform across three telemetry sources, all attached to that platform's own Management Module -- five for the Infrastructure Agent's DB Monitor extension (availability, connection refusals, connection pool pressure, buffer pool cache hit rate, slow query rate; literal per-platform DB Monitor hostname too -- `mariadb` for docker, `127.0.0.1` for k8s), five for the PHP probe agent (app response time, error rate, concurrency, DB backend response time, DB backend query volume), and two for the browser/RUM pipeline (page load time, page hits per interval -- shared across both platforms, no per-platform Browser Agent identity exists yet). Depends on `bpa-demo-management-module.sh <docker\|k8s> create` having been run first for the same platform. Thresholds are measured from live metric windows, not guessed -- see the script's header comment for the readings behind each one. |
+| `bpa-demo-universe.sh` | The per-platform `"BPA Demo universe"`/`"BPA Demo K8s universe"` **APM Universe** (`dx-do apm-universe` -- see `bpa-demo-services-universe.sh` for the other, separate universe type the tenant also needs) -- a topology/metric-data scope populated with 3 explicit metric-source agent paths: the Infrastructure Agent and PHP probe agent (literal per-platform identity) and the BPA WebServer Agent (shared, covers both "BPA agent" and "Browser agent"). Unlike a Service, a Universe has no content-query membership mechanism over the CLI -- sources are added one at a time via `apm-universe add-metric-source`, and `create` self-heals by adding any of the 3 that are missing; since `apm-universe` also has no "remove source" command, the docker Universe's pre-split wildcarded entries stay in place alongside the new literal ones, harmlessly inert. `apm-universe create` does not honor `dry-run` (silently ignored, creates for real immediately) -- see the script's header comment for this and other CLI landmines found while writing it. **Known limitation:** the Triage/Topology console view is driven by a different, legacy-shaped filter (`views.tas`) that `add-metric-source` never touches -- see `BUGS` for the full writeup; fixing it needs a manual console step. |
+| `bpa-demo-services-universe.sh` | The per-platform `"BPA Demo service universe"`/`"BPA Demo K8s service universe"` **O2/Platform Universe** (`dx-do service-universe` -- a.k.a. "Services Universe" in the console; a different resource from the APM Universe above, with its own id space) -- created because the tenant needs both universe types until the product merges them, scoped via `serviceNames=` to that platform's own Service from `bpa-demo-service.sh`. Was blocked on a confirmed console-crash bug in the old `o2-universe` command group (see `dx-do-o2-universe-issue.md`) until the `dx-do` maintainer replaced that group outright with `service-universe` on 2026-08-24, a full CRUD surface (`create`/`update`/`delete`/`get`/`list`/`export`, dry-run by default) that fixes it. `create` self-heals both by name (if the state file is lost) and by filter correctness (re-applies `serviceNames` via `update` if it's ever found to have drifted). |
+| `bpa-demo-sli.sh` | Three **SLI groups** per platform (Service Level Indicators, `dx-do sli` -- see the SLIs section below) bound to that platform's own Service: Frontend Response Time, Frontend Error Rate (both literal per-platform identity, group names suffixed `" K8s"` on that platform since sli group names must be unique per tenant), Client-Side Page Load Time (shared across both platforms, no per-platform Browser Agent identity yet). Each has an SLO (rolling-percentage/error-budget) and an alert on the SLO's rolling percentage. Uses `dx-do` v7.2.1's structured `sli create-group`/`add-slo`/`add-alert`/`set-group-filter` surface -- no JSON templates, no file-based import. `delete` runs `sli delete-group`, which really does delete the SLI, its SLO, and its alerts. |
+| `bpa-demo-agent-health-dashboard.sh` | The single, shared `"BPA-Demo · Agent Health"` **Dashboard** (`dx-do dashboard` -- see the Dashboards section below) in the existing `"BPA-Demo"` folder -- NOT duplicated per platform (see "Docker/Kubernetes separation" above). One traffic-light circle per deployed agent, rolling up that agent's own alerts, plus each agent's basic metrics. Includes a "Deployment" dropdown variable (`docker`/`k8s`/"All") so the Infrastructure Agent/PHP Probe panels can be scoped to one deployment or show both together; the required `<docker\|k8s>` argument sets which value that dropdown defaults to on (re)creation, not a duplicate dashboard. This dx-do build's `dashboard` command group has no `dashboard-create`/`dashboard-delete`/`validate-layout`/`dashboard-render` at all -- `create` uses `dashboard-import` (fresh) or the classic export -> edit -> `dashboard-update` workflow (upsert), and `delete` prints manual console-removal instructions since no CLI command exists for it. |
+| `bpa-demo-application-dashboards.sh` | Three more single, shared **Dashboards** in the existing `"BPA-Demo"` folder -- `"BPA-Demo · Application Overview"`, `"BPA-Demo · Application Drilldown"`, `"BPA-Demo · Transaction Details Drilldown"` -- also NOT duplicated per platform; the required `<docker\|k8s>` argument instead sets each dashboard's own "Application(s)" dropdown (queried live from the raw data's `app_alias` field) to default to that platform's identity. Templated from dashboards the user exported by hand from the console (`jm-dashboards/bpa/`), not authored from scratch. Unlike every other dashboard/alert/SLI in this project, these query the BPA WebServer Extension's raw captured-transaction Elasticsearch index (`AIOps_BPAMetadata` datasource, `ao_aum_captured_data_2*`) directly -- per-request rows (`app_alias`, `bt_name`, `res_status`, `server_time`, client/server IPs, `transaction_id`, ...), not a NASS metric-catalog aggregate. Same create/check/delete shape and dashboard-import/export-edit-update upsert pattern as `bpa-demo-agent-health-dashboard.sh` (array-driven over all three). See the Dashboards section below for what each one shows. |
+| `bpa-demo-axa-app.sh` | One **AXA application** (`dx-do axa` -- Application Experience Analytics, DX O2's mobile/browser Real User Monitoring surface) per platform -- `"BPA Demo AXA"` (docker; unchanged name, `axa` has no rename command) and `"BPA Demo AXA K8s"` (k8s; new) -- created because the demo's Browser Agent snippet needs an AXA application to generate it, normally a console-only step. `create` self-heals by name, then fetches the resulting BrowserAgent snippet (`axa get-application-snippet`) and patches it directly into the checked-in `.config.example`'s matching `APMIA_BROWSER_SNIPPET_DOCKER`/`APMIA_BROWSER_SNIPPET_K8S` line -- safe to commit since the snippet is a client-side `<script>` tag meant to be embedded in every page, not a secret like the rest of `.config`. `compose.sh` reads only the `_DOCKER` variable, `deploy.sh` only `_K8S` -- see `build-scripts/compose.sh`/`deploy.sh`'s own comments. See the AXA section below. |
 
 ## Alerts
 

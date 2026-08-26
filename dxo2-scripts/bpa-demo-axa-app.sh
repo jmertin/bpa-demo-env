@@ -1,31 +1,42 @@
 #!/usr/bin/env bash
-# bpa-demo-axa-app.sh - Create, check, or delete the "BPA Demo AXA"
-# Application Experience Analytics (AXA) application on the DX O2 tenant,
-# and keep .config.example's APMIA_BROWSER_SNIPPET template in sync with
-# its BrowserAgent snippet.
+# bpa-demo-axa-app.sh - Create, check, or delete the per-platform "BPA Demo
+# AXA" Application Experience Analytics (AXA) application on the DX O2
+# tenant, and keep .config.example's matching APMIA_BROWSER_SNIPPET_*
+# template in sync with its BrowserAgent snippet.
 #
 # AXA (`dx-do axa`) is the DX O2 surface for mobile/browser Real User
 # Monitoring applications -- a distinct resource type from every other
 # telemetry source this project's dxo2-scripts/*.sh manage (Services,
 # Universes, Management Modules/Metric Groupings/Alerts, SLI groups,
 # Dashboards). An AXA "application" definition is what a BrowserAgent (BA)
-# snippet is generated *for* -- the `APMIA_BROWSER_SNIPPET` variable this
-# project's .config/.config.example carry (see CLAUDE.md's ".config
-# required variables" section) is exactly this snippet, normally obtained
-# by hand via DX O2 Settings -> Manage Mobile/Browser Web Monitoring ->
-# App to Monitor -> Web App. This script does that step via the CLI
-# instead, named `"BPA Demo AXA"` (not plain `"BPA Demo"`, to disambiguate
-# from the many other tenant resources already using that exact name --
-# the Service, both Universe types, the Management Module, the SLI
-# groups -- none of which are AXA applications).
+# snippet is generated *for*.
 #
-# The BrowserAgent snippet itself is NOT a secret in the way `.config`'s
-# other values are: it is a client-side `<script>` tag meant to be
-# embedded in every HTML response and is visible to any site visitor via
-# view-source, so baking this project's own demo AXA application's
-# snippet into the checked-in `.config.example` (rather than leaving the
-# generic empty default) is safe and intentional -- unlike `.config`
-# itself, which is never committed and holds real credentials.
+# Bug fixed 2026-08-26, reported by the user: this script originally
+# created exactly ONE AXA application shared by both deployments, and
+# .config/.config.example carried exactly ONE APMIA_BROWSER_SNIPPET
+# variable read by both compose.sh (Docker) and deploy.sh (Kubernetes) --
+# meaning every real browser session, regardless of which deployment it
+# hit, reported into DX O2 under the identical AXA application with no way
+# to tell them apart. Split into two independent AXA applications, one per
+# platform, each with its own snippet and its own .config variable:
+#
+#   docker -> AXA application "BPA Demo AXA"        -> APMIA_BROWSER_SNIPPET_DOCKER
+#   k8s    -> AXA application "BPA Demo AXA K8s"     -> APMIA_BROWSER_SNIPPET_K8S
+#
+# The "docker" name intentionally keeps the original, pre-split name
+# ("BPA Demo AXA", not "BPA Demo AXA Docker") rather than being renamed to
+# match the new convention -- `axa` has no rename/update-application
+# command (confirmed via `dx-do help axa`), so the already-existing
+# application from before this split couldn't be renamed even if a
+# "Docker"-suffixed name were preferred; only a brand new one could be
+# created with the new naming, which is what happened for "k8s".
+#
+# compose.sh now exports APMIA_BROWSER_SNIPPET from
+# APMIA_BROWSER_SNIPPET_DOCKER only; deploy.sh's generate_values() now
+# reads APMIA_BROWSER_SNIPPET_K8S only -- see those scripts' own comments.
+# The container-facing environment variable name (APMIA_BROWSER_SNIPPET,
+# read by the PHP probe's entrypoint patching) is unchanged on both
+# platforms; only which .config variable feeds it differs.
 #
 # `secure=false` is passed to `axa create-application` -- that flag
 # encrypts transient data at rest on devices and over the wire, which
@@ -49,31 +60,39 @@
 # project's `.config`/`.config.example` already use elsewhere.
 #
 # Structure created:
-#   AXA application "BPA Demo AXA" (a Web App / browser application, no
+#   One AXA application per platform (a Web App / browser application, no
 #   mobile SDK usage) -- a BrowserAgent snippet is generated for it and
-#   written into .config.example's APMIA_BROWSER_SNIPPET line.
+#   written into .config.example's matching APMIA_BROWSER_SNIPPET_* line.
 #
 # Usage:
-#   dxo2-scripts/bpa-demo-axa-app.sh create   - create the AXA application
-#                                        if it doesn't exist (self-heals
-#                                        by name), then (re-)fetch its
+#   dxo2-scripts/bpa-demo-axa-app.sh <docker|k8s> create   - create that
+#                                        platform's AXA application if it
+#                                        doesn't exist (self-heals by
+#                                        name), then (re-)fetch its
 #                                        BrowserAgent snippet and patch it
 #                                        into .config.example. Safe to
 #                                        re-run -- always re-syncs the
 #                                        snippet even if the application
 #                                        already existed.
-#   dxo2-scripts/bpa-demo-axa-app.sh check    - print whether it exists,
-#                                        its current definition, and its
-#                                        current snippet.
-#   dxo2-scripts/bpa-demo-axa-app.sh delete   - permanently delete the AXA
+#   dxo2-scripts/bpa-demo-axa-app.sh <docker|k8s> check    - print whether
+#                                        it exists, its current
+#                                        definition, and its current
+#                                        snippet.
+#   dxo2-scripts/bpa-demo-axa-app.sh <docker|k8s> delete   - permanently
+#                                        delete that platform's AXA
 #                                        application (irreversible, no
 #                                        dry-run on the API side) and
-#                                        reset .config.example's
-#                                        APMIA_BROWSER_SNIPPET back to the
-#                                        empty placeholder. Prompts for
-#                                        confirmation; pass -y|--yes to
-#                                        skip it.
+#                                        reset its .config.example
+#                                        APMIA_BROWSER_SNIPPET_* line back
+#                                        to the empty placeholder. Prompts
+#                                        for confirmation; pass -y|--yes
+#                                        to skip it.
 #   dxo2-scripts/bpa-demo-axa-app.sh -h|--help - print this help.
+#
+# The <docker|k8s> platform argument is required and must come first --
+# the script exits with an error if it's missing or not exactly one of
+# those two values, before doing anything else (including reading .config
+# or contacting the tenant).
 #
 # Prerequisites:
 #   tools/dx-do-<platform>              DX O2 CLI - download the latest
@@ -94,20 +113,18 @@
 #                                        and `"` characters).
 #
 # State:
-#   Persists the application's key to
-#   dxo2-scripts/.state/bpa-demo-axa-app.env (git-ignored) so
-#   check/delete can find it again. If lost, `axa list-applications`
-#   finds it by name (`"BPA Demo AXA"`) regardless.
+#   Persists each platform's application key to
+#   dxo2-scripts/.state/bpa-demo-axa-app-<docker|k8s>.env (git-ignored) so
+#   check/delete can find it again. If lost, `axa list-applications` finds
+#   it by name ("BPA Demo AXA" / "BPA Demo AXA K8s") regardless.
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly APP_NAME="BPA Demo AXA"
 readonly CONFIG_EXAMPLE="${ROOT_DIR}/.config.example"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
-readonly STATE_FILE="${STATE_DIR}/bpa-demo-axa-app.env"
 
 ## Print usage information.
 usage() {
@@ -198,14 +215,14 @@ fetch_snippet() {
     printf '%s' "${snippet}"
 }
 
-## Patch .config.example's APMIA_BROWSER_SNIPPET line with the given
-## snippet (single-quoted, since the snippet contains double-quotes --
-## the same convention the live .config already documents). Pass an
-## empty string to reset it to the placeholder default. Writes the
-## snippet to a temp file and passes paths (not the raw value) into
-## python, rather than interpolating it into inline python source --
-## the snippet's `/`, `:`, and `"` characters make sed-delimiter or
-## shell-string-interpolation approaches fragile.
+## Patch .config.example's CONFIG_VAR line with the given snippet (single-
+## quoted, since the snippet contains double-quotes -- the same
+## convention the live .config already documents). Pass an empty string
+## to reset it to the placeholder default. Writes the snippet to a temp
+## file and passes paths (not the raw value) into python, rather than
+## interpolating it into inline python source -- the snippet's `/`, `:`,
+## and `"` characters make sed-delimiter or shell-string-interpolation
+## approaches fragile.
 #
 # @param string $1
 #   The snippet to write in (empty string resets to the placeholder).
@@ -219,20 +236,21 @@ patch_config_example() {
     snippet_file="$(mktemp -t bpa-demo-axa-app-snippet-XXXXXX)"
     printf '%s' "${snippet}" > "${snippet_file}"
 
-    python3 - "${CONFIG_EXAMPLE}" "${snippet_file}" <<'PYEOF'
+    python3 - "${CONFIG_EXAMPLE}" "${snippet_file}" "${CONFIG_VAR}" <<'PYEOF'
 import re
 import sys
 
-config_path, snippet_path = sys.argv[1], sys.argv[2]
+config_path, snippet_path, var_name = sys.argv[1], sys.argv[2], sys.argv[3]
 with open(snippet_path) as f:
     snippet = f.read()
 with open(config_path) as f:
     content = f.read()
 
-new_line = "APMIA_BROWSER_SNIPPET='" + snippet + "'"
-content, n = re.subn(r'^APMIA_BROWSER_SNIPPET=.*$', new_line, content, count=1, flags=re.MULTILINE)
+new_line = var_name + "='" + snippet + "'"
+pattern = r'^' + re.escape(var_name) + r'=.*$'
+content, n = re.subn(pattern, new_line, content, count=1, flags=re.MULTILINE)
 if n != 1:
-    raise SystemExit('APMIA_BROWSER_SNIPPET= line not found in ' + config_path)
+    raise SystemExit(var_name + '= line not found in ' + config_path)
 
 with open(config_path, 'w') as f:
     f.write(content)
@@ -275,11 +293,11 @@ cmd_create() {
         info "Application created: ${APP_KEY}"
     fi
 
-    info "Fetching BrowserAgent snippet and syncing it into $(basename "${CONFIG_EXAMPLE}")..."
+    info "Fetching BrowserAgent snippet and syncing it into $(basename "${CONFIG_EXAMPLE}")'s ${CONFIG_VAR}..."
     local snippet
     snippet="$(fetch_snippet)"
     patch_config_example "${snippet}"
-    info "Updated APMIA_BROWSER_SNIPPET."
+    info "Updated ${CONFIG_VAR}."
 
     save_state
     info "Done. State saved to ${STATE_FILE}."
@@ -295,7 +313,7 @@ cmd_check() {
     fi
 
     if [[ -z "${APP_KEY}" ]]; then
-        info "No state file at ${STATE_FILE} and no AXA application named '${APP_NAME}' found via 'axa list-applications' -- '${SCRIPT_NAME} create' has not been run."
+        info "No state file at ${STATE_FILE} and no AXA application named '${APP_NAME}' found via 'axa list-applications' -- '${SCRIPT_NAME} ${PLATFORM} create' has not been run."
         exit 1
     fi
 
@@ -314,18 +332,18 @@ for a in data:
     fetch_snippet
     echo
 
-    if grep -qF "APMIA_BROWSER_SNIPPET='<script" "${CONFIG_EXAMPLE}"; then
-        info "${CONFIG_EXAMPLE} is in sync (APMIA_BROWSER_SNIPPET is populated)."
+    if grep -qF "${CONFIG_VAR}='<script" "${CONFIG_EXAMPLE}"; then
+        info "${CONFIG_EXAMPLE} is in sync (${CONFIG_VAR} is populated)."
     else
-        info "${CONFIG_EXAMPLE}'s APMIA_BROWSER_SNIPPET is NOT populated -- run '${SCRIPT_NAME} create' to sync it."
+        info "${CONFIG_EXAMPLE}'s ${CONFIG_VAR} is NOT populated -- run '${SCRIPT_NAME} ${PLATFORM} create' to sync it."
     fi
 
     save_state
 }
 
-## Delete the AXA application and reset .config.example's
-## APMIA_BROWSER_SNIPPET to the empty placeholder. Prompts for
-## confirmation unless -y/--yes is given.
+## Delete the AXA application and reset .config.example's CONFIG_VAR to
+## the empty placeholder. Prompts for confirmation unless -y/--yes is
+## given.
 #
 # @param string[] "$@"
 #   Remaining arguments after the 'delete' subcommand (e.g. -y, --yes).
@@ -358,14 +376,47 @@ cmd_delete() {
     info "Deleting AXA application (key ${APP_KEY})..."
     run_dx_do axa delete-application "applicationName=${APP_NAME}" "applicationKey=${APP_KEY}"
 
-    info "Resetting $(basename "${CONFIG_EXAMPLE}")'s APMIA_BROWSER_SNIPPET to the empty placeholder..."
+    info "Resetting $(basename "${CONFIG_EXAMPLE}")'s ${CONFIG_VAR} to the empty placeholder..."
     patch_config_example ""
 
     rm -f "${STATE_FILE}"
     info "Done."
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+case "${PLATFORM}" in
+    docker)
+        readonly APP_NAME="BPA Demo AXA"
+        readonly CONFIG_VAR="APMIA_BROWSER_SNIPPET_DOCKER"
+        ;;
+    k8s)
+        readonly APP_NAME="BPA Demo AXA K8s"
+        readonly CONFIG_VAR="APMIA_BROWSER_SNIPPET_K8S"
+        ;;
+esac
+readonly STATE_FILE="${STATE_DIR}/bpa-demo-axa-app-${PLATFORM}.env"
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0

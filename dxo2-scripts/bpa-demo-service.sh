@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# bpa-demo-service.sh - Create, check, or delete the "BPA-Demo" DX O2 Service.
+# bpa-demo-service.sh - Create, check, or delete the per-platform "BPA-Demo"
+# DX O2 Service.
 #
 # The Service groups every BPA-Demo-related telemetry entity under one DX O2
 # console view:
@@ -64,23 +65,47 @@
 # auto-naming is ever re-enabled. `create`'s `set-content` self-heal picks
 # this up automatically on the next run.
 #
+# Bug fixed 2026-08-26, reported by the user: the wildcarded `bpa-demo-.*`
+# segment in three of the four content groups matched BOTH the Docker and
+# Kubernetes deployment's identities in one Service -- there was no way to
+# tell which deployment a given piece of telemetry came from once it
+# landed in the console. Split into two independent Services, one per
+# platform, each with a literal (not wildcarded) identity pattern:
+#
+#   docker -> Service "BPA-Demo"        -- unchanged name, repointed to a
+#                                           docker-only literal pattern
+#   k8s    -> Service "BPA-Demo K8s"    -- new
+#
+# Each pattern still tolerates an optional `%N` disambiguation suffix
+# (`bpa-demo-docker(%\d+)?`) in case DX O2 ever needs to disambiguate a
+# same-identity reconnection -- see CLAUDE.md's "Deployment identity"
+# section for why that can happen and the same `(%\d+)?` convention already
+# used in bpa-demo-application-dashboards.sh's templates. The fourth group
+# (BPA WebServer Agent / Browser Agent, `Logstash-APM-Plugin`) has no
+# per-platform identity today (see bpa-demo-axa-app.sh's header for the
+# newly-split AXA applications this may eventually enable distinguishing)
+# and stays the same fixed literal on both platform's Services.
+#
 # Usage:
-#   dxo2-scripts/bpa-demo-service.sh create        - create the Service, or
-#                                                     if it already exists,
-#                                                     set its content query
-#                                                     to the current four
-#                                                     groups (idempotent,
-#                                                     self-heals any stale
-#                                                     group left over from a
-#                                                     prior identity scheme).
-#   dxo2-scripts/bpa-demo-service.sh check         - print whether the
-#                                                     Service exists and its
-#                                                     current definition.
-#   dxo2-scripts/bpa-demo-service.sh delete        - delete the Service.
-#                                                     Prompts for
-#                                                     confirmation; pass
-#                                                     -y|--yes to skip it.
+#   dxo2-scripts/bpa-demo-service.sh <docker|k8s> create   - create that
+#                                        platform's Service, or if it
+#                                        already exists, set its content
+#                                        query to the current four groups
+#                                        (idempotent, self-heals any stale
+#                                        group left over from a prior
+#                                        identity scheme).
+#   dxo2-scripts/bpa-demo-service.sh <docker|k8s> check    - print whether
+#                                        that platform's Service exists
+#                                        and its current definition.
+#   dxo2-scripts/bpa-demo-service.sh <docker|k8s> delete   - delete that
+#                                        platform's Service. Prompts for
+#                                        confirmation; pass -y|--yes to
+#                                        skip it.
 #   dxo2-scripts/bpa-demo-service.sh -h|--help     - print this help and exit.
+#
+# The <docker|k8s> platform argument is required and must come first -- the
+# script exits with an error if it's missing or not exactly one of those
+# two values, before doing anything else.
 #
 # Prerequisites:
 #   tools/dx-do-<platform>              DX O2 CLI - download the latest
@@ -99,12 +124,8 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly SERVICE_NAME="BPA-Demo"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly BPA_WEBSERVER_AGENT="Experience Collector Host|DxC Agent|Logstash-APM-Plugin"
-readonly APP_NAME_PATTERN='^bpa-demo-.*$'
-readonly INFRA_AGENT_PATTERN='^bpa-demo-.*\|bpa-demo-.*\|bpa-demo-.*$'
-readonly PHP_PROBE_AGENT_PATTERN='^bpa-demo-.*\|php-probes\|bpa-demo-.*(\(/usr/sbin/apache2\))?$'
 
 ## Print usage information.
 usage() {
@@ -157,7 +178,7 @@ run_dx_do() {
     "${DX_DO_BIN}" "$@" 2>&1 | grep -v -e '^ℹ' -e '^☒' -e '^…' -e '^☐' -e 'Authorization'
 }
 
-## Create the BPA-Demo Service, or bring an existing one's content query up
+## Create the platform's Service, or bring an existing one's content query up
 ## to date. Safe to re-run: uses `service set-content` (a full replace, not
 ## an incremental add) so the four groups declared above always match
 ## exactly what's live -- no stale groups left behind from a prior identity
@@ -184,7 +205,7 @@ cmd_create() {
         content.g4.agent.EQUALS="${BPA_WEBSERVER_AGENT}" \
         dry-run=false
     info "Done. Allow ~30 seconds for the change to become visible in the console."
-    info "Run '${SCRIPT_NAME} check' to see its current definition."
+    info "Run '${SCRIPT_NAME} ${PLATFORM} check' to see its current definition."
 }
 
 ## Print whether the Service exists and its current definition.
@@ -225,7 +246,42 @@ cmd_delete() {
     fi
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+case "${PLATFORM}" in
+    docker)
+        readonly IDENTITY="bpa-demo-docker"
+        readonly SERVICE_NAME="BPA-Demo"
+        ;;
+    k8s)
+        readonly IDENTITY="bpa-demo-k8s"
+        readonly SERVICE_NAME="BPA-Demo K8s"
+        ;;
+esac
+readonly APP_NAME_PATTERN="^${IDENTITY}(%\\d+)?\$"
+readonly INFRA_AGENT_PATTERN="^${IDENTITY}(%\\d+)?\\|${IDENTITY}(%\\d+)?\\|${IDENTITY}(%\\d+)?\$"
+readonly PHP_PROBE_AGENT_PATTERN="^${IDENTITY}(%\\d+)?\\|php-probes\\|${IDENTITY}(%\\d+)?(\\(/usr/sbin/apache2\\))?\$"
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0
