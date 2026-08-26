@@ -36,8 +36,10 @@ if (!array_key_exists($page, $routes)) {
 
 // Emit a baseline page identifier on every response so monitoring tools and
 // browser devtools always see X-Page-ID regardless of which page is served.
-// Pages that call set_monitoring_headers() replace this with a richer value.
-header('X-Page-ID: page_' . $page);
+// Uppercased to match set_page_id()/set_monitoring_headers()'s own
+// MODULE-ACTION-TARGET format, which is always uppercase (see page_id.php) --
+// pages that call set_monitoring_headers() replace this with a richer value.
+header('X-Page-ID: PAGE_' . strtoupper($page));
 
 // ── Run use case for logged-in user ────────────────────────────────────────────
 $ctx = ['page' => $page];
