@@ -74,6 +74,24 @@
 # per-URL pattern instead (same shape as the Response Time SLI), which is
 # visible and reliable.
 #
+# Bug fixed 2026-08-26, reported by the user: the response-time and
+# error-rate groups' SOURCE_PATTERN/ATTRIBUTE_PATTERN wildcarded the
+# deployment identity (`bpa-demo-[^|]+`), so one shared SLI group's SLO/
+# error-budget/alert blended both the Docker and Kubernetes deployment's
+# response times and error rates together. Split into two independent
+# sets of 3 SLI groups (the page-load one has no per-platform identity
+# today and stays shared, same as elsewhere in this project), one set
+# per platform, bound to that platform's own Service
+# (bpa-demo-service.sh's `<docker|k8s>` split):
+#
+#   docker -> bound to Service "BPA-Demo",     group names unchanged
+#             (e.g. "BPA-Demo Frontend Response Time")
+#   k8s    -> bound to Service "BPA-Demo K8s", group names suffixed
+#             " K8s" (e.g. "BPA-Demo Frontend Response Time K8s") --
+#             sli group names must be unique per tenant, so the docker
+#             set (repointed, unchanged) and the new k8s set can't share
+#             identical names.
+#
 # Bug fixed 2026-08-21 (doc-only, found during an unrelated docs audit):
 # every doc that recorded this rebuild's sliGroupIds (this header, CLAUDE.md,
 # TOBEDONE.md, the CHANGELOG entry) said 2955/2956/2957, but the live
@@ -91,21 +109,28 @@
 # `.state/bpa-demo-sli.env`, never a hardcoded literal.
 #
 # Usage:
-#   dxo2-scripts/bpa-demo-sli.sh create   - create all 3 SLI groups (with
+#   dxo2-scripts/bpa-demo-sli.sh <docker|k8s> create   - create that
+#                                            platform's 3 SLI groups (with
 #                                            their SLO and alert). Safe to
 #                                            re-run: for an already-created
 #                                            group, re-applies the group
 #                                            filter (idempotent) and adds
 #                                            the SLO/alert only if missing.
-#   dxo2-scripts/bpa-demo-sli.sh check    - print each group's live status
-#                                            (`sli status` + `sli export`
+#   dxo2-scripts/bpa-demo-sli.sh <docker|k8s> check    - print each
+#                                            group's live status (`sli
+#                                            status` + `sli export`
 #                                            summary).
-#   dxo2-scripts/bpa-demo-sli.sh delete   - permanently delete all 3 SLI
+#   dxo2-scripts/bpa-demo-sli.sh <docker|k8s> delete   - permanently
+#                                            delete that platform's 3 SLI
 #                                            groups (their SLIs, SLOs, and
 #                                            alerts). Prompts for
 #                                            confirmation; pass -y|--yes to
 #                                            skip it.
 #   dxo2-scripts/bpa-demo-sli.sh -h|--help - print this help.
+#
+# The <docker|k8s> platform argument is required and must come first -- the
+# script exits with an error if it's missing or not exactly one of those
+# two values, before doing anything else.
 #
 # Prerequisites:
 #   tools/dx-do-<platform>              DX O2 CLI - download the latest
@@ -122,10 +147,10 @@
 #                                        `sli export` JSON output.
 #
 # State:
-#   Persists each SLI group's id to
-#   dxo2-scripts/.state/bpa-demo-sli.env (git-ignored) so check/delete can
-#   find them again. If lost, `sli list-groups filter=BPA-Demo` finds them
-#   by name regardless.
+#   Persists each platform's SLI group ids to
+#   dxo2-scripts/.state/bpa-demo-sli-<docker|k8s>.env (git-ignored) so
+#   check/delete can find them again. If lost, `sli list-groups
+#   filter=BPA-Demo` finds them by name regardless.
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -133,9 +158,7 @@ readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
-readonly STATE_FILE="${STATE_DIR}/bpa-demo-sli.env"
 
-readonly SERVICE_NAME="BPA-Demo"
 readonly AGGREGATION_INTERVAL=5
 readonly SLO_TARGET=98
 readonly SLO_WINDOW_DAYS=1
@@ -144,10 +167,15 @@ readonly ALERT_DANGER_THRESHOLD=90
 
 readonly SLI_KEYS=(response-time error-rate page-load)
 
-declare -rA SLI_GROUP_NAME=(
-    [response-time]="BPA-Demo Frontend Response Time"
-    [error-rate]="BPA-Demo Frontend Error Rate"
-    [page-load]="BPA-Demo Client-Side Page Load Time"
+# Templates with __NAME_SUFFIX__ (empty for docker, " K8s" for k8s) /
+# __APP_ID__ (deployment identity) placeholders, resolved into the real
+# per-platform arrays further down once the platform argument is parsed.
+# page-load has no per-platform identity today (see this script's header)
+# and carries no __APP_ID__ placeholder.
+declare -A SLI_GROUP_NAME_TEMPLATE=(
+    [response-time]="BPA-Demo Frontend Response Time__NAME_SUFFIX__"
+    [error-rate]="BPA-Demo Frontend Error Rate__NAME_SUFFIX__"
+    [page-load]="BPA-Demo Client-Side Page Load Time__NAME_SUFFIX__"
 )
 
 declare -rA SLI_TYPE=(
@@ -169,15 +197,15 @@ declare -rA SOURCE_CONDITION=(
 )
 
 # No trailing $ -- see the "Landmine" header comment above.
-declare -rA SOURCE_PATTERN=(
-    [response-time]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?'
-    [error-rate]='SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?'
+declare -A SOURCE_PATTERN_TEMPLATE=(
+    [response-time]='SuperDomain\|__APP_ID__\|php-probes\|__APP_ID__(%\d+)?(\(/usr/sbin/apache2\))?'
+    [error-rate]='SuperDomain\|__APP_ID__\|php-probes\|__APP_ID__(%\d+)?(\(/usr/sbin/apache2\))?'
     [page-load]='SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin'
 )
 
-declare -rA ATTRIBUTE_PATTERN=(
-    [response-time]='Frontends\|Apps\|bpa-demo-[^|]+\|URLs\|[^|]+:Average Response Time \(ms\)'
-    [error-rate]='Frontends\|Apps\|bpa-demo-[^|]+\|URLs\|[^|]+:Errors Per Interval'
+declare -A ATTRIBUTE_PATTERN_TEMPLATE=(
+    [response-time]='Frontends\|Apps\|__APP_ID__\|URLs\|[^|]+:Average Response Time \(ms\)'
+    [error-rate]='Frontends\|Apps\|__APP_ID__\|URLs\|[^|]+:Errors Per Interval'
     [page-load]='Business Segment\|BPA Demo\|[^|]+:Average Page Load Time \(ms\)'
 )
 
@@ -429,7 +457,7 @@ cmd_create() {
 
     save_state
     info "Done. State saved to ${STATE_FILE}."
-    info "Run '${SCRIPT_NAME} check' to see each group's live status."
+    info "Run '${SCRIPT_NAME} ${PLATFORM} check' to see each group's live status."
 }
 
 ## Print each SLI group's live status and export summary.
@@ -445,7 +473,7 @@ cmd_check() {
         fi
 
         if [[ -z "${group_id}" ]]; then
-            info "'${name}': not found -- '${SCRIPT_NAME} create' has not been run, or it was deleted outside this script."
+            info "'${name}': not found -- '${SCRIPT_NAME} ${PLATFORM} create' has not been run, or it was deleted outside this script."
             continue
         fi
 
@@ -497,7 +525,63 @@ cmd_delete() {
     info "Done."
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+case "${PLATFORM}" in
+    docker)
+        readonly APP_ID="bpa-demo-docker"
+        readonly NAME_SUFFIX=""
+        readonly SERVICE_NAME="BPA-Demo"
+        ;;
+    k8s)
+        readonly APP_ID="bpa-demo-k8s"
+        readonly NAME_SUFFIX=" K8s"
+        readonly SERVICE_NAME="BPA-Demo K8s"
+        ;;
+esac
+readonly STATE_FILE="${STATE_DIR}/bpa-demo-sli-${PLATFORM}.env"
+
+declare -A SLI_GROUP_NAME=()
+declare -A SOURCE_PATTERN=()
+declare -A ATTRIBUTE_PATTERN=()
+for _key in "${SLI_KEYS[@]}"; do
+    _name="${SLI_GROUP_NAME_TEMPLATE[${_key}]}"
+    _name="${_name//__NAME_SUFFIX__/${NAME_SUFFIX}}"
+    SLI_GROUP_NAME[${_key}]="${_name}"
+
+    _pattern="${SOURCE_PATTERN_TEMPLATE[${_key}]}"
+    _pattern="${_pattern//__APP_ID__/${APP_ID}}"
+    SOURCE_PATTERN[${_key}]="${_pattern}"
+
+    _pattern="${ATTRIBUTE_PATTERN_TEMPLATE[${_key}]}"
+    _pattern="${_pattern//__APP_ID__/${APP_ID}}"
+    ATTRIBUTE_PATTERN[${_key}]="${_pattern}"
+done
+unset _key _name _pattern
+readonly SLI_GROUP_NAME
+readonly SOURCE_PATTERN
+readonly ATTRIBUTE_PATTERN
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0

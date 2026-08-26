@@ -150,10 +150,18 @@ generate_values() {
     local apmia_process_name="${APMIA_PROCESS_NAME:-${deployment_id}}"
     local apmia_php_agent_name="${APMIA_PHP_AGENT_NAME:-${deployment_id}}"
     local apmia_web_agent_name="${APMIA_WEB_AGENT_NAME:-${deployment_id}}"
-    # The browser snippet contains double-quotes (HTML src="..." attributes).
-    # Embed it as a YAML single-quoted string so those double-quotes are safe.
-    # Escape any literal single-quote in the value as '' per YAML spec.
-    local apmia_browser_snippet="${APMIA_BROWSER_SNIPPET:-}"
+    # APMIA_BROWSER_SNIPPET_K8S is deploy.sh's own half of the split
+    # per-platform AXA/BrowserAgent config (see .config.example's "DX O2
+    # Browser Agent auto-injection" section and dxo2-scripts/bpa-demo-axa-
+    # app.sh) -- compose.sh reads APMIA_BROWSER_SNIPPET_DOCKER instead, so
+    # the two deployments never report under the same AXA application.
+    # Still lands in the pod as the plain APMIA_BROWSER_SNIPPET env var
+    # via dxo2.browserSnippet below -- only which .config variable feeds
+    # it differs per platform. The browser snippet contains double-quotes
+    # (HTML src="..." attributes). Embed it as a YAML single-quoted string
+    # so those double-quotes are safe. Escape any literal single-quote in
+    # the value as '' per YAML spec.
+    local apmia_browser_snippet="${APMIA_BROWSER_SNIPPET_K8S:-}"
     local apmia_browser_snippet_yaml="${apmia_browser_snippet//\'/\'\'}"
     local apmia_log_level="${APMIA_LOG_LEVEL:-INFO}"
     local apmia_php_collector_host="${APMIA_PHP_COLLECTOR_HOST:-127.0.0.1}"

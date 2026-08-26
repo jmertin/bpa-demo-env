@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# bpa-demo-management-module.sh - Create, check, or delete the "BPA-Demo"
-# APM Management Module and its alert(s) that catch demo use-case symptoms.
+# bpa-demo-management-module.sh - Create, check, or delete the per-platform
+# "BPA-Demo" APM Management Module and its alert(s) that catch demo
+# use-case symptoms.
 #
-# Structure created:
-#   Management Module "BPA-Demo"
-#     agentExpressions: SuperDomain\|.*bpa-demo.*  (matches both the
-#       Infrastructure Agent and the PHP probe agent)
+# Structure created (one platform at a time):
+#   Management Module "BPA-Demo" (docker) / "BPA-Demo K8s" (k8s)
+#     agentExpressions: SuperDomain\|.*bpa-demo-<platform>.*  (matches both
+#       the Infrastructure Agent and the PHP probe agent for that platform
+#       only -- see "Bug fixed 2026-08-26" below)
 #     Metric Grouping "BPA-Demo Frontend Response Time"
-#       attributeNamePattern: Frontends|Apps|bpa-demo-[^|]*|URLs|.*:Average
-#       Response Time (ms)  (matches every tracked frontend URL, across
-#       any deployment postfix -- see "Bug fixed 2026-07-10" below)
-#       sourceNamePattern: SuperDomain\|.*bpa-demo.*, with
+#       attributeNamePattern: Frontends|Apps|bpa-demo-<platform>|URLs|.*:
+#       Average Response Time (ms)  (matches every tracked frontend URL
+#       for that platform's own app-name identity)
+#       sourceNamePattern: SuperDomain\|.*bpa-demo-<platform>.*, with
 #       useManagementModuleAgentExpression=false -- the MG carries its own
 #       explicit copy of the MM's agent scope rather than inheriting it.
 #       See "Bug fixed 2026-07-06" below for why.
@@ -37,6 +39,7 @@
 # correctly-anchored sourceNamePattern instead of inheriting the MM's
 # (also corrected, for consistency, even though nothing currently depends
 # on the MM-level value now that the MG no longer inherits it).
+#
 # Bug fixed 2026-07-10: the Metric Grouping's attributeNamePattern hardcoded
 # the literal application name "BPA-Demo" (Frontends|Apps|BPA-Demo|URLs|...).
 # Adding DEPLOYMENT_NAME/DEPLOYMENT_POSTFIX to .config (see CLAUDE.md's
@@ -46,11 +49,22 @@
 # instead of a fixed "BPA-Demo", so the literal segment stopped matching
 # anything (confirmed live via `nass query`: the real attribute prefix is now
 # Frontends|Apps|bpa-demo-k8s|... and Frontends|Apps|bpa-demo-docker|...).
-# Fixed by wildcarding that segment to bpa-demo-[^|]* so the grouping matches
-# any deployment's app name, present or future, rather than hardcoding a
-# specific literal that a future identity change could break again. The
-# self-heal path (above) now also re-applies attributeNamePattern, not just
-# sourceNamePattern, since it was previously missing from that update call.
+# Fixed (at the time) by wildcarding that segment to bpa-demo-[^|]* so the
+# grouping matched any deployment's app name in one shared MM -- since
+# superseded by the 2026-08-26 split below, which un-wildcards it again
+# into two platform-specific literals instead.
+#
+# Bug fixed 2026-08-26, reported by the user: the wildcarded
+# `bpa-demo-[^|]*`/`.*bpa-demo.*` segments matched BOTH the Docker and
+# Kubernetes deployment's identities in one shared Management Module --
+# a `trouble`-use-case spike on either deployment fired the identical
+# alert with no way to tell which deployment caused it. Split into two
+# independent Management Modules, one per platform, each with a literal
+# (not wildcarded) identity segment:
+#
+#   docker -> Management Module "BPA-Demo"        -- unchanged name,
+#                                                      repointed
+#   k8s    -> Management Module "BPA-Demo K8s"    -- new
 #
 # Only `trouble` has a real, currently-observable APM signal. `empty_basket`
 # (basket total always 0) and `locked` (blocks login) do not currently
@@ -61,20 +75,30 @@
 # RESP_HEADER_X_BASKET_TOTAL as an attribute).
 #
 # Usage:
-#   dxo2-scripts/bpa-demo-management-module.sh create   - create the module,
-#                                                metric grouping, and alert.
-#                                                Safe to re-run: warns
-#                                                instead of failing if
-#                                                already created.
-#   dxo2-scripts/bpa-demo-management-module.sh check    - print whether it
-#                                                exists and its current
+#   dxo2-scripts/bpa-demo-management-module.sh <docker|k8s> create   -
+#                                                create that platform's
+#                                                module, metric grouping,
+#                                                and alert. Safe to
+#                                                re-run: warns instead of
+#                                                failing if already
+#                                                created.
+#   dxo2-scripts/bpa-demo-management-module.sh <docker|k8s> check    -
+#                                                print whether that
+#                                                platform's resources
+#                                                exist and their current
 #                                                definition.
-#   dxo2-scripts/bpa-demo-management-module.sh delete   - delete the alert,
-#                                                metric grouping, and
-#                                                management module.
-#                                                Prompts for confirmation;
-#                                                pass -y|--yes to skip it.
+#   dxo2-scripts/bpa-demo-management-module.sh <docker|k8s> delete   -
+#                                                delete that platform's
+#                                                alert, metric grouping,
+#                                                and management module.
+#                                                Prompts for
+#                                                confirmation; pass
+#                                                -y|--yes to skip it.
 #   dxo2-scripts/bpa-demo-management-module.sh -h|--help - print this help.
+#
+# The <docker|k8s> platform argument is required and must come first -- the
+# script exits with an error if it's missing or not exactly one of those
+# two values, before doing anything else.
 #
 # Prerequisites:
 #   tools/dx-do-<platform>              DX O2 CLI - download the latest
@@ -93,26 +117,23 @@
 #   reliably re-discoverable by name from the CLI alone (managementmodule
 #   list's table output wraps across multiple lines per row and has no
 #   raw-JSON mode). This script persists the ids it creates to
-#   dxo2-scripts/.state/bpa-demo-management-module.env (git-ignored) so
-#   check/delete can find them again. If that file is lost, the resources
-#   still exist in the tenant -- find and remove them via the console, or
-#   via `dx-do managementmodule list` (the module's own name, "BPA-Demo",
-#   is visible there even without the state file).
+#   dxo2-scripts/.state/bpa-demo-management-module-<docker|k8s>.env
+#   (git-ignored) so check/delete can find them again. If that file is
+#   lost, the resources still exist in the tenant -- find and remove them
+#   via the console, or via `dx-do managementmodule list` (the module's
+#   own name, "BPA-Demo"/"BPA-Demo K8s", is visible there even without
+#   the state file).
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly MODULE_NAME="BPA-Demo"
 readonly METRIC_GROUPING_NAME="BPA-Demo Frontend Response Time"
 readonly ALERT_NAME="Trouble User - High Response Time"
-readonly ATTRIBUTE_NAME_PATTERN='Frontends\|Apps\|bpa-demo-[^|]*\|URLs\|.*:Average Response Time \(ms\)'
-readonly AGENT_EXPRESSION='SuperDomain\|.*bpa-demo.*'
 readonly WARNING_THRESHOLD_MS="100"
 readonly ERROR_THRESHOLD_MS="250"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
-readonly STATE_FILE="${STATE_DIR}/bpa-demo-management-module.env"
 
 ## Print usage information.
 usage() {
@@ -192,18 +213,37 @@ cmd_create() {
     load_state
 
     if [[ -n "${MM_ID}" ]] && "${DX_DO_BIN}" managementmodule list 2>/dev/null | grep -q "${MM_ID}"; then
-        info "Management Module '${MODULE_NAME}' already created (${MM_ID}) -- checking the metric grouping actually matches something."
-        local metrics_json
-        metrics_json=$("${DX_DO_BIN}" metricgrouping list-metrics metricGroupingId="${MG_ID}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null || true)
-        # Count data rows only, not the ["metric.source","metric.path"] header
-        # row -- every real row's first element is a "SuperDomain|..." agent
-        # path, which the header line never contains.
-        local match_count
-        match_count=$(printf '%s' "${metrics_json}" | grep -c '"SuperDomain|' || true)
+        info "Management Module '${MODULE_NAME}' already created (${MM_ID}) -- checking the metric grouping's pattern is the current platform-specific one and actually matches something."
+        # Check the pattern itself, not just "any live matches" -- a resource
+        # migrated from a pre-split shared/wildcarded pattern (see "Bug fixed
+        # 2026-08-26" in this script's header) can still have live matches
+        # under the OLD wildcarded pattern (it matched both platforms), which
+        # would otherwise make a match-count-only check falsely report
+        # healthy without ever picking up the new platform-specific literal.
+        local current_pattern
+        current_pattern=$("${DX_DO_BIN}" metricgrouping detail metricGroupingId="${MG_ID}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null \
+            | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    print(d.get('specifier', {}).get('attributeNameSpecifier', {}).get('pattern', ''))
+except Exception:
+    pass
+" 2>/dev/null || true)
+        local match_count="0"
+        if [[ "${current_pattern}" == "${ATTRIBUTE_NAME_PATTERN}" ]]; then
+            local metrics_json
+            metrics_json=$("${DX_DO_BIN}" metricgrouping list-metrics metricGroupingId="${MG_ID}" managementModuleId="${MM_ID}" output.format=json 2>/dev/null || true)
+            # Count data rows only, not the ["metric.source","metric.path"]
+            # header row -- every real row's first element is a
+            # "SuperDomain|..." agent path, which the header line never
+            # contains.
+            match_count=$(printf '%s' "${metrics_json}" | grep -c '"SuperDomain|' || true)
+        fi
         if [[ "${match_count}" -gt 0 ]]; then
-            info "Metric Grouping (${MG_ID}) has live matches -- nothing to do."
+            info "Metric Grouping (${MG_ID}) already has the current pattern and live matches -- nothing to do."
         else
-            info "Metric Grouping (${MG_ID}) has ZERO live matches -- self-healing with the current sourceNamePattern/attributeNamePattern (see 'Bug fixed 2026-07-06' and 'Bug fixed 2026-07-10' in this script's header)."
+            info "Metric Grouping (${MG_ID}) has a stale pattern or ZERO live matches -- self-healing with the current sourceNamePattern/attributeNamePattern."
             run_dx_do metricgrouping update \
                 metricGroupingId="${MG_ID}" \
                 managementModuleId="${MM_ID}" \
@@ -212,7 +252,7 @@ cmd_create() {
                 useManagementModuleAgentExpression=false \
                 dry-run=false
         fi
-        info "Run '${SCRIPT_NAME} check' to see its current definition."
+        info "Run '${SCRIPT_NAME} ${PLATFORM} check' to see its current definition."
         return 0
     fi
 
@@ -267,7 +307,7 @@ cmd_check() {
     load_state
 
     if [[ -z "${MM_ID}" ]]; then
-        info "No state file at ${STATE_FILE} -- '${SCRIPT_NAME} create' has not been run here."
+        info "No state file at ${STATE_FILE} -- '${SCRIPT_NAME} ${PLATFORM} create' has not been run here."
         info "The resources may still exist under a different state file/machine -- check 'dx-do managementmodule list' for '${MODULE_NAME}'."
         exit 1
     fi
@@ -331,7 +371,42 @@ cmd_delete() {
     info "Done."
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+case "${PLATFORM}" in
+    docker)
+        readonly IDENTITY="bpa-demo-docker"
+        readonly MODULE_NAME="BPA-Demo"
+        ;;
+    k8s)
+        readonly IDENTITY="bpa-demo-k8s"
+        readonly MODULE_NAME="BPA-Demo K8s"
+        ;;
+esac
+readonly ATTRIBUTE_NAME_PATTERN="Frontends\\|Apps\\|${IDENTITY}\\|URLs\\|.*:Average Response Time \\(ms\\)"
+readonly AGENT_EXPRESSION="SuperDomain\\|.*${IDENTITY}.*"
+readonly STATE_FILE="${STATE_DIR}/bpa-demo-management-module-${PLATFORM}.env"
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0

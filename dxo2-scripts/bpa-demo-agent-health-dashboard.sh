@@ -59,25 +59,48 @@
 # template) passes. `delete` has no CLI equivalent at all -- it prints
 # manual console-removal instructions instead of pretending to work.
 #
+# 2026-08-26, at the user's request: added a required <docker|k8s>
+# platform argument, consistent with every other dxo2-scripts/*.sh
+# script -- but this dashboard is NOT duplicated per platform the way
+# those scripts' underlying alerts/metric groupings/SLI groups now are.
+# It already solves the docker/k8s split at the RUNTIME/viewer level via
+# the "Deployment" dropdown variable (see "2026-07-10" above), which is a
+# better fit here than a second copy of the whole dashboard would be.
+# The platform argument instead selects which value that dropdown
+# defaults to when the dashboard is (re)created -- "All" stays the
+# viewer's own choice to pick otherwise, this only changes what a fresh
+# viewer sees by default. The Browser Agent / BPA WebServer Plugin panels
+# are unaffected either way, same as always.
+#
 # Usage:
-#   dxo2-scripts/bpa-demo-agent-health-dashboard.sh create   - import the
-#                                                dashboard into the
-#                                                "BPA-Demo" folder
-#                                                (created if missing).
-#                                                Safe to re-run: upserts
-#                                                in place by uid instead
-#                                                of duplicating.
-#   dxo2-scripts/bpa-demo-agent-health-dashboard.sh check    - print
-#                                                whether it exists and a
-#                                                summary of its panels.
-#   dxo2-scripts/bpa-demo-agent-health-dashboard.sh delete   - print
-#                                                manual console-removal
+#   dxo2-scripts/bpa-demo-agent-health-dashboard.sh <docker|k8s> create -
+#                                                import the dashboard
+#                                                into the "BPA-Demo"
+#                                                folder (created if
+#                                                missing), with its
+#                                                "Deployment" dropdown
+#                                                defaulted to the given
+#                                                platform. Safe to
+#                                                re-run: upserts in place
+#                                                by uid instead of
+#                                                duplicating.
+#   dxo2-scripts/bpa-demo-agent-health-dashboard.sh <docker|k8s> check  -
+#                                                print whether it exists
+#                                                and a summary of its
+#                                                panels.
+#   dxo2-scripts/bpa-demo-agent-health-dashboard.sh <docker|k8s> delete -
+#                                                print manual
+#                                                console-removal
 #                                                instructions (no CLI
 #                                                delete command exists
 #                                                for dashboards on this
 #                                                dx-do build).
 #   dxo2-scripts/bpa-demo-agent-health-dashboard.sh -h|--help - print
 #                                                this help.
+#
+# The <docker|k8s> platform argument is required and must come first -- the
+# script exits with an error if it's missing or not exactly one of those
+# two values, before doing anything else.
 #
 # Prerequisites:
 #   tools/dx-do-<platform>              DX O2 CLI - download the latest
@@ -224,6 +247,33 @@ for row in data:
 " 2>/dev/null || true
 }
 
+## Rewrite a dashboard JSON file's "deployment" templating variable
+## (if present) so PLATFORM is its default selection instead of "All" --
+## see this script's 2026-08-26 header comment. Leaves every other field
+## (including the variable's own option list) untouched.
+#
+# @param string $1
+#   Path to the source dashboard JSON file.
+# @param string $2
+#   Path to write the rewritten dashboard JSON file to.
+apply_platform_default() {
+    local -r in_file="$1"
+    local -r out_file="$2"
+    python3 -c "
+import json
+with open('${in_file}') as f:
+    data = json.load(f)
+for var in data.get('dashboard', {}).get('templating', {}).get('list', []):
+    if var.get('name') == 'deployment':
+        var['current'] = {'selected': True, 'text': '${PLATFORM}', 'value': '${PLATFORM}'}
+        for opt in var.get('options', []):
+            opt['selected'] = (opt.get('value') == '${PLATFORM}')
+        break
+with open('${out_file}', 'w') as f:
+    json.dump(data, f)
+"
+}
+
 ## Create or upsert the dashboard. Safe to re-run.
 cmd_create() {
     load_state
@@ -264,8 +314,8 @@ cmd_create() {
         "${DX_DO_BIN}" dashboard dashboard-export "uid=${DASH_UID}" "dashboardExportFile=${exported_file}" >/dev/null 2>&1 || \
             fatal "Could not export the existing dashboard (uid ${DASH_UID}) to merge the update into."
 
-        local rendered_file
-        rendered_file="$(mktemp -t bpa-demo-agent-health-dashboard-XXXXXX.json)"
+        local merged_file
+        merged_file="$(mktemp -t bpa-demo-agent-health-dashboard-XXXXXX.json)"
         python3 -c "
 import json
 with open('${exported_file}') as f:
@@ -276,22 +326,33 @@ live['dashboard']['panels'] = fresh['dashboard']['panels']
 live['dashboard']['title'] = fresh['dashboard']['title']
 live['dashboard']['tags'] = fresh['dashboard']['tags']
 live['dashboard']['templating'] = fresh['dashboard'].get('templating', {'list': []})
-with open('${rendered_file}', 'w') as f:
+with open('${merged_file}', 'w') as f:
     json.dump(live, f)
 "
         rm -f "${exported_file}"
+
+        local rendered_file
+        rendered_file="$(mktemp -t bpa-demo-agent-health-dashboard-rendered-XXXXXX.json)"
+        apply_platform_default "${merged_file}" "${rendered_file}"
+        rm -f "${merged_file}"
+
         run_dx_do dashboard dashboard-update "dashboardExportFile=${rendered_file}"
         rm -f "${rendered_file}"
         save_state
-        info "Run '${SCRIPT_NAME} check' to see its current definition."
+        info "Run '${SCRIPT_NAME} ${PLATFORM} check' to see its current definition."
         return 0
     fi
 
-    info "Importing dashboard '${DASHBOARD_TITLE}' into folder '${FOLDER_TITLE}' (id ${folder_id})..."
+    local rendered_file
+    rendered_file="$(mktemp -t bpa-demo-agent-health-dashboard-rendered-XXXXXX.json)"
+    apply_platform_default "${TEMPLATE_FILE}" "${rendered_file}"
+
+    info "Importing dashboard '${DASHBOARD_TITLE}' into folder '${FOLDER_TITLE}' (id ${folder_id}), defaulting Deployment to '${PLATFORM}'..."
     local import_json
     import_json=$("${DX_DO_BIN}" dashboard dashboard-import \
-        "dashboardExportFile=${TEMPLATE_FILE}" \
+        "dashboardExportFile=${rendered_file}" \
         "folderId=${folder_id}" 2>&1 | grep -v -e '^ℹ' -e '^☒' -e '^…' -e '^☐' -e 'Authorization')
+    rm -f "${rendered_file}"
     echo "${import_json}"
     DASH_UID=$(printf '%s' "${import_json}" | grep -oE "uid: *'[^']*'|uid: *\"[^\"]*\"|\"uid\": *\"[^\"]*\"" | head -1 | grep -oE "[A-Za-z0-9_-]{6,}" | tail -1)
     [[ -n "${DASH_UID}" ]] || fatal "Could not parse dashboard uid from dx-do output above."
@@ -310,7 +371,7 @@ cmd_check() {
     fi
 
     if [[ -z "${DASH_UID}" ]]; then
-        info "No state file at ${STATE_FILE} and no dashboard named '${DASHBOARD_TITLE}' found via 'dx-do dashboard dashboard-search' -- '${SCRIPT_NAME} create' has not been run."
+        info "No state file at ${STATE_FILE} and no dashboard named '${DASHBOARD_TITLE}' found via 'dx-do dashboard dashboard-search' -- '${SCRIPT_NAME} ${PLATFORM} create' has not been run."
         exit 1
     fi
 
@@ -362,7 +423,28 @@ cmd_delete() {
     info "  rm -f ${STATE_FILE}"
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0

@@ -75,18 +75,48 @@
 # (`agent EQUALS`/`applicationName EQUALS`) rather than an explicit source
 # list; this script does not create or touch it.
 #
+# Bug fixed 2026-08-26, reported by the user: the first two sources'
+# wildcarded REGEX segments matched BOTH the Docker and Kubernetes
+# deployment's identities in one shared Universe. Split into two
+# independent Universes, one per platform, with literal (not wildcarded)
+# identity segments:
+#
+#   docker -> Universe "BPA Demo universe"        -- unchanged name,
+#                                                     repointed (existing
+#                                                     entries can't be
+#                                                     removed -- see below)
+#   k8s    -> Universe "BPA Demo K8s universe"    -- new
+#
+# `apm-universe` has no "remove metric source" command (see "Gotchas"
+# below), so repointing the existing "docker" Universe means ADDING the
+# new literal docker-specific sources alongside the old wildcarded ones
+# that already matched both platforms -- the old entries can't be
+# retracted, only superseded; they remain harmlessly inert in the
+# Universe's `names` array (an OR'd specifier list tolerates dead entries
+# fine, same as the already-documented stale EXACT entries from the
+# 2026-08-21 fix below). The third source (BPA WebServer Agent) has no
+# per-platform identity today and stays the same fixed literal on both
+# platform's Universes.
+#
 # Usage:
-#   dxo2-scripts/bpa-demo-universe.sh create   - create the Universe and add
-#                                        all 3 metric sources. Safe to
-#                                        re-run: if the Universe already
-#                                        exists, adds any missing metric
-#                                        source instead of no-op'ing.
-#   dxo2-scripts/bpa-demo-universe.sh check    - print whether it exists and
-#                                        its current definition.
-#   dxo2-scripts/bpa-demo-universe.sh delete   - delete the Universe.
-#                                        Prompts for confirmation; pass
-#                                        -y|--yes to skip it.
+#   dxo2-scripts/bpa-demo-universe.sh <docker|k8s> create   - create that
+#                                        platform's Universe and add all 3
+#                                        metric sources. Safe to re-run:
+#                                        if the Universe already exists,
+#                                        adds any missing metric source
+#                                        instead of no-op'ing.
+#   dxo2-scripts/bpa-demo-universe.sh <docker|k8s> check    - print
+#                                        whether it exists and its current
+#                                        definition.
+#   dxo2-scripts/bpa-demo-universe.sh <docker|k8s> delete   - delete that
+#                                        platform's Universe. Prompts for
+#                                        confirmation; pass -y|--yes to
+#                                        skip it.
 #   dxo2-scripts/bpa-demo-universe.sh -h|--help - print this help.
+#
+# The <docker|k8s> platform argument is required and must come first -- the
+# script exits with an error if it's missing or not exactly one of those
+# two values, before doing anything else.
 #
 # Prerequisites:
 #   tools/dx-do-<platform>              DX O2 CLI - see
@@ -130,24 +160,12 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly UNIVERSE_NAME="BPA Demo universe"
 readonly DXDO_CONFIG="${HOME}/.dxdo/default.dxo2.config.json"
 readonly STATE_DIR="${SCRIPT_DIR}/.state"
-readonly STATE_FILE="${STATE_DIR}/bpa-demo-universe.env"
 
-# The 3 metric sources covering all 4 named telemetry-producing identities
-# (BPA WebServer Agent covers both "BPA agent" and "Browser agent" -- see
-# header comment). The first two are wildcarded REGEX so one entry each
-# covers every deployment's real identity (docker/k8s/future) instead of
-# a per-deployment EXACT literal a future identity change could break
-# again -- see "Bug fixed 2026-08-21" above. The third is a fixed,
-# non-deployment-specific literal, so it stays EXACT.
-readonly METRIC_SOURCE_TYPES=(REGEX REGEX EXACT)
-readonly METRIC_SOURCES=(
-    'SuperDomain\|bpa-demo-[^|]+\|bpa-demo-[^|]+\|bpa-demo-[^|]+$'
-    'SuperDomain\|bpa-demo-[^|]+\|php-probes\|bpa-demo-[^|]+(%\d+)?(\(/usr/sbin/apache2\))?$'
-    'SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin'
-)
+# Third metric source (BPA WebServer Agent) has no per-platform identity
+# today (see header comment) and stays a fixed, shared EXACT literal.
+readonly BPA_WEBSERVER_SOURCE='SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin'
 
 ## Print usage information.
 usage() {
@@ -275,7 +293,7 @@ cmd_check() {
     load_state
 
     if [[ -z "${UNIVERSE_ID}" ]]; then
-        info "No state file at ${STATE_FILE} -- '${SCRIPT_NAME} create' has not been run here."
+        info "No state file at ${STATE_FILE} -- '${SCRIPT_NAME} ${PLATFORM} create' has not been run here."
         info "The Universe may still exist under a different state file/machine -- check 'dx-do apm-universe list output.format=json' (redirect to a file) for the label '${UNIVERSE_NAME}'."
         exit 1
     fi
@@ -326,7 +344,46 @@ cmd_delete() {
     info "Done."
 }
 
-# == Argument parsing =========================================================
+# == Platform argument ========================================================
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+if [[ -z "${1:-}" ]]; then
+    usage
+    fatal "Missing required <docker|k8s> argument. Usage: ${SCRIPT_NAME} <docker|k8s> <create|check|delete>"
+fi
+
+case "${1}" in
+    docker) readonly PLATFORM="docker" ;;
+    k8s)    readonly PLATFORM="k8s" ;;
+    *)
+        usage
+        fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
+        ;;
+esac
+shift
+
+case "${PLATFORM}" in
+    docker)
+        readonly IDENTITY="bpa-demo-docker"
+        readonly UNIVERSE_NAME="BPA Demo universe"
+        ;;
+    k8s)
+        readonly IDENTITY="bpa-demo-k8s"
+        readonly UNIVERSE_NAME="BPA Demo K8s universe"
+        ;;
+esac
+readonly METRIC_SOURCE_TYPES=(REGEX REGEX EXACT)
+readonly METRIC_SOURCES=(
+    "SuperDomain\\|${IDENTITY}\\|${IDENTITY}\\|${IDENTITY}\$"
+    "SuperDomain\\|${IDENTITY}\\|php-probes\\|${IDENTITY}(%\\d+)?(\\(/usr/sbin/apache2\\))?\$"
+    "${BPA_WEBSERVER_SOURCE}"
+)
+readonly STATE_FILE="${STATE_DIR}/bpa-demo-universe-${PLATFORM}.env"
+
+# == Subcommand argument =======================================================
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || -z "${1:-}" ]]; then
     usage
     exit 0

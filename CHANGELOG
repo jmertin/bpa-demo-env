@@ -5,6 +5,105 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-26 @ 14:02 - [Feat - split all 9 dxo2-scripts/ scripts into required docker/k8s platform modes]:
+  User reported mixed-up Browser Agent/AXA data: bpa-demo-axa-app.sh
+  originally created a single AXA application and wrote a single
+  .config APMIA_BROWSER_SNIPPET variable shared by both the Docker
+  Compose and Kubernetes deployments, so every real browser session
+  reported under the same identity no matter which deployment it hit.
+  Investigating found the same class of bug in several other scripts:
+  a single wildcarded regex (e.g. bpa-demo-[^|]+) matching both
+  bpa-demo-docker and bpa-demo-k8s inside one shared Metric
+  Grouping/Alert/Universe/SLI-group/content-query.
+
+  Added a required `<docker|k8s>` platform argument, positioned first
+  (`<script>.sh <docker|k8s> <create|check|delete>`), to all 9 scripts
+  in dxo2-scripts/ -- each one now validates it immediately and exits
+  with an error before touching the tenant or reading any other state
+  if it's missing or not exactly "docker"/"k8s". Per the user's
+  answers to clarifying questions: all 9 scripts got the argument
+  uniformly (not just the ones with an obvious pre-existing bug); the
+  AXA/Browser Agent snippet split uses two .config variables
+  (APMIA_BROWSER_SNIPPET_DOCKER / APMIA_BROWSER_SNIPPET_K8S); each
+  pre-existing shared tenant resource was repointed to become the
+  "docker" instance in place (pattern/name corrected, no
+  delete+recreate) while a brand new "k8s" instance was created
+  alongside it.
+
+  Genuinely duplicated into two platform-specific tenant resources:
+  bpa-demo-service.sh (two Services), bpa-demo-management-module.sh
+  (two Management Modules), bpa-demo-agent-alerts.sh's infra/php-tier
+  groupings (two sets of 10), bpa-demo-universe.sh (two APM
+  Universes), bpa-demo-services-universe.sh (two Services Universes),
+  bpa-demo-sli.sh's response-time/error-rate groups (two sets, "K8s"
+  name suffix on the k8s copy since sli group names must be globally
+  unique), and bpa-demo-axa-app.sh (two AXA applications: the
+  pre-existing "BPA Demo AXA" app becomes docker's, since axa has no
+  rename/update-application command; a new "BPA Demo AXA K8s" app is
+  created for k8s).
+
+  Deliberately left shared (no per-platform Browser Agent identity
+  exists yet to split against): the two browser-tier alerts, the one
+  browser-tier SLI group, and the Browser Agent/BPA WebServer Agent
+  content-query groups.
+
+  Not duplicated, handled via a runtime default instead: the two
+  dashboard scripts (bpa-demo-agent-health-dashboard.sh,
+  bpa-demo-application-dashboards.sh) already had a Grafana template
+  variable letting a viewer pick a platform/application at view time
+  -- the platform argument now just sets that variable's default
+  `current` selection at (re)creation, via a shared
+  apply_platform_default() helper wired into both the fresh-import
+  and export->merge->update code paths (handles both scalar and
+  multi:true array-shaped `current` values).
+
+  Fixed a pattern-staleness self-heal bug found independently in
+  bpa-demo-management-module.sh and bpa-demo-agent-alerts.sh: the old
+  self-heal only checked "does this grouping have live matches" --
+  but a wildcarded pattern being replaced by a platform-specific
+  literal still matches the new literal's data too (it's a superset),
+  so a repointed resource would falsely report "already healthy" and
+  never actually receive the corrected pattern. Fixed by fetching the
+  grouping's current live pattern (metricgrouping detail's
+  specifier.attributeNameSpecifier.pattern, not a top-level
+  attributeNamePattern key) and comparing it to the desired one before
+  trusting the match-count check.
+
+  Also fixed several leftover un-parameterized ${SCRIPT_NAME} log/error
+  messages (missed during the platform-argument rework) across
+  bpa-demo-agent-alerts.sh, bpa-demo-services-universe.sh,
+  bpa-demo-sli.sh, and bpa-demo-application-dashboards.sh (the last of
+  which had never declared a SCRIPT_NAME constant at all).
+
+  build-scripts/compose.sh now exports APMIA_BROWSER_SNIPPET (the
+  container-facing name, unchanged) from .config's
+  APMIA_BROWSER_SNIPPET_DOCKER; build-scripts/deploy.sh's
+  generate_values() now reads APMIA_BROWSER_SNIPPET_K8S. Updated
+  .config.example with both variables populated with real, distinct
+  snippets. Migrated dxo2-scripts/.state/ files to per-platform names
+  (e.g. bpa-demo-service-docker.env) and removed the now-stale
+  un-suffixed originals after confirming their content matched.
+
+  Updated CLAUDE.md (dxo2-scripts intro paragraph, the axa-app entry,
+  the .config required-variables reference block, and the Docker
+  Compose notes' APMIA_BROWSER_SNIPPET bullet), dxo2-scripts/README.md
+  (usage block, new "Docker/Kubernetes separation" section, all 9
+  script table rows), and QUICKSTART.md's example dxo2-scripts
+  invocation sequence to require the platform argument.
+
+  Verified live: all 9 scripts' create/check/delete confirmed for both
+  docker and k8s, including idempotency re-runs; the corrected
+  patterns confirmed against real tenant data (metricgrouping
+  list-metrics / sli filter-test / nass query where applicable), not
+  just "the create succeeded."
+
+  Not yet resolved: whether the AXA application split will eventually
+  let the still-shared browser-tier alerts/SLI/content-groups also be
+  split by platform -- deferred pending real browser traffic against
+  both deployments to confirm the two AXA apps' data lands under
+  distinguishable metric paths.
+
+------------------------------------------------------------------------------
 2026-08-26 @ 10:57 - [Fix - X-Page-ID baseline header was lowercase while every override was uppercase]:
   User reported: some X-Page-ID values are lowercase, some are full
   uppercase. Traced to the only two places that ever set X-Page-ID:
