@@ -5,6 +5,37 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-08-26 @ 10:57 - [Fix - X-Page-ID baseline header was lowercase while every override was uppercase]:
+  User reported: some X-Page-ID values are lowercase, some are full
+  uppercase. Traced to the only two places that ever set X-Page-ID:
+  page_id.php's set_page_id() (called via set_monitoring_headers() from
+  shop/product/basket/checkout/order/login) already forces
+  MODULE-ACTION-TARGET uppercase via strtoupper() on every component;
+  index.php's own baseline header (`X-Page-ID: page_<slug>`, emitted on
+  every request before any page-specific override) did not -- the only
+  lowercase X-Page-ID values were ever produced by the four pages that
+  never call set_monitoring_headers() at all (logout, info, db, dxo2),
+  plus any page's own early-exit path that redirects before reaching
+  its later set_monitoring_headers() call (e.g. admin/product without
+  auth).
+  Fixed by uppercasing index.php's baseline header to match:
+  `X-Page-ID: PAGE_<SLUG>` via strtoupper($page). Confirmed via grep
+  that these are the only two header('X-Page-ID: ...') call sites in
+  the whole app -- no other place needed the same fix.
+  Verified live end to end: rebuilt and redeployed the running Compose
+  stack (`compose.sh build` + `up -d`), confirmed via curl that
+  page=dxo2/logout/info/db (previously PAGE_DXO2 etc. as
+  page_dxo2/page_logout/...) now return PAGE_DXO2/PAGE_LOGOUT/PAGE_INFO/
+  PAGE_DB, that already-uppercase pages (shop, login, bare /, an
+  unknown page falling back to shop) are unaffected, and that the
+  early-redirect case (admin/product without auth) now also correctly
+  returns an uppercase baseline (PAGE_ADMIN/PAGE_PRODUCT) instead of the
+  old lowercase leak. No errors in the apache-php or traffic-generator
+  container logs after the restart.
+  Updated CLAUDE.md's front-controller section to match the new format
+  and record the fix.
+
+------------------------------------------------------------------------------
 2026-08-24 @ 17:05 - [Feat - load .config.example first, then .config, so a stale .config still gets new-release defaults]:
   User's stated concern: .config won't always be updated to the latest
   release, so a variable added to .config.example in a newer release
