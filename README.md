@@ -17,6 +17,8 @@ indent, K&R braces, PHPDoc on every function, single quotes).
 
 ### DX O2 agents demonstrated
 
+![Cluster Diagram](BPA_Demo_Topology.jpg)
+
 | Agent / component | What it monitors | Where it runs |
 |---|---|---|
 | **Infrastructure Agent (IA)** | Host + process‑level agent; hosts the extensions below and reports the app's core identity to the DX O2 tenant | `dx-o2-agent` sidecar container |
