@@ -77,7 +77,8 @@ entirely by `.config`:
 ├── app/
 │   └── src/                      # PHP application source
 │       ├── health                # static file – K8s liveness/readiness/startup probe target (no PHP)
-│       ├── index.php             # front-controller (all routing; reached only as index.php?page=<slug>, no clean-URL rewriting)
+│       ├── index.php             # front-controller (all routing; reached as index.php?page=<slug> or, in mp mode, via a wrapper file)
+│       ├── shop.php, basket.php, product.php, ...  # 11 mp-mode wrapper files (bare require of index.php)
 │       ├── config/               # session bootstrap, PDO singleton
 │       ├── lib/                  # auth, product, basket, order, usecase, validate, headers
 │       ├── pages/                # shop, product, basket, checkout, order, login, admin
@@ -91,7 +92,8 @@ entirely by `.config`:
 │   │   ├── Dockerfile            # Stage 1: extract archive; Stage 2: runtime + OPcache disabled
 │   │   ├── entrypoint.sh         # PHP probe + BPA Apache module injection, cron, Apache
 │   │   └── config/
-│   │       └── vhost.conf        # VirtualHost :8080; no-cache headers; baked in + ConfigMap override
+│   │       ├── vhost.conf-mp     # VirtualHost :8080, mp mode: clean URLs, no-cache headers
+│   │       └── vhost.conf-plain  # VirtualHost :8080, plain mode: index.php?page=<slug>, no rewriting
 │   │
 │   └── dx-o2-agents/             # Broadcom DX O2 monitoring container (ubuntu:24.04)
 │       ├── Dockerfile            # extracts APMIA + BTL + BPA plugin to /opt/apmia, /opt/btlistener
@@ -125,7 +127,8 @@ entirely by `.config`:
         ├── values.yaml           # all defaults – no secrets, no registry credentials
         ├── .helmignore
         ├── files/
-        │   └── vhost.conf        # symlink -> src/apache-php/config/vhost.conf (single source of truth)
+        │   ├── vhost.conf-mp     # symlink -> src/apache-php/config/vhost.conf-mp (single source of truth)
+        │   └── vhost.conf-plain  # symlink -> src/apache-php/config/vhost.conf-plain
         ├── sql/
         │   ├── schema.sql        # 8-table MariaDB schema
         │   └── seed.sql          # 3 brands, 6 capabilities, 300 products, 13 demo users
@@ -136,7 +139,7 @@ entirely by `.config`:
             ├── serviceaccount.yaml     # automountServiceAccountToken: false
             ├── registry-secret.yaml    # kubernetes.io/dockerconfigjson pull secret
             ├── db-init-configmap.yaml  # embeds schema.sql + seed.sql for MariaDB init
-            ├── configmap.yaml          # {{ .Files.Get "files/vhost.conf" }} (mounted via subPath)
+            ├── configmap.yaml          # picks files/vhost.conf-{mp,plain} by .Values.appType (mounted via subPath)
             ├── secret.yaml             # MariaDB credentials from Helm values
             ├── service.yaml            # ClusterIP on port 8080 -- Ingress routes here
             ├── service-headless.yaml   # clusterIP: None -- stable per-pod DNS for the StatefulSet
@@ -439,7 +442,8 @@ Replace `<APP_NAMESPACE>` with the value of `APP_NAMESPACE` from your `.config`
 
 ### Logging in
 
-Click **Sign in** in the top-right corner, or navigate directly to `/index.php?page=login`.
+Click **Sign in** in the top-right corner, or navigate directly to `/login`
+(`mp` mode, the default) or `/index.php?page=login` (`plain` mode).
 All demo accounts use the password **`demo123`**.
 
 | Username | Role | Notes |
@@ -458,11 +462,11 @@ can view all users and assign or remove use cases.
 A **Diagnostics** section also appears in the sidebar, giving access to three
 pages that inspect the runtime from inside the container:
 
-| Page | URL | Shows |
+| Page | URL (`mp` / `plain`) | Shows |
 |---|---|---|
-| DX O2 Status | `/index.php?page=dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, APMIA IA / PHP probe / BTListener log tails |
-| PHP Info | `/index.php?page=info` | PHP version, SAPI, OS, memory limit, loaded extensions |
-| Database | `/index.php?page=db` | Live MariaDB connection result, server version, uptime |
+| DX O2 Status | `/dxo2` / `/index.php?page=dxo2` | PHP probe, BPA module, browser agent, TCP connectivity, APMIA env vars, APMIA IA / PHP probe / BTListener log tails |
+| PHP Info | `/info` / `/index.php?page=info` | PHP version, SAPI, OS, memory limit, loaded extensions |
+| Database | `/db` / `/index.php?page=db` | Live MariaDB connection result, server version, uptime |
 
 These pages are available even when DX O2 is not deployed — all probes will report
 "not loaded", which is the expected state for a vanilla deployment.
@@ -577,28 +581,31 @@ All accounts use the password **`demo123`**.
 
 ### Application routes
 
-There is no clean-URL rewriting — every page is a plain `index.php?page=<slug>`
-query string (see CLAUDE.md's "Front controller" section for why: a per-page
-wrapper-file workaround for a PHP-probe browser-agent injection bug used to
-provide clean URLs, but was reverted at the user's request on 2026-08-19,
-along with the underlying `vhost.conf` `RewriteRule` itself).
+Routing is controlled by the `APP_TYPE` `.config` variable (`mp` default, or
+`plain`) — see CLAUDE.md's "Front controller" section for the full
+explanation and how each deployment mechanism selects it. `mp` mode uses
+clean URLs via a `vhost.conf-mp` rewrite rule + per-page wrapper files
+(needed for the PHP probe's browser-agent injection to fire); `plain` mode
+uses the `index.php?page=<slug>` query-variable form with no rewriting at
+all, which also demonstrates the DX O2 shortcoming `mp` mode works around
+(every page collapsing into one shared `/index.php` metric path).
 
-| URL | Description |
-|---|---|
-| `/index.php?page=shop` | Product grid with filter bar (default landing page; bare `/` also resolves here) |
-| `/index.php?page=shop&brand=<slug>` | Filter by brand: `shelly` / `sonoff` / `tuya` |
-| `/index.php?page=shop&cap=<slug>` | Filter by protocol capability |
-| `/index.php?page=shop&q=<search>` | Full-text product search |
-| `/index.php?page=product&slug=<slug>` | Product detail page |
-| `/index.php?page=basket` | Shopping basket |
-| `/index.php?page=checkout` | Billing form + Luhn-validated fake credit-card payment |
-| `/index.php?page=order&id=<id>` | Order confirmation |
-| `/index.php?page=order` | Order history (login required) |
-| `/index.php?page=login` | Sign in |
-| `/index.php?page=admin` | Admin panel (admin role required) |
-| `/index.php?page=info` | PHP runtime diagnostics — **admin only** |
-| `/index.php?page=db` | MariaDB connection test — **admin only** |
-| `/index.php?page=dxo2` | DX O2 agent status and log tails — **admin only** |
+| `mp` mode URL | `plain` mode URL | Description |
+|---|---|---|
+| `/shop` | `/index.php?page=shop` | Product grid with filter bar (default landing page; bare `/` also resolves here — external 302 to `/shop` in `mp` mode) |
+| `/shop?brand=<slug>` | `/index.php?page=shop&brand=<slug>` | Filter by brand: `shelly` / `sonoff` / `tuya` |
+| `/shop?cap=<slug>` | `/index.php?page=shop&cap=<slug>` | Filter by protocol capability |
+| `/shop?q=<search>` | `/index.php?page=shop&q=<search>` | Full-text product search |
+| `/product?slug=<slug>` | `/index.php?page=product&slug=<slug>` | Product detail page |
+| `/basket` | `/index.php?page=basket` | Shopping basket |
+| `/checkout` | `/index.php?page=checkout` | Billing form + Luhn-validated fake credit-card payment |
+| `/order?id=<id>` | `/index.php?page=order&id=<id>` | Order confirmation |
+| `/order` | `/index.php?page=order` | Order history (login required) |
+| `/login` | `/index.php?page=login` | Sign in |
+| `/admin` | `/index.php?page=admin` | Admin panel (admin role required) |
+| `/info` | `/index.php?page=info` | PHP runtime diagnostics — **admin only** |
+| `/db` | `/index.php?page=db` | MariaDB connection test — **admin only** |
+| `/dxo2` | `/index.php?page=dxo2` | DX O2 agent status and log tails — **admin only** |
 
 ### Admin diagnostic pages
 
@@ -607,7 +614,7 @@ They appear as a **Diagnostics** section in the left sidebar when an admin is
 logged in, and are useful for verifying the runtime environment and DX O2 agent
 stack from inside the running container without needing shell access.
 
-**PHP runtime info** (`?page=info`)
+**PHP runtime info** (`/info` in `mp` mode, `?page=info` in `plain` mode)
 
 Displays the PHP version, SAPI, OS, architecture, memory limit, max execution
 time, and all loaded extensions (including `wily_php_agent` when the DX O2 PHP
@@ -615,9 +622,9 @@ probe is active).
 
 Access:
 1. Log in as `admin` (password: `demo123`).
-2. Navigate to `http://<host>:8080/?page=info`
+2. Navigate to `http://<host>:8080/info` (`mp` mode) or `http://<host>:8080/index.php?page=info` (`plain` mode).
 
-**MariaDB connection test** (`?page=db`)
+**MariaDB connection test** (`/db` in `mp` mode, `?page=db` in `plain` mode)
 
 Attempts a live PDO connection to MariaDB using the environment variables
 (`MARIADB_HOST`, `MARIADB_PORT`, `MARIADB_DATABASE`, `MARIADB_USER`,
@@ -626,9 +633,9 @@ parameters, or a formatted error message on failure.
 
 Access:
 1. Log in as `admin` (password: `demo123`).
-2. Navigate to `http://<host>:8080/?page=db`
+2. Navigate to `http://<host>:8080/db` (`mp` mode) or `http://<host>:8080/index.php?page=db` (`plain` mode).
 
-**DX O2 agent status** (`?page=dxo2`)
+**DX O2 agent status** (`/dxo2` in `mp` mode, `?page=dxo2` in `plain` mode)
 
 Comprehensive health check for the DX O2 monitoring stack.  Checks:
 
@@ -648,7 +655,7 @@ Comprehensive health check for the DX O2 monitoring stack.  Checks:
 
 Access:
 1. Log in as `admin` (password: `demo123`).
-2. Navigate to `http://<host>:8080/?page=dxo2`
+2. Navigate to `http://<host>:8080/dxo2` (`mp` mode) or `http://<host>:8080/index.php?page=dxo2` (`plain` mode).
 
 > **Note:** when `dxo2.enabled=false` (the default), the apmia volume is
 > absent.  The page loads cleanly but reports all probes as not-loaded and
@@ -658,9 +665,9 @@ From Kubernetes you can reach all diagnostic pages via port-forward:
 ```bash
 kubectl port-forward -n <APP_NAMESPACE> svc/php-demo-php-demo 8080:8080
 # then open:
-#   http://localhost:8080/?page=info
-#   http://localhost:8080/?page=db
-#   http://localhost:8080/?page=dxo2
+#   http://localhost:8080/info   (or /index.php?page=info in plain mode)
+#   http://localhost:8080/db     (or /index.php?page=db in plain mode)
+#   http://localhost:8080/dxo2   (or /index.php?page=dxo2 in plain mode)
 ```
 
 ### Monitoring HTTP headers

@@ -5,6 +5,87 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-09-02 @ 16:11 - [Feat - add APP_TYPE routing mode (mp/plain), resurrecting the reverted clean-URL + wrapper-file mechanism as an opt-in switch]:
+  Per the TODO file: give the user the choice between the URL-path
+  ("mp"/metric-path) routing approach and the plain index.php?page=
+  query-variable approach, instead of the app being permanently stuck
+  in whichever one a past revert (2026-08-19) left it in.
+
+  Added a new .config variable, APP_TYPE, with two values:
+    - mp (default): clean URLs (/shop, /basket, /product?slug=..., ...),
+      routed via a vhost.conf-mp RewriteRule to 11 per-page wrapper
+      files at the document root (shop.php, basket.php, etc. -- each
+      forces a non-include first opcode before require-ing index.php,
+      the exact mechanism bug_php_probe.md and the 2026-07-01/08-19
+      history describe). This is the one mode under which the PHP
+      probe's browser-agent auto-injection can fire at all, and gives
+      BPA/the probe distinct per-page metric paths instead of one
+      shared /index.php bucket.
+    - plain: index.php?page=<slug>, no rewriting at all -- the layout
+      the app has run under since the 2026-08-19 revert, kept as a
+      deliberate demonstration of the DX O2 shortcoming "mp" mode
+      works around.
+  No image rebuild is needed to switch modes: build-scripts/compose.sh
+  re-reads APP_TYPE on every container start (apache-php's
+  entrypoint.sh copies the matching vhost.conf-{mp,plain} variant over
+  the active Apache site); build-scripts/deploy.sh re-renders the Helm
+  chart's ConfigMap on every `helm upgrade` (configmap.yaml picks
+  between the same two files via the new .Values.appType, itself set
+  from .config's APP_TYPE).
+
+  Restored the 11 wrapper files (app/src/{shop,basket,product,
+  checkout,order,login,logout,admin,info,db,dxo2}.php) and split
+  src/apache-php/config/vhost.conf into vhost.conf-mp (the pre-revert
+  rewrite rules + bare-root-to-/shop redirect, restored from git
+  history) and vhost.conf-plain (today's file, unchanged). The old
+  single vhost.conf and its Helm files/vhost.conf symlink are gone,
+  replaced by vhost.conf-{mp,plain} pairs on both sides.
+
+  Deliberately did NOT follow the TODO's own fallback suggestion of
+  duplicating index.php (or an app_type.inc) per mode -- reading the
+  real pre-revert diff showed index.php's dispatch logic never
+  differed between modes at all (the wrapper files, not index.php,
+  did all the mode-specific work), and the only genuine per-mode
+  difference elsewhere is link *text* in ~40 call sites across 13
+  files. Centralized that into one new library, app/src/lib/
+  routing.php (page_url(), page_form_action(), page_hidden_input()),
+  and repointed every internal href/action/hidden-page-input/
+  header('Location: ...') in templates/layout.php, every pages/*.php
+  file, lib/auth.php, and usecases/locked.php to call it instead of
+  hardcoding either URL form -- avoiding ~13 duplicate files for a
+  cosmetic difference. traffic-generator/generator.py got an
+  equivalent page_path() helper (plus a broadened PRODUCT_SLUG_RE
+  matching both URL shapes) so synthetic traffic always matches
+  whichever mode the app under test is running; docker-compose.yml and
+  helm/php-demo/templates/traffic-deployment.yaml both pass the same
+  APP_TYPE value through to the traffic-generator container/pod.
+
+  Updated CLAUDE.md ("Front controller" section, "Helm chart" section,
+  "Docker Compose notes", ".config required variables"), README.md
+  (directory tree, the application-routes table now showing both
+  URL forms side by side, admin-diagnostic-page access instructions),
+  DX-O2-AGENT-SETUP.md's PHP-probe-gating section, and bug_php_probe.md's
+  status header to describe the current, dual-mode state instead of
+  the single permanently-reverted one.
+
+  Verified live end-to-end, isolated from the real running demo stack
+  (separate throwaway image/containers/network/database, torn down
+  after): built the apache-php image standalone, ran two containers
+  (APP_TYPE=mp and APP_TYPE=plain) against a freshly seeded MariaDB,
+  and confirmed for both -- bare / behavior (302-to-/shop in mp,
+  DirectoryIndex-to-shop with no redirect in plain), X-Page-ID headers,
+  rendered href/form/hidden-input markup matching each mode's
+  convention, and a full login -> shop -> add-to-basket -> checkout ->
+  order-confirmation flow completing correctly with mode-correct
+  redirects throughout. Also verified via `helm lint`/`helm template`
+  (both appType=mp default and appType=plain) that the ConfigMap
+  correctly selects the matching vhost.conf variant and both the
+  StatefulSet and traffic Deployment carry the right APP_TYPE env var,
+  and via a full build-scripts/package-helm-bundle.sh run that both
+  vhost.conf-{mp,plain} symlinks dereference into real files in the
+  bundle. All modified/new PHP files pass `php -l`.
+
+------------------------------------------------------------------------------
 2026-08-26 @ 14:02 - [Feat - split all 9 dxo2-scripts/ scripts into required docker/k8s platform modes]:
   User reported mixed-up Browser Agent/AXA data: bpa-demo-axa-app.sh
   originally created a single AXA application and wrote a single

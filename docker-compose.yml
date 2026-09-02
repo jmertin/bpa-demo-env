@@ -156,6 +156,7 @@ services:
       - MARIADB_DATABASE
       - MARIADB_USER
       - MARIADB_PASSWORD
+      - APP_TYPE
       - APMIA_PHP_COLLECTOR_PORT
       - APMIA_BTL_PORT
       - APMIA_APP_NAME
@@ -188,6 +189,10 @@ services:
       # Compose service name – not from .config; Kubernetes would use
       # 127.0.0.1 (same pod) or a Service DNS name instead.
       TARGET_URL: http://apachephp:8080
+      # Must match the apachephp service's own APP_TYPE (see that service's
+      # environment block) so the generator's requests use the same routing
+      # mode the app is actually running -- see lib/routing.php.
+      APP_TYPE: ${APP_TYPE:-mp}
       MIN_ACTION_DELAY_SECS: ${TRAFFIC_MIN_ACTION_DELAY_SECS:-1}
       MAX_ACTION_DELAY_SECS: ${TRAFFIC_MAX_ACTION_DELAY_SECS:-4}
       MIN_SESSION_DELAY_SECS: ${TRAFFIC_MIN_SESSION_DELAY_SECS:-2}

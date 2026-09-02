@@ -52,6 +52,10 @@ from dataclasses import dataclass, field
 # wanted off temporarily without editing docker-compose.yml/values.yaml.
 TRAFFIC_ENABLED = os.environ.get("TRAFFIC_ENABLED", "true").lower() == "true"
 BASE_URL = os.environ.get("TARGET_URL", "http://apachephp:8080").rstrip("/")
+# Routing mode -- mirrors app/src/lib/routing.php's app_type_is_mp() so the
+# generator's own requests always match whichever mode the app under test
+# is actually running. See CLAUDE.md's "Front controller" section.
+APP_TYPE = os.environ.get("APP_TYPE", "mp")
 MIN_ACTION_DELAY_SECS = float(os.environ.get("MIN_ACTION_DELAY_SECS", "1"))
 MAX_ACTION_DELAY_SECS = float(os.environ.get("MAX_ACTION_DELAY_SECS", "4"))
 MIN_SESSION_DELAY_SECS = float(os.environ.get("MIN_SESSION_DELAY_SECS", "2"))
@@ -112,10 +116,36 @@ CAPABILITY_SLUGS = ["wifi", "zigbee", "matter", "z-wave", "bluetooth"]
 TEST_CARD_NUMBERS = ["4532015112830366", "4539578763621486", "5425233430109903"]
 
 CSRF_TOKEN_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
-PRODUCT_SLUG_RE = re.compile(r'page=product&slug=([a-z0-9-]+)')
+# Matches both routing modes' product-link shape: "page=product&slug=x"
+# (plain) or "/product?slug=x" (mp) -- see page_path() below.
+PRODUCT_SLUG_RE = re.compile(r'(?:page=product&|/product\?)slug=([a-z0-9-]+)')
 PRODUCT_ID_RE = re.compile(r'name="product_id" value="(\d+)"')
 
 NETWORK_ERRORS = (urllib.error.URLError, http.client.HTTPException, socket.timeout, OSError)
+
+
+def page_path(page: str, **params: str) -> str:
+    """Builds a request path to an application page, honouring APP_TYPE.
+
+    Mirrors app/src/lib/routing.php's page_url() so every request this
+    generator makes matches whichever routing mode the app under test is
+    actually running.
+
+    @param page
+      Page slug (e.g. "shop", "basket").
+    @param params
+      Additional query-string parameters.
+
+    @return
+      e.g. "/shop?q=foo" in mp mode, "/index.php?page=shop&q=foo" in plain
+      mode.
+    """
+    if APP_TYPE != "plain":
+        path = f"/{page}"
+        query = urllib.parse.urlencode(params)
+        return f"{path}?{query}" if query else path
+    all_params = {"page": page, **params}
+    return f"/index.php?{urllib.parse.urlencode(all_params)}"
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -271,12 +301,13 @@ def login(username: str) -> BrowsingSession | None:
       treats as an error.
     """
     session = new_session(username)
-    get(session, "/index.php?page=shop")
+    shop_path = page_path("shop")
+    get(session, shop_path)
     if not session.csrf_token:
-        log.warning("[%s] no CSRF token found on /index.php?page=shop -- skipping this user", username)
+        log.warning("[%s] no CSRF token found on %s -- skipping this user", username, shop_path)
         return None
 
-    resp = post(session, "/index.php?page=login", {"username": username, "password": PASSWORD})
+    resp = post(session, page_path("login"), {"username": username, "password": PASSWORD})
     if resp.status != 302:
         log.info(
             "[%s] login did not redirect (status %s) -- likely blocked (e.g. the "
@@ -286,7 +317,7 @@ def login(username: str) -> BrowsingSession | None:
         return None
 
     session.is_admin = username == "admin"
-    get(session, resp.location or "/index.php?page=shop")
+    get(session, resp.location or shop_path)
     log.info("[%s] logged in%s", username, " (admin)" if session.is_admin else "")
     return session
 
@@ -296,16 +327,15 @@ def action_browse_shop(session: BrowsingSession) -> None:
     (brand, capability, or page number) to vary the traffic pattern
     instead of always hitting the bare listing.
     """
-    params = []
+    params = {}
     roll = random.random()
     if roll < 0.15:
-        params.append(f"brand={random.choice(BRAND_SLUGS)}")
+        params["brand"] = random.choice(BRAND_SLUGS)
     elif roll < 0.30:
-        params.append(f"cap={random.choice(CAPABILITY_SLUGS)}")
+        params["cap"] = random.choice(CAPABILITY_SLUGS)
     elif roll < 0.40:
-        params.append(f"p={random.randint(2, 4)}")
-    path = "/index.php?page=shop" + (f"&{'&'.join(params)}" if params else "")
-    get(session, path)
+        params["p"] = str(random.randint(2, 4))
+    get(session, page_path("shop", **params))
 
 
 def action_view_product(session: BrowsingSession) -> None:
@@ -316,7 +346,7 @@ def action_view_product(session: BrowsingSession) -> None:
     if not session.known_slugs:
         action_browse_shop(session)
     if session.known_slugs:
-        get(session, f"/index.php?page=product&slug={random.choice(session.known_slugs)}")
+        get(session, page_path("product", slug=random.choice(session.known_slugs)))
 
 
 def action_add_to_basket(session: BrowsingSession) -> None:
@@ -327,7 +357,7 @@ def action_add_to_basket(session: BrowsingSession) -> None:
         action_browse_shop(session)
     if session.known_product_ids:
         product_id = random.choice(session.known_product_ids)
-        post(session, "/index.php?page=basket", {
+        post(session, page_path("basket"), {
             "action": "add",
             "product_id": product_id,
             "qty": str(random.randint(1, 3)),
@@ -336,7 +366,7 @@ def action_add_to_basket(session: BrowsingSession) -> None:
 
 
 def action_view_basket(session: BrowsingSession) -> None:
-    get(session, "/index.php?page=basket")
+    get(session, page_path("basket"))
 
 
 def action_checkout(session: BrowsingSession) -> None:
@@ -345,12 +375,12 @@ def action_checkout(session: BrowsingSession) -> None:
     an empty attempt is harmless -- this still exercises that path some of
     the time when basket_has_items is stale/wrong.
     """
-    resp = get(session, "/index.php?page=checkout")
+    resp = get(session, page_path("checkout"))
     if resp.status != 200 or "billing_name" not in resp.text:
         return  # Redirected to ?page=basket (empty) or page shape unexpected.
 
     year = time.gmtime().tm_year + 3
-    resp = post(session, "/index.php?page=checkout", {
+    resp = post(session, page_path("checkout"), {
         "billing_name": f"{session.username.capitalize()} Demo",
         "billing_email": f"{session.username}@bpa.demo",
         "cc_number": random.choice(TEST_CARD_NUMBERS),
@@ -359,14 +389,14 @@ def action_checkout(session: BrowsingSession) -> None:
     })
     if resp.status == 302:
         session.basket_has_items = False
-        get(session, resp.location or "/index.php?page=shop")
+        get(session, resp.location or page_path("shop"))
 
 
 def action_visit_admin_pages(session: BrowsingSession) -> None:
     """Admin-only diagnostic pages -- only called for the admin account."""
     get(session, random.choice([
-        "/index.php?page=admin", "/index.php?page=info",
-        "/index.php?page=db", "/index.php?page=dxo2",
+        page_path("admin"), page_path("info"),
+        page_path("db"), page_path("dxo2"),
     ]))
 
 
@@ -412,7 +442,7 @@ def run_user_session(username: str) -> None:
         return
 
     action_count = _run_session_actions(session)
-    get(session, "/index.php?page=logout")
+    get(session, page_path("logout"))
     log.info("[%s] session complete (%d actions)", username, action_count)
 
 
@@ -428,9 +458,10 @@ def run_guest_session(label: str) -> None:
     same way action_checkout already does for authenticated users.
     """
     session = new_session(label)
-    get(session, "/index.php?page=shop")
+    shop_path = page_path("shop")
+    get(session, shop_path)
     if not session.csrf_token:
-        log.warning("[%s] no CSRF token found on /index.php?page=shop -- skipping this guest", label)
+        log.warning("[%s] no CSRF token found on %s -- skipping this guest", label, shop_path)
         return
 
     action_count = _run_session_actions(session)

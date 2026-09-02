@@ -7,10 +7,10 @@
 #
 # Produces a self-contained tarball containing exactly:
 #   - helm/php-demo/            The full Helm chart. Every symlink inside it
-#                                (notably files/vhost.conf, which points
-#                                outside helm/ at
-#                                src/apache-php/config/vhost.conf) is
-#                                dereferenced into a real file during
+#                                (notably files/vhost.conf-{mp,plain}, which
+#                                point outside helm/ at
+#                                src/apache-php/config/vhost.conf-{mp,plain})
+#                                is dereferenced into a real file during
 #                                staging. Copying just helm/ from the source
 #                                repo without doing this leaves a dangling
 #                                symlink on the target host and silently
@@ -53,9 +53,9 @@
 # package-app.sh).
 #
 # CAUTION -- bundles go stale silently, confirmed live 2026-08-24: this
-# script dereferences helm/php-demo/files/vhost.conf (a symlink to
-# src/apache-php/config/vhost.conf) into a real, frozen file copy at
-# bundle-build time, by design -- the whole point is a bundle with no
+# script dereferences helm/php-demo/files/vhost.conf-{mp,plain} (symlinks
+# to src/apache-php/config/vhost.conf-{mp,plain}) into real, frozen file
+# copies at bundle-build time, by design -- the whole point is a bundle with no
 # dangling links, deployable on a host with no access to the rest of the
 # repo. That also means a previously-built bundle keeps whatever
 # vhost.conf/chart content was current when it was built, forever, with
@@ -229,15 +229,18 @@ stage_bundle() {
 
     write_readme "${stage_dir}" "${patched_tag}"
 
-    # Verify the vhost.conf symlink was actually dereferenced into a real,
-    # non-empty file -- fail loudly here rather than silently ship a bundle
-    # with a dangling link, which is exactly the bug this script exists to
-    # prevent.
-    local -r vhost="${stage_dir}/helm/php-demo/files/vhost.conf"
-    [[ -L "${vhost}" ]] && \
-        fatal "files/vhost.conf is still a symlink after staging -- 'cp -rL' did not dereference it as expected."
-    [[ -s "${vhost}" ]] || \
-        fatal "files/vhost.conf is missing or empty after staging -- dereferenced copy failed."
+    # Verify both vhost.conf-{mp,plain} symlinks were actually dereferenced
+    # into real, non-empty files -- fail loudly here rather than silently
+    # ship a bundle with a dangling link, which is exactly the bug this
+    # script exists to prevent.
+    local vhost_variant
+    for vhost_variant in mp plain; do
+        local vhost="${stage_dir}/helm/php-demo/files/vhost.conf-${vhost_variant}"
+        [[ -L "${vhost}" ]] && \
+            fatal "files/vhost.conf-${vhost_variant} is still a symlink after staging -- 'cp -rL' did not dereference it as expected."
+        [[ -s "${vhost}" ]] || \
+            fatal "files/vhost.conf-${vhost_variant} is missing or empty after staging -- dereferenced copy failed."
+    done
 
     printf '%s' "${stage_dir}"
 }

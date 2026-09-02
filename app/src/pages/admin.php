@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $flash = 'Use case removed.';
     }
   }
-  header('Location: /index.php?page=admin');
+  header('Location: ' . page_url('admin'));
   exit;
 }
 

@@ -12,16 +12,29 @@ data:
   # The sites-enabled/ symlink created by a2ensite in the image follows this
   # ConfigMap-sourced file automatically.
   #
-  # Sourced from files/vhost.conf, a symlink to
-  # src/apache-php/config/vhost.conf -- the same file Docker Compose mounts
-  # directly and the Dockerfile bakes in. This chart previously carried its
-  # own hand-copied duplicate of vhost.conf here, which silently drifted out
-  # of sync with the real file (missing the no-cache headers, the health
-  # check log suppression, and -- critically -- the per-page-wrapper
-  # RewriteRule the browser agent injection depends on) since nothing kept
-  # the two in sync. `.Files.Get` reading the symlinked file makes this a
-  # single source of truth: editing src/apache-php/config/vhost.conf is
-  # picked up here automatically on the next `helm upgrade`, no separate
-  # copy to remember to update.
+  # Sourced from files/vhost.conf-{mp,plain}, symlinks to
+  # src/apache-php/config/vhost.conf-{mp,plain} -- the same two files the
+  # apache-php entrypoint chooses between at container startup on Docker
+  # Compose (see entrypoint.sh's "Routing mode (APP_TYPE)" section). This
+  # chart previously carried its own hand-copied duplicate of a single
+  # vhost.conf here, which silently drifted out of sync with the real file
+  # (missing the no-cache headers, the health check log suppression, and --
+  # critically -- the per-page-wrapper RewriteRule the browser agent
+  # injection depends on) since nothing kept the two in sync. `.Files.Get`
+  # reading the symlinked files makes this a single source of truth:
+  # editing either src/apache-php/config/vhost.conf-{mp,plain} is picked up
+  # here automatically on the next `helm upgrade`, no separate copy to
+  # remember to update.
+  #
+  # Unlike Compose (where entrypoint.sh re-reads APP_TYPE at every container
+  # start with no rebuild or redeploy needed), the choice here is made once
+  # at `helm upgrade` time from .Values.appType (set by deploy.sh from
+  # .config's APP_TYPE) -- the checksum/config annotation on the pod
+  # template already forces a pod restart whenever this ConfigMap's
+  # rendered content changes, including a switch between the two variants.
   vhost.conf: |
-{{ .Files.Get "files/vhost.conf" | indent 4 }}
+{{- if eq .Values.appType "plain" }}
+{{ .Files.Get "files/vhost.conf-plain" | indent 4 }}
+{{- else }}
+{{ .Files.Get "files/vhost.conf-mp" | indent 4 }}
+{{- end }}

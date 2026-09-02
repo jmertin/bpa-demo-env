@@ -23,6 +23,26 @@ IMAGE_PREFIX="dxo2-bpa-demo"
 IMAGE_TAG="1.0.0"
 BUILD_PLATFORM="linux/amd64"
 
+# ── Application routing mode ──────────────────────────────────────────────────
+# Controls how the app's pages are reached, and how DX O2's PHP probe and BPA
+# WebServer Extension see the URL for each one -- see CLAUDE.md's "Front
+# controller" section for the full explanation.
+#
+# mp:    (default) URL-path routing, e.g. /shop, /basket -- each page is a
+#        distinct metric path, and (unlike "plain") this is also the one
+#        mode under which the PHP probe's browser-agent auto-injection can
+#        fire, since the probe requires a real per-page URL segment.
+# plain: index.php?page=<slug> query-variable routing -- the original
+#        front-controller layout, with no rewriting. Demonstrates the DX O2
+#        shortcoming this app is also used to illustrate: every page
+#        collapses into one shared /index.php metric path.
+#
+# Read by both build-scripts/compose.sh and build-scripts/deploy.sh with no
+# image rebuild required to switch -- compose.sh re-reads it on every
+# container start (apache-php's entrypoint.sh); deploy.sh re-renders the
+# Helm chart's ConfigMap on every `helm upgrade`.
+APP_TYPE="mp"
+
 # ── MariaDB credentials ───────────────────────────────────────────────────────
 MARIADB_ROOT_PASSWORD="changeme_root"
 MARIADB_DATABASE="phpapp"
@@ -165,7 +185,7 @@ MYSQL_MONITOR="true"
 # dxo2-scripts/README.md's AXA section. Safe to commit: unlike every other
 # value in this file, a BA snippet is a client-side <script> tag meant to
 # be embedded in every page (visible via view-source), not a secret.
-APMIA_BROWSER_SNIPPET_DOCKER=''
+APMIA_BROWSER_SNIPPET_DOCKER='<script type="text/javascript" id="ca_eum_ba" src="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/bajs?agent=browser" data-profileUrl="https://dxc.dxi-eu1.saas.broadcom.com/api/1/urn:ca:tenantId:CA629949-9D34-4BA7-B198-0335025F4AF3/urn:ca:appId:BPA Demo AXA/profile?agent=browser" data-tenantID="CA629949-9D34-4BA7-B198-0335025F4AF3" data-appID="BPA Demo AXA" data-appVersion="1.0" data-use-axa-appname="true" data-appKey="9072ded0-a550-11f1-b11a-cb298d633a77" async ></script>'
 APMIA_BROWSER_SNIPPET_K8S=''
 
 # ── APMIA fine tuning ─────────────────────────────────────────────────────────

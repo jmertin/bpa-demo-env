@@ -1,12 +1,18 @@
 <?php
 // BPA-Demo front controller.
-// Every page is reached as index.php?page=<slug> -- there is no clean-URL
-// rewriting (vhost.conf has no RewriteRule at all).  Bare / and /index.php
-// default to 'shop' internally, with no redirect.
+// Routing is controlled by the APP_TYPE environment variable (see
+// lib/routing.php): "mp" (the default) reaches every page as a clean URL
+// (/shop, /basket, ...) via a per-page wrapper file at the document root
+// and a vhost.conf rewrite rule; "plain" reaches every page as
+// index.php?page=<slug> with no rewriting at all. Either way, $_GET['page']
+// is already set by the time this file runs (the wrapper file sets it in
+// mp mode; the query string sets it directly in plain mode), so the
+// dispatch logic below is identical for both modes.
 
 require_once __DIR__ . '/config/app.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/lib/validate.php';
+require_once __DIR__ . '/lib/routing.php';
 require_once __DIR__ . '/lib/page_id.php';
 require_once __DIR__ . '/lib/auth.php';
 require_once __DIR__ . '/lib/basket.php';
