@@ -74,10 +74,17 @@ RUN echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf &&
 # Listen on non-privileged port 8080 (the default of 80 requires root).
 RUN sed -i 's/Listen 80$/Listen 8080/' /etc/apache2/ports.conf
 
-# Project VirtualHost – baked in for Compose; overridden via ConfigMap subPath
-# mount in Kubernetes (the sites-enabled/ symlink follows the mounted file).
-COPY config/vhost.conf /etc/apache2/sites-available/bpa-demo.conf
-RUN a2ensite bpa-demo
+# Project VirtualHost -- both routing-mode variants (APP_TYPE=mp/plain, see
+# CLAUDE.md's "Front controller" section) are baked in; entrypoint.sh picks
+# one at container startup for Compose (no rebuild needed to switch modes).
+# Overridden via ConfigMap subPath mount in Kubernetes instead (the
+# sites-enabled/ symlink follows the mounted file) -- entrypoint.sh detects
+# that case and skips its own selection there. "mp" is copied as the
+# initial default so the site is valid even before entrypoint.sh runs.
+COPY config/vhost.conf-mp /etc/apache2/vhost-variants/vhost.conf-mp
+COPY config/vhost.conf-plain /etc/apache2/vhost-variants/vhost.conf-plain
+RUN cp /etc/apache2/vhost-variants/vhost.conf-mp /etc/apache2/sites-available/bpa-demo.conf && \
+    a2ensite bpa-demo
 
 # Security-update cron job.
 COPY config/security-updates /etc/cron.d/security-updates

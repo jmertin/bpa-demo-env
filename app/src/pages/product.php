@@ -3,7 +3,7 @@ require_once __DIR__ . '/../lib/product.php';
 
 $slug = validate_slug($_GET['slug'] ?? '') ?? '';
 if ($slug === '') {
-  header('Location: /index.php?page=shop');
+  header('Location: ' . page_url('shop'));
   exit;
 }
 
@@ -34,8 +34,8 @@ require __DIR__ . '/../templates/layout.php';
 ?>
 
 <nav style="font-size:.85rem;color:#607d8b;margin-bottom:1rem">
-  <a href="/index.php?page=shop">Shop</a> &rsaquo;
-  <a href="/index.php?page=shop&brand=<?= htmlspecialchars($product['brand_slug']) ?>"><?= htmlspecialchars($product['brand_name']) ?></a> &rsaquo;
+  <a href="<?= page_url('shop') ?>">Shop</a> &rsaquo;
+  <a href="<?= page_url('shop', ['brand' => $product['brand_slug']]) ?>"><?= htmlspecialchars($product['brand_name']) ?></a> &rsaquo;
   <?= htmlspecialchars($product['name']) ?>
 </nav>
 
@@ -68,7 +68,7 @@ require __DIR__ . '/../templates/layout.php';
       <div class="product-detail-price">€<?= number_format((float) $product['price'], 2) ?></div>
       <div class="product-stock" style="margin:.4rem 0">In stock: <?= (int) $product['stock'] ?> units</div>
 
-      <form method="post" action="/index.php?page=basket" style="display:flex;gap:.7rem;align-items:center;margin-top:1rem">
+      <form method="post" action="<?= page_url('basket') ?>" style="display:flex;gap:.7rem;align-items:center;margin-top:1rem">
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action"     value="add">
         <input type="hidden" name="product_id" value="<?= (int) $product['id'] ?>">
@@ -80,7 +80,7 @@ require __DIR__ . '/../templates/layout.php';
 </div>
 
 <div style="margin-top:1rem">
-  <a href="/index.php?page=shop&brand=<?= htmlspecialchars($product['brand_slug']) ?>" class="btn btn-secondary">&larr; Back to <?= htmlspecialchars($product['brand_name']) ?></a>
+  <a href="<?= page_url('shop', ['brand' => $product['brand_slug']]) ?>" class="btn btn-secondary">&larr; Back to <?= htmlspecialchars($product['brand_name']) ?></a>
 </div>
 
 <?php require __DIR__ . '/../templates/footer.php' ?>

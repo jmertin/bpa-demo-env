@@ -1,7 +1,7 @@
 # Bug Report: PHP Probe Browser Agent Not Injecting into BPA-Demo App
 
 **Date:** 2026-07-01  
-**Status:** Resolved  
+**Status:** Resolved (2026-07-01); the fix below was fully reverted 2026-08-19 (see CLAUDE.md's "Front controller" section) and then reinstated, opt-in, as `APP_TYPE=mp` (the current default) on 2026-09-02. Everything below still describes the real, current `mp`-mode mechanism -- `plain` mode intentionally runs without it, as a demonstration of the shortcoming this fix works around.  
 **Component:** `wily_php_agent` (DX O2 PHP Probe) — browser-agent auto-injection  
 
 ---

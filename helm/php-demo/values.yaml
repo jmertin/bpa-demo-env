@@ -4,6 +4,13 @@
 
 replicaCount: 1
 
+# Routing mode: "mp" (metric-path clean URLs, e.g. /shop -- the default) or
+# "plain" (index.php?page=<slug>, no rewriting). See CLAUDE.md's "Front
+# controller" section. Selects which vhost.conf variant configmap.yaml
+# renders and is passed through to the apache-php container as APP_TYPE so
+# app/src/lib/routing.php makes the identical choice on the PHP side.
+appType: mp
+
 image:
   apachephp:
     repository: registry.example.com/php-demo/apache-php

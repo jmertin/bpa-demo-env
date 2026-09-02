@@ -62,6 +62,11 @@ spec:
             # namespace without the fully-qualified <svc>.<ns>.svc form.
             - name: TARGET_URL
               value: "http://{{ include "php-demo.fullname" . }}:{{ .Values.service.port }}"
+            # Must match the apache-php container's own APP_TYPE (statefulset.yaml)
+            # so the generator's requests use the same routing mode the app is
+            # actually running -- see lib/routing.php.
+            - name: APP_TYPE
+              value: {{ .Values.appType | quote }}
             - name: MIN_ACTION_DELAY_SECS
               value: {{ .Values.trafficGenerator.env.minActionDelaySecs | quote }}
             - name: MAX_ACTION_DELAY_SECS

@@ -7,7 +7,7 @@ $items   = basket_items();
 $total   = basket_total();
 
 if (empty($items)) {
-  header('Location: /index.php?page=basket');
+  header('Location: ' . page_url('basket'));
   exit;
 }
 
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $values['billing_email'],
       $ccLast4
     );
-    header("Location: /index.php?page=order&id={$orderId}");
+    header('Location: ' . page_url('order', ['id' => $orderId]));
     exit;
   }
 }
@@ -146,7 +146,7 @@ require __DIR__ . '/../templates/layout.php';
         </div>
       </div>
     </div>
-    <a href="/index.php?page=basket" class="btn btn-secondary btn-sm">&larr; Edit basket</a>
+    <a href="<?= page_url('basket') ?>" class="btn btn-secondary btn-sm">&larr; Edit basket</a>
   </div>
 
 </div>

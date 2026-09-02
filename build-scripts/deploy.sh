@@ -114,6 +114,11 @@ load_config() {
     : "${MARIADB_USER:?MARIADB_USER must be set in .config}"
     : "${MARIADB_PASSWORD:?MARIADB_PASSWORD must be set in .config}"
 
+    case "${APP_TYPE:-mp}" in
+        mp|plain) ;;
+        *) fatal "APP_TYPE must be 'mp' or 'plain' (got '${APP_TYPE}')." ;;
+    esac
+
     export KUBECONFIG
 }
 
@@ -170,6 +175,11 @@ generate_values() {
     local apmia_btl_port="${APMIA_BTL_PORT:-8000}"
     local mysql_monitor="${MYSQL_MONITOR:-true}"
     local mariadb_database="${MARIADB_DATABASE:-phpapp}"
+    # Routing mode -- see CLAUDE.md's "Front controller" section and
+    # values.yaml's appType default. Selects which vhost.conf variant
+    # configmap.yaml renders and is passed through to the apache-php
+    # container as APP_TYPE so lib/routing.php makes the identical choice.
+    local app_type="${APP_TYPE:-mp}"
 
     # "APMIA fine tuning" section of .config (see .config.example): every
     # APMENV_*-prefixed variable found there becomes one {name, value} pair
@@ -207,6 +217,8 @@ generate_values() {
     info "Generating transient Helm values override: ${out}"
     cat > "${out}" <<EOF
 # Auto-generated from .config by deploy.sh – do NOT commit.
+appType: "${app_type}"
+
 image:
   apachephp:
     repository: ${REGISTRY}/${IMAGE_PREFIX}/apache-php

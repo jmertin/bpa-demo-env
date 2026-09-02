@@ -87,8 +87,8 @@ require __DIR__ . '/../templates/layout.php';
 </div>
 
 <!-- Filter bar -->
-<form method="get" action="/index.php" class="filter-bar">
-  <input type="hidden" name="page" value="shop">
+<form method="get" action="<?= page_form_action('shop') ?>" class="filter-bar">
+  <?= page_hidden_input('shop') ?>
   <?php if ($brandSlug): ?><input type="hidden" name="brand" value="<?= htmlspecialchars($brandSlug) ?>"><?php endif ?>
   <?php if ($capSlug): ?><input type="hidden" name="cap"   value="<?= htmlspecialchars($capSlug) ?>"><?php endif ?>
   <div class="filter-group" style="flex:2;min-width:180px">
@@ -104,7 +104,7 @@ require __DIR__ . '/../templates/layout.php';
     <input type="text" name="max_price" value="<?= $maxPrice !== null ? htmlspecialchars((string) $maxPrice) : '' ?>" placeholder="999">
   </div>
   <button type="submit" class="btn btn-primary">Filter</button>
-  <a href="/index.php?page=shop" class="btn btn-secondary">Reset</a>
+  <a href="<?= page_url('shop') ?>" class="btn btn-secondary">Reset</a>
 </form>
 
 <!-- Product grid -->
@@ -131,7 +131,7 @@ require __DIR__ . '/../templates/layout.php';
         <?= htmlspecialchars($p['brand_name']) ?>
       </div>
       <div class="product-name">
-        <a href="/index.php?page=product&slug=<?= htmlspecialchars($p['slug']) ?>">
+        <a href="<?= page_url('product', ['slug' => $p['slug']]) ?>">
           <?= htmlspecialchars($p['name']) ?>
         </a>
       </div>
@@ -145,8 +145,8 @@ require __DIR__ . '/../templates/layout.php';
       <div class="product-stock">Stock: <?= (int) $p['stock'] ?></div>
     </div>
     <div class="product-card-footer">
-      <a href="/index.php?page=product&slug=<?= htmlspecialchars($p['slug']) ?>" class="btn btn-secondary btn-sm" style="flex:1;text-align:center">Details</a>
-      <form method="post" action="/index.php?page=basket" style="flex:1">
+      <a href="<?= page_url('product', ['slug' => $p['slug']]) ?>" class="btn btn-secondary btn-sm" style="flex:1;text-align:center">Details</a>
+      <form method="post" action="<?= page_url('basket') ?>" style="flex:1">
         <input type="hidden" name="csrf_token" value="<?= csrf_token() ?>">
         <input type="hidden" name="action"     value="add">
         <input type="hidden" name="product_id" value="<?= (int) $p['id'] ?>">
@@ -162,17 +162,16 @@ require __DIR__ . '/../templates/layout.php';
 <div class="pagination">
   <?php for ($i = 1; $i <= $result['pages']; $i++): ?>
     <?php
-    $params = array_filter([
-      'page'      => 'shop',
+    $params = [
       'brand'     => $brandSlug,
       'cap'       => $capSlug,
       'q'         => $search,
       'min_price' => $minPrice,
       'max_price' => $maxPrice,
       'p'         => $i,
-    ], fn($v) => $v !== '' && $v !== null);
+    ];
     ?>
-    <a href="/index.php?<?= http_build_query($params) ?>"
+    <a href="<?= page_url('shop', $params) ?>"
        class="page-link <?= $i === $pageNum ? 'active' : '' ?>"><?= $i ?></a>
   <?php endfor ?>
 </div>

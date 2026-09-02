@@ -32,6 +32,32 @@ PHP_MODS_AVAIL="/etc/php/${PHP_VERSION}/mods-available"
 # mod_php uses the apache2 SAPI conf.d, not the fpm one.
 PHP_CONF_D="/etc/php/${PHP_VERSION}/apache2/conf.d"
 
+# == Routing mode (APP_TYPE) ===================================================
+# Selects which vhost.conf variant Apache loads: "mp" (metric-path clean
+# URLs, e.g. /shop -- the default) or "plain" (index.php?page=<slug>, no
+# rewriting). See CLAUDE.md's "Front controller" section and
+# app/src/lib/routing.php, which makes the same choice on the PHP side from
+# the identical APP_TYPE value.
+# On Kubernetes this file is instead selected declaratively by the Helm
+# chart's ConfigMap (rendered at `helm upgrade` time from the same two
+# tracked vhost.conf-{mp,plain} files) and mounted read-only over this same
+# path -- skip here so this step never fights that mount.
+# KUBERNETES_SERVICE_HOST is auto-injected into every pod by Kubernetes
+# itself, so its presence is a reliable "are we running under k8s" check
+# with no new plumbing required.
+if [[ -z "${KUBERNETES_SERVICE_HOST:-}" ]]; then
+    APP_TYPE="${APP_TYPE:-mp}"
+    case "${APP_TYPE}" in
+        mp|plain) ;;
+        *)
+            echo "[entrypoint] WARNING: invalid APP_TYPE '${APP_TYPE}' -- must be 'mp' or 'plain'. Defaulting to 'mp'." >&2
+            APP_TYPE="mp"
+            ;;
+    esac
+    echo "[entrypoint] Routing mode: APP_TYPE=${APP_TYPE}"
+    cp "/etc/apache2/vhost-variants/vhost.conf-${APP_TYPE}" /etc/apache2/sites-available/bpa-demo.conf
+fi
+
 # == DX O2 PHP Probe Injection =================================================
 if [[ -f "${PHP_PROBE_DIR}/wily_php_agent.ini" ]]; then
     echo "[entrypoint] Injecting DX O2 PHP probe from ${PHP_PROBE_DIR}"

@@ -124,6 +124,16 @@ load_config() {
     export APMIA_BTL_HOST="${APMIA_BTL_HOST:-127.0.0.1}"
     export APMIA_BTL_PORT="${APMIA_BTL_PORT:-8000}"
     export MYSQL_MONITOR="${MYSQL_MONITOR:-true}"
+    # Routing mode -- see CLAUDE.md's "Front controller" section.
+    # apache-php's entrypoint.sh re-reads this at every container start (no
+    # rebuild needed to switch) to choose which vhost.conf variant to load;
+    # app/src/lib/routing.php reads the identical env var so PHP-generated
+    # links/redirects match whichever mode is active.
+    case "${APP_TYPE:-mp}" in
+        mp|plain) ;;
+        *) fatal "APP_TYPE must be 'mp' or 'plain' (got '${APP_TYPE}')." ;;
+    esac
+    export APP_TYPE="${APP_TYPE:-mp}"
     # APMIA_BROWSER_SNIPPET_DOCKER is Compose's own half of the split
     # per-platform AXA/BrowserAgent config (see .config.example's "DX O2
     # Browser Agent auto-injection" section and dxo2-scripts/bpa-demo-axa-

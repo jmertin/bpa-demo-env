@@ -285,6 +285,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "php-demo.secretName" . }}
                   key: MARIADB_PASSWORD
+            # Routing mode -- see values.yaml's appType and lib/routing.php.
+            # The vhost.conf variant mounted below (app-config ConfigMap) is
+            # already selected to match; this env var lets the PHP side
+            # (page_url() et al.) make the identical choice.
+            - name: APP_TYPE
+              value: {{ .Values.appType | quote }}
             {{- if .Values.dxo2.enabled }}
             - name: APMIA_HOME
               value: "/opt/apmia"
