@@ -136,8 +136,10 @@ and has taken some traffic — the `traffic` Compose service (see step 4) or
 its standalone container (`traffic-generator/`) can generate this
 automatically — set up the full console-side view (Service, Management
 Module, Alerts, Universes, SLI, Dashboard) with the scripts in
-`dxo2-scripts/` — no AI assistant required, just the `dx-do` CLI (see
-`dxo2-scripts/README.md` for setup). Every script requires a
+`dxo2-scripts/` — no AI assistant required, just the `dx-do` CLI. Fetch it
+with `build-scripts/download-dx-do.sh` (downloads the version this project
+has verified working, checksum-verified, into `tools/`; see
+`dxo2-scripts/README.md` for full setup). Every script requires a
 `<docker|k8s>` platform argument first — it identifies which
 deployment's telemetry the script's resources should track and exits
 immediately if omitted or invalid (see `dxo2-scripts/README.md`'s

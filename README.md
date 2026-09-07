@@ -106,7 +106,8 @@ entirely by `.config`:
 │   ├── push.sh                   # docker login (--password-stdin) + push all images
 │   ├── deploy.sh                 # renders values.local.yaml from .config, helm upgrade
 │   ├── compose.sh                # docker compose wrapper (sources .config, exports vars)
-│   └── package-helm-bundle.sh    # bundle helm/ + deploy.sh for a separate deploy host (images already pushed)
+│   ├── package-helm-bundle.sh    # bundle helm/ + deploy.sh for a separate deploy host (images already pushed)
+│   └── download-dx-do.sh         # fetch the dx-do CLI (dxo2-scripts/) into tools/, checksum-verified
 │
 ├── traffic-generator/            # synthetic user traffic for the demo shop (stdlib-only Python)
 │   ├── Dockerfile
@@ -114,6 +115,7 @@ entirely by `.config`:
 │   └── README.md
 │
 ├── tools/                        # local-only binaries for demo automation (git-ignored, see tools/README.md)
+│                                  # populate with build-scripts/download-dx-do.sh
 │
 ├── dxo2-scripts/                 # scripted DX O2 tenant config (Service + alerts) via the dx-do CLI
 │   ├── bpa-demo-service.sh       # "BPA-Demo" Service: create|check|delete
