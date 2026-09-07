@@ -5,6 +5,35 @@ All changes are listed in reverse chronological order.
 Format: YYYY-MM-DD @ HH:MM  <summary>
 
 ------------------------------------------------------------------------------
+2026-09-07 @ 14:19 - [Feat - add build-scripts/download-dx-do.sh to fetch the dx-do CLI]:
+  Every dxo2-scripts/*.sh script depends on tools/dx-do-<platform>, which
+  previously had to be downloaded and placed by hand (tools/ is git-ignored,
+  so there was no scripted way to get it). Added
+  build-scripts/download-dx-do.sh so the user can download it easier:
+  detects the local platform the same way every dxo2-scripts/*.sh script's
+  own resolve_dx_do() does (Darwin-arm64 -> dx-do-macos-arm64; everything
+  else -> dx-do-linux-x64), downloads the version this project has already
+  verified working (DX_DO_VERSION_DEFAULT="7.2.1", kept in sync with
+  tools/README.md's own documented version) from
+  https://github.com/kialambroca/dx-do-dist/releases, verifies it against
+  the release's own SHA256SUMS asset, and installs it into tools/ with the
+  executable bit set -- backing up any existing binary as .bak first
+  instead of silently overwriting it. -v|--version overrides the pinned
+  version for a one-off fetch of an unverified release.
+
+  Verified live: downloaded the real v7.2.1 release into a scratch
+  directory (not touching the already-installed tools/dx-do-linux-x64) and
+  confirmed the result is byte-for-byte identical via sha256sum; separately
+  confirmed the script exits non-zero with no partial install on both a
+  bad --version and a deliberately-wrong-platform asset name.
+
+  Documented in QUICKSTART.md (step 6, DX O2 tenant configuration),
+  README.md (build-scripts/ file tree + tools/ tree entry), and
+  dxo2-scripts/README.md's prerequisites section; also noted in CLAUDE.md's
+  "Local tooling (tools/)" section for consistency with the rest of that
+  doc.
+
+------------------------------------------------------------------------------
 2026-09-02 @ 16:11 - [Feat - add APP_TYPE routing mode (mp/plain), resurrecting the reverted clean-URL + wrapper-file mechanism as an opt-in switch]:
   Per the TODO file: give the user the choice between the URL-path
   ("mp"/metric-path) routing approach and the plain index.php?page=

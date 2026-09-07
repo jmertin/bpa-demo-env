@@ -288,6 +288,8 @@ BTL at `/opt/btlistener/bin/BTListener.sh`; config at `/opt/btlistener/conf/cust
 
 `tools/` holds local-only binaries that support demo-app automation (e.g. `dx-do`, downloaded from an external GitHub release). The entire directory is excluded via `tools/*` in `.gitignore` — nothing under it is ever committed, including its own `README.md`, which documents each binary's source/version for local reference. Do not commit files here; do not assume `tools/` is populated in a fresh clone.
 
+**`build-scripts/download-dx-do.sh`** fetches `dx-do` into `tools/` for you: detects the local platform the same way every `dxo2-scripts/*.sh` script's own `resolve_dx_do()` does (`Darwin-arm64` → `dx-do-macos-arm64`; everything else → `dx-do-linux-x64`), downloads the version pinned in the script (`DX_DO_VERSION_DEFAULT`, kept in sync with `tools/README.md`'s own documented, verified version — currently `7.2.1`) from `https://github.com/kialambroca/dx-do-dist/releases`, verifies it against the release's own `SHA256SUMS` asset, and installs it with the executable bit set. An existing binary is kept alongside as `.bak` rather than silently overwritten. `-v|--version <X.Y.Z>` overrides the pinned version for a one-off fetch (unverified against this project). Verified live: downloaded v7.2.1 into a scratch directory and confirmed the result is byte-for-byte identical (`sha256sum`) to the already-installed, previously-verified binary; also confirmed the checksum-mismatch and unknown-version failure paths exit non-zero with no partial install.
+
 ---
 
 ## DX O2 tenant configuration scripts (`dxo2-scripts/`)

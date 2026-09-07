@@ -11,10 +11,12 @@ each one is a self-contained, human-readable CLI.
 ## Prerequisites (all scripts)
 
 - **`tools/dx-do-<platform>`** -- the [`dx-do`](https://github.com/kialambroca/dx-do-dist)
-  CLI. Download the latest release for your platform from
+  CLI. Run `build-scripts/download-dx-do.sh` to fetch the version this
+  project has verified working (checksum-verified, installed to `tools/`,
+  git-ignored -- see `tools/README.md`), or download a release yourself from
   <https://github.com/kialambroca/dx-do-dist/releases>, place it under
-  `tools/` (git-ignored -- see `tools/README.md`), and `chmod +x` it. Set
-  the `DX_DO` environment variable to override the expected path.
+  `tools/`, and `chmod +x` it. Set the `DX_DO` environment variable to
+  override the expected path.
 - **`~/.dxdo/default.dxo2.config.json`** -- your DX O2 tenant credentials.
   See the `dx-do` project's own documentation for how to generate this file.
 
