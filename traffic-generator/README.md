@@ -1,66 +1,101 @@
 # traffic-generator
 
-Synthetic user traffic for the BPA-Demo web shop. Runs continuously. Every
-cycle gives each demo user exactly one authenticated session (shuffled
-once per pass) so the `trouble`, `empty_basket`, and `locked` use cases
-(see the root `CLAUDE.md`'s "Demo use cases" section) all get exercised
-regularly, not just by chance, and tops that up with anonymous guest
-sessions (80% of the cycle's total by default) so the overall traffic mix
-looks like a real shop rather than only ever logged-in activity. A small
-pool of sessions run concurrently rather than one at a time, so requests
-genuinely overlap the way real traffic does — useful for keeping the DX O2
-agents reporting live, *varied* data without a human clicking through the
-app.
+Synthetic user traffic generator for the BPA-Demo web shop. Runs continuously inside a single Docker container hosting both a headless Chromium service (**Browserless**) and a **Python Playwright** execution engine.
 
-## What it does
+Every cycle assigns each demo user an authenticated session alongside a configurable ratio of anonymous guest sessions. Sessions execute real browser rendering and client-side JavaScript, simulating realistic global visitors with randomized locations, dynamic timezones, UUID-based session IDs, simulated network RTT latencies, and proxy IP headers for App Experience Analytics (AXA) GeoIP mapping.
 
-Each cycle builds a shuffled mix of sessions: one authenticated session
-per demo user, plus enough anonymous guest sessions to reach
-`TRAFFIC_ANONYMOUS_RATIO` of the total. `TRAFFIC_CONCURRENT_SESSIONS`
-worker threads pull from that mix and run them in parallel.
+## What It Does
 
-Every session (guest or authenticated) performs a random number of random
-shop actions (browse the listing with occasional filters, view a product,
-add to basket, view the basket, or complete a checkout — guest checkout
-works too, the app accepts orders with no user id), then an authenticated
-session logs out. The `admin` account also occasionally visits the admin
-diagnostic pages (`?page=admin`, `?page=info`, `?page=db`, `?page=dxo2`).
+Each cycle builds a shuffled queue of authenticated and guest sessions executed concurrently by worker threads:
 
-Pacing between actions has a small chance (`TRAFFIC_SLOWDOWN_PROBABILITY`)
-of an extra randomized delay on top, simulating an occasional slow client
-or network burst, so pacing has a realistic long tail instead of a narrow
-uniform range.
+* **Real Browser Engine:** Replaces standard HTTP libraries with headless Chromium connected over WebSockets (`ws://localhost:3000`) via Playwright, executing full client-side JavaScript, dynamic DOM updates, and analytics tracking tags.
+* **AXA GeoIP Spoofing:** Injects regional public IP addresses (`X-Forwarded-For`, `X-Real-IP`, `Client-IP`, `CF-Connecting-IP`) into every browser context so downstream APM and App Experience Analytics (AXA) agents map traffic to real global regions.
+* **Geographic & Timezone Emulation:** Configures browser contexts with regional geolocation coordinates, locales, and randomized IANA timezones (e.g., `Europe/Berlin`, `Asia/Tokyo`, `America/New_York`).
+* **Cross-Continent Latency (RTT):** Uses Chrome DevTools Protocol (`Network.emulateNetworkConditions`) to apply realistic round-trip latencies (+40ms to +240ms RTT) based on the simulated continent.
+* **Unique Session Tracing:** Appends unique UUIDs (`user-a1b2c3d4`, `guest-e5f6g7h8`) to session logs and HTTP headers (`X-Session-ID`) to distinguish individual visits.
+* **Realistic User Behavior:** Cycles through demo users (`trouble`, `empty`, `locked`, `admin`, etc.) performing randomized shop actions (browsing, product viewing, basket management, checkout, and admin diagnostics) with randomized pacing and client slowdown bursts.
 
-Login failures (the `locked` use case blocks it) and empty-basket
-checkout attempts are expected, tolerated outcomes, not errors — the
-generator logs them and moves on to the next session.
 
-`generator.py` uses only the Python standard library (`urllib`,
-`http.cookiejar`, `threading`, `queue`) — no `pip install`, no dependency
-layer.
 
 ## Configuration
 
-All via environment variables (see `generator.py`'s top for the exact
-defaults):
+All configuration is managed via environment variables:
 
 | Variable | Default | Meaning |
-|---|---|---|
-| `TARGET_URL` | `http://apachephp:8080` | Base URL of the app (the Compose service name; override for other deployments) |
-| `MIN_ACTION_DELAY_SECS` / `MAX_ACTION_DELAY_SECS` | `1` / `4` | Pause between actions within one session |
-| `MIN_SESSION_DELAY_SECS` / `MAX_SESSION_DELAY_SECS` | `2` / `8` | Pause between one session ending and a worker picking up the next |
-| `MIN_ACTIONS_PER_SESSION` / `MAX_ACTIONS_PER_SESSION` | `3` / `9` | Random action count per session |
-| `TRAFFIC_ANONYMOUS_RATIO` | `0.8` | Fraction of each cycle's sessions that browse anonymously (no login). The remaining share is always exactly one authenticated session per demo user |
-| `TRAFFIC_CONCURRENT_SESSIONS` | `3` | How many sessions run in parallel |
-| `TRAFFIC_SLOWDOWN_PROBABILITY` | `0.12` | Chance a given action's pacing gets an extra "slow client" delay on top |
-| `TRAFFIC_SLOWDOWN_MIN_SECS` / `TRAFFIC_SLOWDOWN_MAX_SECS` | `3` / `12` | Range for that extra delay when it happens |
-| `REQUEST_TIMEOUT_SECS` | `15` | Per-request timeout (the `trouble` use case can take several hundred ms) |
-| `STARTUP_WAIT_TIMEOUT_SECS` | `120` | How long to wait for `/health` to respond before giving up at startup |
-| `LOG_LEVEL` | `INFO` | Set to `DEBUG` to log every request (and every simulated slowdown) |
+| --- | --- | --- |
+| `TARGET_URL` | `http://apachephp:8080` | Base URL of the target web application
 
-## Running standalone (outside Compose)
+ |
+| `BROWSERLESS_URL` | `ws://localhost:3000` | WebSocket endpoint for the local Browserless Chromium service |
+| `TRAFFIC_CONCURRENT_SESSIONS` | `3` | Number of concurrent browser worker threads running in parallel
+
+ |
+| `TRAFFIC_ANONYMOUS_RATIO` | `0.8` | Share of cycle sessions that browse anonymously without logging in
+
+ |
+| `MIN_ACTION_DELAY_SECS` / `MAX_ACTION_DELAY_SECS` | `1` / `4` | Pause duration between individual browser actions
+
+ |
+| `MIN_SESSION_DELAY_SECS` / `MAX_SESSION_DELAY_SECS` | `2` / `8` | Pause between a worker completing one session and starting the next
+
+ |
+| `MIN_ACTIONS_PER_SESSION` / `MAX_ACTIONS_PER_SESSION` | `3` / `9` | Action count per user session
+
+ |
+| `TRAFFIC_SLOWDOWN_PROBABILITY` | `0.12` | Chance an action gets an extra "slow network/client" delay
+
+ |
+| `TRAFFIC_SLOWDOWN_MIN_SECS` / `TRAFFIC_SLOWDOWN_MAX_SECS` | `3` / `12` | Delay range applied during a simulated slowdown burst
+
+ |
+| `STARTUP_WAIT_TIMEOUT_SECS` | `120` | Timeout waiting for the target app `/health` endpoint at startup
+
+ |
+| `LOG_LEVEL` | `INFO` | Logging level (`INFO` or `DEBUG`)
+
+ |
+
+## Apache Configuration for AXA GeoIP (`mod_remoteip`)
+
+Because all requests originate from the Docker container's local IP address, the target Apache web server must be configured with `mod_remoteip` to process the `X-Forwarded-For` header spoofed by `generator.py`. This ensures PHP and App Experience Analytics (AXA) record the simulated global IPs.
+
+Enable `mod_remoteip` and add the following block to your Apache configuration (`/etc/apache2/apache2.conf`):
+
+```apache
+<IfModule mod_remoteip_module>
+    # Read true client IP from proxy headers sent by generator.py
+    RemoteIPHeader X-Forwarded-For
+
+    # Trust internal Docker network subnets
+    RemoteIPInternalProxy 10.0.0.0/8
+    RemoteIPInternalProxy 172.16.0.0/12
+    RemoteIPInternalProxy 192.168.0.0/16
+</IfModule>
+
+```
+
+## Corporate Firewall & Certificate Support
+
+If building inside an enterprise network with SSL-inspecting proxies:
+
+1. Place your corporate CA certificate file (`corporate-ca.crt`) in the root build directory alongside the `Dockerfile`.
+2. The `Dockerfile` copies `corporate-ca.crt` to `/usr/local/share/ca-certificates/`, runs `update-ca-certificates`, and configures `SSL_CERT_FILE` and `REQUESTS_CA_BUNDLE` so Playwright and Python validate HTTPS connections securely.
+
+## Building and Running Standalone
+
+**Build the All-in-One Container:**
 
 ```bash
-docker build -t traffic-generator traffic-generator/
-docker run --rm -e TARGET_URL=http://localhost:8080 traffic-generator
+docker build -t traffic-generator .
+
 ```
+
+**Run Container:**
+
+```bash
+docker run --rm \
+  -e TARGET_URL=http://localhost:8080 \
+  -e BROWSERLESS_URL=ws://localhost:3000 \
+  -p 3000:3000 \
+  traffic-generator
+

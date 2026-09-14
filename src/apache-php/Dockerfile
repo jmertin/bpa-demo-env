@@ -58,7 +58,7 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Enable required Apache modules; disable the distro default site.
-RUN a2enmod rewrite headers php8.3 && \
+RUN a2enmod rewrite headers php8.3 remoteip && \
     a2dissite 000-default
 
 # Disable PHP OPcache so every request compiles PHP source fresh.
@@ -81,8 +81,9 @@ RUN sed -i 's/Listen 80$/Listen 8080/' /etc/apache2/ports.conf
 # sites-enabled/ symlink follows the mounted file) -- entrypoint.sh detects
 # that case and skips its own selection there. "mp" is copied as the
 # initial default so the site is valid even before entrypoint.sh runs.
-COPY config/vhost.conf-mp /etc/apache2/vhost-variants/vhost.conf-mp
+COPY config/xforwardfor.conf /etc/apache2/vhost-variants/xforwardfor.conf
 COPY config/vhost.conf-plain /etc/apache2/vhost-variants/vhost.conf-plain
+COPY config/vhost.conf-mp /etc/apache2/vhost-variants/vhost.conf-mp
 RUN cp /etc/apache2/vhost-variants/vhost.conf-mp /etc/apache2/sites-available/bpa-demo.conf && \
     a2ensite bpa-demo
 

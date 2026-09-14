@@ -1,92 +1,42 @@
 #!/usr/bin/env python3
-"""Synthetic traffic generator for the BPA-Demo web shop.
+"""Synthetic traffic generator using Browserless & Playwright.
 
-Continuously cycles through the demo user roster (seeded in
-helm/php-demo/sql/seed.sql), logging in as each one in turn and performing
-a randomized sequence of shop actions -- browsing, viewing products, using
-the basket, checking out, and (for the admin account) visiting the admin
-diagnostic pages. Cycling through every user on every pass guarantees the
-`trouble`, `empty_basket`, and `locked` demo use cases (see CLAUDE.md's
-"Demo use cases" section) all get exercised regularly, not just by chance.
-
-Every cycle also mixes in anonymous guest sessions (no login at all --
-the app supports guest checkout) alongside the one authenticated session
-per user, at TRAFFIC_ANONYMOUS_RATIO of the cycle's total (default 80%),
-matching how most real e-commerce traffic is anonymous browsing rather
-than logged-in activity. All of a cycle's sessions (both kinds) are
-shuffled together and run by a small pool of concurrent worker threads
-(TRAFFIC_CONCURRENT_SESSIONS) instead of one at a time -- real users
-don't queue up sequentially, and genuinely overlapping requests create
-natural response-time variance from real server-side contention, unlike
-a single-threaded generator whose averages stay artificially flat.
-Per-action pacing also has a small random chance of an extra "slow
-client" delay layered on top (TRAFFIC_SLOWDOWN_*), widening the pacing
-distribution beyond a narrow uniform range.
-
-Uses only the standard library -- no third-party dependencies, so there's
-nothing to fetch at build time and the resulting image stays minimal.
-
-Configuration is via environment variables; see the Dockerfile/README for
-the full list and their defaults.
+Executes real browser rendering and client-side JavaScript execution via a 
+Browserless container instance. Simulates realistic global user sessions with 
+geographic location tagging (coordinates, locale), spoofed client proxy IP headers 
+(X-Forwarded-For) for GeoIP identification in APM/AXA, randomized session identifiers 
+(UUIDs), dynamic global timezones, and continent-based RTT latency adjustments via CDP.
 """
 
-import http.client
-import http.cookiejar
 import logging
 import os
 import queue
 import random
-import re
-import socket
 import sys
 import threading
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
-from dataclasses import dataclass, field
+import uuid
+from dataclasses import dataclass
+from playwright.sync_api import sync_playwright, Page, BrowserContext
 
 # == Configuration ============================================================
-# TRAFFIC_ENABLED=false keeps the container up but idle -- same pattern as
-# APMIA_DEPLOY in src/dx-o2-agents/entrypoint.sh -- for when traffic is
-# wanted off temporarily without editing docker-compose.yml/values.yaml.
 TRAFFIC_ENABLED = os.environ.get("TRAFFIC_ENABLED", "true").lower() == "true"
 BASE_URL = os.environ.get("TARGET_URL", "http://apachephp:8080").rstrip("/")
-# Routing mode -- mirrors app/src/lib/routing.php's app_type_is_mp() so the
-# generator's own requests always match whichever mode the app under test
-# is actually running. See CLAUDE.md's "Front controller" section.
+BROWSERLESS_URL = os.environ.get("BROWSERLESS_URL", "ws://localhost:3000")
 APP_TYPE = os.environ.get("APP_TYPE", "mp")
+
 MIN_ACTION_DELAY_SECS = float(os.environ.get("MIN_ACTION_DELAY_SECS", "1"))
 MAX_ACTION_DELAY_SECS = float(os.environ.get("MAX_ACTION_DELAY_SECS", "4"))
 MIN_SESSION_DELAY_SECS = float(os.environ.get("MIN_SESSION_DELAY_SECS", "2"))
 MAX_SESSION_DELAY_SECS = float(os.environ.get("MAX_SESSION_DELAY_SECS", "8"))
 MIN_ACTIONS_PER_SESSION = int(os.environ.get("MIN_ACTIONS_PER_SESSION", "3"))
 MAX_ACTIONS_PER_SESSION = int(os.environ.get("MAX_ACTIONS_PER_SESSION", "9"))
-REQUEST_TIMEOUT_SECS = float(os.environ.get("REQUEST_TIMEOUT_SECS", "15"))
 STARTUP_WAIT_TIMEOUT_SECS = float(os.environ.get("STARTUP_WAIT_TIMEOUT_SECS", "120"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
-# Fraction of each cycle's sessions that browse anonymously (no login) --
-# real shop traffic is mostly anonymous, and the app supports guest
-# checkout (order_create() accepts a null user id), so this is realistic
-# rather than a limitation. The remaining (1 - ratio) share is always
-# exactly one authenticated session per user in USERS (see
-# _build_cycle_tasks) so the trouble/empty_basket/locked use cases still
-# fire every single cycle regardless of this ratio.
 ANONYMOUS_RATIO = float(os.environ.get("TRAFFIC_ANONYMOUS_RATIO", "0.8"))
-
-# How many sessions run concurrently. Real traffic overlaps; a single
-# sequential worker produces near-constant response-time averages because
-# there's never any real contention. Keep modest -- this demo stack's
-# MariaDB/Apache sizing is not tuned for load testing.
 CONCURRENT_SESSIONS = int(os.environ.get("TRAFFIC_CONCURRENT_SESSIONS", "3"))
 
-# Chance that a given action's pacing gets an extra "slow client" delay on
-# top of the normal MIN/MAX_ACTION_DELAY_SECS pause, simulating a slow
-# device or flaky network -- widens the pacing distribution beyond a
-# narrow uniform range and increases the odds of concurrent workers'
-# requests landing close together, contributing to the response-time
-# variance CONCURRENT_SESSIONS is chiefly responsible for.
 SLOWDOWN_PROBABILITY = float(os.environ.get("TRAFFIC_SLOWDOWN_PROBABILITY", "0.12"))
 SLOWDOWN_MIN_SECS = float(os.environ.get("TRAFFIC_SLOWDOWN_MIN_SECS", "3"))
 SLOWDOWN_MAX_SECS = float(os.environ.get("TRAFFIC_SLOWDOWN_MAX_SECS", "12"))
@@ -98,10 +48,6 @@ logging.basicConfig(
 )
 log = logging.getLogger("traffic-generator")
 
-# Demo accounts, seeded in helm/php-demo/sql/seed.sql. All share the same
-# password. trouble/empty/locked carry pre-assigned use cases (5000
-# sequential DB reads per request, basket total always shown as 0, and
-# login blocked, respectively) -- see CLAUDE.md's "Demo use cases" section.
 PASSWORD = "demo123"
 USERS = [
     "admin", "trouble", "empty", "alice", "bob", "charlie", "diana",
@@ -110,146 +56,57 @@ USERS = [
 
 BRAND_SLUGS = ["shelly", "sonoff", "tuya"]
 CAPABILITY_SLUGS = ["wifi", "zigbee", "matter", "z-wave", "bluetooth"]
-
-# A handful of well-known, publicly documented Luhn-valid test card numbers
-# (not real accounts) -- good enough to pass checkout.php's Luhn check.
 TEST_CARD_NUMBERS = ["4532015112830366", "4539578763621486", "5425233430109903"]
 
-CSRF_TOKEN_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
-# Matches both routing modes' product-link shape: "page=product&slug=x"
-# (plain) or "/product?slug=x" (mp) -- see page_path() below.
-PRODUCT_SLUG_RE = re.compile(r'(?:page=product&|/product\?)slug=([a-z0-9-]+)')
-PRODUCT_ID_RE = re.compile(r'name="product_id" value="(\d+)"')
 
-NETWORK_ERRORS = (urllib.error.URLError, http.client.HTTPException, socket.timeout, OSError)
+# == Dynamic Timezones & Geographic Profiles ==================================
+TIMEZONES = [
+    "America/New_York", "America/Los_Angeles", "America/Chicago",
+    "Europe/London", "Europe/Paris", "Europe/Berlin",
+    "Asia/Tokyo", "Asia/Singapore", "Asia/Kolkata",
+    "Australia/Sydney", "America/Sao_Paulo", "Africa/Johannesburg",
+]
+
+
+@dataclass
+class LocationProfile:
+    name: str
+    continent: str
+    locale: str
+    latitude: float
+    longitude: float
+    added_rtt_ms: int
+    sample_ip: str  # Regional public IP for HTTP X-Forwarded-For spoofing
+
+
+LOCATIONS = [
+    LocationProfile("Local-EU", "Europe", "en-GB", 51.5074, -0.1278, added_rtt_ms=0, sample_ip="185.86.151.11"),
+    LocationProfile("US-East", "North America", "en-US", 40.7128, -74.0060, added_rtt_ms=40, sample_ip="40.71.1.1"),
+    LocationProfile("US-West", "North America", "en-US", 34.0522, -118.2437, added_rtt_ms=75, sample_ip="54.183.0.1"),
+    LocationProfile("SA-SaoPaulo", "South America", "pt-BR", -23.5505, -46.6333, added_rtt_ms=130, sample_ip="177.131.0.1"),
+    LocationProfile("Asia-Tokyo", "Asia", "ja-JP", 35.6762, 139.6503, added_rtt_ms=180, sample_ip="133.242.0.1"),
+    LocationProfile("AU-Sydney", "Oceania", "en-AU", -33.8688, 151.2093, added_rtt_ms=240, sample_ip="139.130.4.5"),
+]
 
 
 def page_path(page: str, **params: str) -> str:
-    """Builds a request path to an application page, honouring APP_TYPE.
-
-    Mirrors app/src/lib/routing.php's page_url() so every request this
-    generator makes matches whichever routing mode the app under test is
-    actually running.
-
-    @param page
-      Page slug (e.g. "shop", "basket").
-    @param params
-      Additional query-string parameters.
-
-    @return
-      e.g. "/shop?q=foo" in mp mode, "/index.php?page=shop&q=foo" in plain
-      mode.
-    """
     if APP_TYPE != "plain":
         path = f"/{page}"
-        query = urllib.parse.urlencode(params)
+        query = "&".join(f"{k}={v}" for k, v in params.items())
         return f"{path}?{query}" if query else path
     all_params = {"page": page, **params}
-    return f"/index.php?{urllib.parse.urlencode(all_params)}"
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Disables automatic redirect-following so callers can inspect a
-    3xx response's status/Location header themselves, matching how a
-    caller would need to detect e.g. a successful login (302) versus a
-    re-rendered form (200/403) -- urllib follows redirects by default,
-    which would otherwise hide that distinction.
-    """
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
+    return f"/index.php?{'&'.join(f'{k}={v}' for k, v in all_params.items())}"
 
 
 @dataclass
 class BrowsingSession:
-    """Per-user state carried between actions within one login session,
-    mirroring what a real browser tab would remember: the cookie jar
-    (via its opener), the product ids/slugs visible on the last page
-    rendered, and whether the basket is believed to hold anything
-    (best-effort -- the app is the source of truth, this is only used to
-    decide which actions make sense to attempt next).
-    """
-
-    opener: urllib.request.OpenerDirector
+    context: BrowserContext
+    page: Page
     username: str
+    session_id: str
+    location: LocationProfile
+    timezone: str
     is_admin: bool = False
-    csrf_token: str = ""
-    known_product_ids: list = field(default_factory=list)
-    known_slugs: list = field(default_factory=list)
-    basket_has_items: bool = False
-
-
-@dataclass
-class Response:
-    """Minimal stand-in for the bits of an HTTP response this generator
-    actually reads, since urllib returns a fresh, differently-shaped
-    object depending on whether a redirect was followed.
-    """
-
-    status: int
-    text: str
-    location: str = ""
-
-
-def new_session(username: str) -> BrowsingSession:
-    cookiejar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(
-        NoRedirect, urllib.request.HTTPCookieProcessor(cookiejar)
-    )
-    return BrowsingSession(opener=opener, username=username)
-
-
-def _remember_page(session: BrowsingSession, html: str) -> None:
-    """Updates session state from a freshly rendered page's HTML: the
-    current CSRF token (regenerated by the app on login/logout, so it
-    must always be re-read rather than cached across sessions) and any
-    product ids/slugs newly visible, so later actions have something real
-    to act on instead of guessing.
-    """
-    token = CSRF_TOKEN_RE.search(html)
-    if token:
-        session.csrf_token = token.group(1)
-    session.known_product_ids = list(set(PRODUCT_ID_RE.findall(html))) or session.known_product_ids
-    session.known_slugs = list(set(PRODUCT_SLUG_RE.findall(html))) or session.known_slugs
-
-
-def _do_request(session: BrowsingSession, req: urllib.request.Request) -> Response:
-    try:
-        with session.opener.open(req, timeout=REQUEST_TIMEOUT_SECS) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return Response(status=resp.status, text=body, location=resp.headers.get("Location", ""))
-    except urllib.error.HTTPError as err:
-        # Any non-2xx status lands here, not in the `with` block above --
-        # urllib raises HTTPError for these regardless of NoRedirect, even
-        # though NoRedirect's job is specifically to let a 3xx through
-        # un-followed. The app's own 403 (e.g. the `locked` use case) and
-        # 404 (e.g. a missing product) responses land here too. All of
-        # these are normal, expected outcomes this generator needs to
-        # inspect the status/body of, not failures -- HTTPError itself is
-        # a valid response-like object (status/headers/read()).
-        body = err.read().decode("utf-8", errors="replace")
-        return Response(status=err.code, text=body, location=err.headers.get("Location", ""))
-
-
-def get(session: BrowsingSession, path: str) -> Response:
-    """Issues a GET request and updates session state from the response."""
-    resp = _do_request(session, urllib.request.Request(f"{BASE_URL}{path}"))
-    log.debug("[%s] GET %s -> %s", session.username, path, resp.status)
-    _remember_page(session, resp.text)
-    return resp
-
-
-def post(session: BrowsingSession, path: str, fields: dict) -> Response:
-    """Issues a CSRF-protected POST request with the session's current
-    token. Redirects are not followed (see NoRedirect) so callers can
-    inspect the target themselves -- the app POST-Redirect-GETs on success.
-    """
-    body = {"csrf_token": session.csrf_token, **fields}
-    data = urllib.parse.urlencode(body).encode("utf-8")
-    req = urllib.request.Request(f"{BASE_URL}{path}", data=data, method="POST")
-    resp = _do_request(session, req)
-    log.debug("[%s] POST %s -> %s", session.username, path, resp.status)
-    return resp
 
 
 def sleep_between(min_secs: float, max_secs: float) -> None:
@@ -257,11 +114,6 @@ def sleep_between(min_secs: float, max_secs: float) -> None:
 
 
 def sleep_with_shaping(min_secs: float, max_secs: float) -> None:
-    """Like sleep_between, plus a SLOWDOWN_PROBABILITY chance of an extra
-    delay on top, simulating an occasional slow client/network burst.
-    Used between actions within a session so pacing has a realistic
-    long tail instead of a flat, narrow uniform range.
-    """
     sleep_between(min_secs, max_secs)
     if random.random() < SLOWDOWN_PROBABILITY:
         extra = random.uniform(SLOWDOWN_MIN_SECS, SLOWDOWN_MAX_SECS)
@@ -270,63 +122,112 @@ def sleep_with_shaping(min_secs: float, max_secs: float) -> None:
 
 
 def wait_for_app() -> bool:
-    """Blocks until the app answers /health, or STARTUP_WAIT_TIMEOUT_SECS
-    elapses. The app container may still be starting when this one does --
-    depends_on: service_healthy only guarantees the *container* passed its
-    healthcheck, which races with this container's own startup.
-
-    @return bool
-      True once the app responds, False if the timeout was reached.
-    """
     deadline = time.monotonic() + STARTUP_WAIT_TIMEOUT_SECS
-    while time.monotonic() < deadline:
-        try:
-            with urllib.request.urlopen(f"{BASE_URL}/health", timeout=5) as resp:
-                if resp.status == 200:
+    with sync_playwright() as p:
+        while time.monotonic() < deadline:
+            try:
+                browser = p.chromium.connect_over_cdp(BROWSERLESS_URL)
+                page = browser.new_page()
+                res = page.goto(f"{BASE_URL}/health", timeout=5000)
+                browser.close()
+                if res and res.status == 200:
                     return True
-        except NETWORK_ERRORS:
-            pass
-        log.info("Waiting for %s to become reachable...", BASE_URL)
-        time.sleep(3)
+            except Exception:
+                pass
+            log.info("Waiting for %s to become reachable via Browserless...", BASE_URL)
+            time.sleep(3)
     return False
 
 
-def login(username: str) -> BrowsingSession | None:
-    """Attempts to log in as `username`.
-
-    @return BrowsingSession|None
-      A ready-to-use session on success. None on a failed login attempt --
-      wrong credentials or the `locked` use case blocking it are both
-      realistic, expected outcomes this generator tolerates rather than
-      treats as an error.
+def create_browser_session(p, username: str) -> BrowsingSession:
+    """Connects to Browserless, creates a context configured with a random location,
+    randomized IANA timezone, client IP headers (X-Forwarded-For), and unique per-session UUID.
     """
-    session = new_session(username)
-    shop_path = page_path("shop")
-    get(session, shop_path)
-    if not session.csrf_token:
-        log.warning("[%s] no CSRF token found on %s -- skipping this user", username, shop_path)
-        return None
+    location = random.choice(LOCATIONS)
+    selected_timezone = random.choice(TIMEZONES)
+    session_id = f"{username}-{uuid.uuid4().hex[:8]}"
 
-    resp = post(session, page_path("login"), {"username": username, "password": PASSWORD})
-    if resp.status != 302:
-        log.info(
-            "[%s] login did not redirect (status %s) -- likely blocked (e.g. the "
-            "'locked' use case) or a use-case-driven slowdown timed out; moving on",
-            username, resp.status,
+    browser = p.chromium.connect_over_cdp(BROWSERLESS_URL)
+
+    # Configure geographic, timezone, locale, and proxy IP headers
+    context = browser.new_context(
+        locale=location.locale,
+        timezone_id=selected_timezone,
+        geolocation={"latitude": location.latitude, "longitude": location.longitude},
+        permissions=["geolocation"],
+        extra_http_headers={
+            "X-Simulated-Region": location.name,
+            "X-Simulated-Continent": location.continent,
+            "X-Session-ID": session_id,
+            # Reverse proxy headers picked up by Apache mod_remoteip & AXA for GeoIP evaluation
+            "X-Forwarded-For": location.sample_ip,
+            "X-Real-IP": location.sample_ip,
+            "Client-IP": location.sample_ip,
+            "CF-Connecting-IP": location.sample_ip,
+        },
+    )
+
+    page = context.new_page()
+
+    # Emulate cross-continent network latency (RTT) via Chrome DevTools Protocol (CDP)
+    if location.added_rtt_ms > 0:
+        cdp = context.new_cdp_session(page)
+        cdp.send(
+            "Network.emulateNetworkConditions",
+            {
+                "offline": False,
+                "latency": location.added_rtt_ms,
+                "downloadThroughput": -1,
+                "uploadThroughput": -1,
+            },
         )
-        return None
 
-    session.is_admin = username == "admin"
-    get(session, resp.location or shop_path)
-    log.info("[%s] logged in%s", username, " (admin)" if session.is_admin else "")
-    return session
+    log.debug(
+        "[%s] Configured session: IP=%s, Timezone=%s, Geo=%s (%s), Latency=+%dms RTT",
+        session_id, location.sample_ip, selected_timezone, location.name, location.continent, location.added_rtt_ms,
+    )
+    return BrowsingSession(
+        context=context,
+        page=page,
+        username=username,
+        session_id=session_id,
+        location=location,
+        timezone=selected_timezone,
+    )
+
+
+def login(session: BrowsingSession) -> bool:
+    try:
+        session.page.goto(f"{BASE_URL}{page_path('shop')}")
+        session.page.goto(f"{BASE_URL}{page_path('login')}")
+
+        # Verify client-side JS timezone execution context
+        active_tz = session.page.evaluate("Intl.DateTimeFormat().resolvedOptions().timeZone")
+        log.debug("[%s] Client JS verified timezone: %s", session.session_id, active_tz)
+
+        session.page.fill('input[name="username"]', session.username)
+        session.page.fill('input[name="password"]', PASSWORD)
+
+        with session.page.expect_navigation(timeout=10000):
+            session.page.click('button[type="submit"], input[type="submit"]')
+
+        if "/login" in session.page.url:
+            log.info("[%s] Login failed or blocked (e.g. 'locked' account)", session.session_id)
+            return False
+
+        session.is_admin = session.username == "admin"
+        log.info(
+            "[%s] Logged in successfully (%s) [IP: %s, Location: %s, TZ: %s, RTT +%dms]",
+            session.session_id, "admin" if session.is_admin else "user",
+            session.location.sample_ip, session.location.name, session.timezone, session.location.added_rtt_ms,
+        )
+        return True
+    except Exception as exc:
+        log.warning("[%s] Login error: %s", session.session_id, exc)
+        return False
 
 
 def action_browse_shop(session: BrowsingSession) -> None:
-    """Views the shop listing, occasionally with a random filter applied
-    (brand, capability, or page number) to vary the traffic pattern
-    instead of always hitting the bare listing.
-    """
     params = {}
     roll = random.random()
     if roll < 0.15:
@@ -335,73 +236,50 @@ def action_browse_shop(session: BrowsingSession) -> None:
         params["cap"] = random.choice(CAPABILITY_SLUGS)
     elif roll < 0.40:
         params["p"] = str(random.randint(2, 4))
-    get(session, page_path("shop", **params))
+    
+    session.page.goto(f"{BASE_URL}{page_path('shop', **params)}")
 
 
 def action_view_product(session: BrowsingSession) -> None:
-    """Views a single product's detail page, picked from slugs seen on a
-    previously rendered page. Falls back to browsing the shop first if no
-    slug is known yet.
-    """
-    if not session.known_slugs:
-        action_browse_shop(session)
-    if session.known_slugs:
-        get(session, page_path("product", slug=random.choice(session.known_slugs)))
+    session.page.goto(f"{BASE_URL}{page_path('shop')}")
+    product_links = session.page.locator('a[href*="product"]').all()
+    if product_links:
+        target_link = random.choice(product_links)
+        target_link.click()
+        session.page.wait_for_load_state("domcontentloaded")
 
 
 def action_add_to_basket(session: BrowsingSession) -> None:
-    """Adds a random known product to the basket. Falls back to browsing
-    the shop first if no product id is known yet.
-    """
-    if not session.known_product_ids:
-        action_browse_shop(session)
-    if session.known_product_ids:
-        product_id = random.choice(session.known_product_ids)
-        post(session, page_path("basket"), {
-            "action": "add",
-            "product_id": product_id,
-            "qty": str(random.randint(1, 3)),
-        })
-        session.basket_has_items = True
+    session.page.goto(f"{BASE_URL}{page_path('shop')}")
+    add_buttons = session.page.locator('form[action*="basket"] button, form[action*="basket"] input[type="submit"]').all()
+    if add_buttons:
+        random.choice(add_buttons).click()
+        session.page.wait_for_load_state("domcontentloaded")
 
 
 def action_view_basket(session: BrowsingSession) -> None:
-    get(session, page_path("basket"))
+    session.page.goto(f"{BASE_URL}{page_path('basket')}")
 
 
 def action_checkout(session: BrowsingSession) -> None:
-    """Completes a checkout if the basket is believed to hold items.
-    checkout.php redirects straight to ?page=basket for an empty basket, so
-    an empty attempt is harmless -- this still exercises that path some of
-    the time when basket_has_items is stale/wrong.
-    """
-    resp = get(session, page_path("checkout"))
-    if resp.status != 200 or "billing_name" not in resp.text:
-        return  # Redirected to ?page=basket (empty) or page shape unexpected.
-
-    year = time.gmtime().tm_year + 3
-    resp = post(session, page_path("checkout"), {
-        "billing_name": f"{session.username.capitalize()} Demo",
-        "billing_email": f"{session.username}@bpa.demo",
-        "cc_number": random.choice(TEST_CARD_NUMBERS),
-        "cc_expiry": f"12/{year % 100:02d}",
-        "cc_cvv": str(random.randint(100, 999)),
-    })
-    if resp.status == 302:
-        session.basket_has_items = False
-        get(session, resp.location or page_path("shop"))
+    session.page.goto(f"{BASE_URL}{page_path('checkout')}")
+    if session.page.locator('input[name="billing_name"]').count() > 0:
+        year = time.gmtime().tm_year + 3
+        session.page.fill('input[name="billing_name"]', f"{session.username.capitalize()} Demo")
+        session.page.fill('input[name="billing_email"]', f"{session.username}@bpa.demo")
+        session.page.fill('input[name="cc_number"]', random.choice(TEST_CARD_NUMBERS))
+        session.page.fill('input[name="cc_expiry"]', f"12/{year % 100:02d}")
+        session.page.fill('input[name="cc_cvv"]', str(random.randint(100, 999)))
+        
+        session.page.click('button[type="submit"], input[type="submit"]')
+        session.page.wait_for_load_state("domcontentloaded")
 
 
 def action_visit_admin_pages(session: BrowsingSession) -> None:
-    """Admin-only diagnostic pages -- only called for the admin account."""
-    get(session, random.choice([
-        page_path("admin"), page_path("info"),
-        page_path("db"), page_path("dxo2"),
-    ]))
+    target = random.choice(["admin", "info", "db", "dxo2"])
+    session.page.goto(f"{BASE_URL}{page_path(target)}")
 
 
-# Weighted so basket/checkout activity (the interesting business flow) is
-# common without crowding out plain browsing, which should still dominate.
 WEIGHTED_ACTIONS = (
     [action_browse_shop] * 4
     + [action_view_product] * 3
@@ -412,13 +290,6 @@ WEIGHTED_ACTIONS = (
 
 
 def _run_session_actions(session: BrowsingSession) -> int:
-    """Runs a random number of random actions against an already-prepared
-    session (logged in or anonymous alike). Shared by run_user_session and
-    run_guest_session so both kinds of session pick actions the same way.
-
-    @return int
-      The number of actions performed.
-    """
     action_count = random.randint(MIN_ACTIONS_PER_SESSION, MAX_ACTIONS_PER_SESSION)
     actions = list(WEIGHTED_ACTIONS)
     if session.is_admin:
@@ -426,68 +297,48 @@ def _run_session_actions(session: BrowsingSession) -> int:
 
     for _ in range(action_count):
         action = random.choice(actions)
-        action(session)
+        try:
+            action(session)
+        except Exception as err:
+            log.debug("[%s] Action error: %s", session.session_id, err)
         sleep_with_shaping(MIN_ACTION_DELAY_SECS, MAX_ACTION_DELAY_SECS)
 
     return action_count
 
 
-def run_user_session(username: str) -> None:
-    """Logs in as `username`, performs a random number of random actions,
-    then logs out. Any failure is caught by the caller -- one bad session
-    must not stop the generator from moving on to the next user.
-    """
-    session = login(username)
-    if session is None:
-        return
+def run_session(p, kind: str, ident: str) -> None:
+    session = create_browser_session(p, ident)
+    try:
+        if kind == "auth":
+            if not login(session):
+                return
+        else:
+            session.page.goto(f"{BASE_URL}{page_path('shop')}")
+            active_tz = session.page.evaluate("Intl.DateTimeFormat().resolvedOptions().timeZone")
+            log.debug("[%s] Guest Client JS verified timezone: %s", session.session_id, active_tz)
 
-    action_count = _run_session_actions(session)
-    get(session, page_path("logout"))
-    log.info("[%s] session complete (%d actions)", username, action_count)
+        actions_done = _run_session_actions(session)
+        
+        if kind == "auth":
+            session.page.goto(f"{BASE_URL}{page_path('logout')}")
 
-
-def run_guest_session(label: str) -> None:
-    """Runs a session with no login at all. Browsing, the basket, and even
-    checkout all work unauthenticated -- checkout.php's order_create()
-    accepts a null user id (guest checkout), and the basket is
-    session-backed regardless of login state -- so a guest session can run
-    the exact same weighted action set as an authenticated one, just
-    without a login/logout step and never as admin. `label` is a
-    generated per-session identifier (e.g. "guest4821"), used only for
-    logging and to personalize a guest checkout's billing name/email the
-    same way action_checkout already does for authenticated users.
-    """
-    session = new_session(label)
-    shop_path = page_path("shop")
-    get(session, shop_path)
-    if not session.csrf_token:
-        log.warning("[%s] no CSRF token found on %s -- skipping this guest", label, shop_path)
-        return
-
-    action_count = _run_session_actions(session)
-    log.info("[%s] guest session complete (%d actions)", label, action_count)
+        log.info(
+            "[%s] %s session complete (%d actions) [IP: %s, Location: %s, TZ: %s]",
+            session.session_id, kind, actions_done, session.location.sample_ip, session.location.name, session.timezone,
+        )
+    finally:
+        session.context.close()
 
 
 def _build_cycle_tasks() -> list[tuple[str, str]]:
-    """Builds one full cycle's session tasks as (kind, identifier) pairs,
-    kind being "auth" or "guest". Every user in USERS gets exactly one
-    "auth" task -- preserving the existing guarantee that trouble/
-    empty_basket/locked all fire every cycle -- topped up with enough
-    "guest" tasks (freshly generated labels) to make guests ANONYMOUS_RATIO
-    of the cycle's total. The combined list is shuffled so guest and
-    authenticated sessions are randomly interleaved, not grouped.
-    """
     auth_tasks = [("auth", username) for username in USERS]
-    if ANONYMOUS_RATIO <= 0.0:
-        guest_count = 0
-    elif ANONYMOUS_RATIO >= 1.0:
-        # Can't reach 100% anonymous while still guaranteeing one
-        # authenticated session per user -- fall back to a generous
-        # multiple instead of silently ignoring the setting.
-        guest_count = len(auth_tasks) * 4
-    else:
-        guest_count = round(len(auth_tasks) * ANONYMOUS_RATIO / (1 - ANONYMOUS_RATIO))
-    guest_tasks = [("guest", f"guest{random.randint(1000, 9999)}") for _ in range(guest_count)]
+    guest_count = (
+        len(auth_tasks) * 4
+        if ANONYMOUS_RATIO >= 1.0
+        else round(len(auth_tasks) * ANONYMOUS_RATIO / max(0.01, (1 - ANONYMOUS_RATIO)))
+    )
+    # Generate unique UUID-suffixed identifiers for guest sessions per cycle
+    guest_tasks = [("guest", f"guest-{uuid.uuid4().hex[:6]}") for _ in range(guest_count)]
 
     tasks = auth_tasks + guest_tasks
     random.shuffle(tasks)
@@ -495,28 +346,19 @@ def _build_cycle_tasks() -> list[tuple[str, str]]:
 
 
 def _worker(task_queue: "queue.Queue[tuple[str, str]]") -> None:
-    """Pulls tasks off the shared queue until it's empty, running each as
-    an authenticated or guest session, then paces itself before pulling
-    the next one -- this is what lets CONCURRENT_SESSIONS workers overlap
-    independently instead of lock-stepping through the same list.
-    """
-    while True:
-        try:
-            kind, ident = task_queue.get_nowait()
-        except queue.Empty:
-            return
-        try:
-            if kind == "auth":
-                run_user_session(ident)
-            else:
-                run_guest_session(ident)
-        except NETWORK_ERRORS as exc:
-            log.warning("[%s] request failed: %s", ident, exc)
-        except Exception:  # noqa: BLE001 - a single bad session must never kill a worker.
-            log.exception("[%s] unexpected error during session", ident)
-        finally:
-            task_queue.task_done()
-        sleep_between(MIN_SESSION_DELAY_SECS, MAX_SESSION_DELAY_SECS)
+    with sync_playwright() as p:
+        while True:
+            try:
+                kind, ident = task_queue.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                run_session(p, kind, ident)
+            except Exception as exc:
+                log.warning("[%s] Browser session error: %s", ident, exc)
+            finally:
+                task_queue.task_done()
+            sleep_between(MIN_SESSION_DELAY_SECS, MAX_SESSION_DELAY_SECS)
 
 
 def main() -> None:
@@ -525,18 +367,13 @@ def main() -> None:
         while True:
             time.sleep(3600)
 
-    log.info("Traffic generator starting -- target %s", BASE_URL)
+    log.info("Traffic generator starting via Browserless target %s", BROWSERLESS_URL)
     if not wait_for_app():
-        log.error("Timed out waiting for %s to become reachable -- exiting.", BASE_URL)
+        log.error("Timed out waiting for target app -- exiting.")
         sys.exit(1)
 
     while True:
         tasks = _build_cycle_tasks()
-        guest_count = sum(1 for kind, _ in tasks if kind == "guest")
-        log.info(
-            "Starting a full cycle: %d sessions (%d authenticated, %d anonymous), %d concurrent workers",
-            len(tasks), len(tasks) - guest_count, guest_count, CONCURRENT_SESSIONS,
-        )
         task_queue: "queue.Queue[tuple[str, str]]" = queue.Queue()
         for task in tasks:
             task_queue.put(task)

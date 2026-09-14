@@ -72,6 +72,7 @@
 
     # Log to container stdout/stderr so the runtime captures them.
     # Probe requests to /health are suppressed (dontlog) to reduce noise.
+    LogFormat "%a %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
     ErrorLog  /proc/self/fd/2
     CustomLog /proc/self/fd/1 combined env=!dontlog
 </VirtualHost>
