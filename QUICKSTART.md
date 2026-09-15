@@ -4,12 +4,12 @@
 
 ## Prerequisites
 
-| Tool | Notes |
-|---|---|
-| Docker 24+ (with Compose plugin) | `docker compose version` |
-| `kubectl` 1.28+ | Pointed at the target cluster |
-| `helm` 3.12+ | Kubernetes deploy only |
-| cert-manager + Ingress controller | Cluster-side, for TLS |
+| Tool                              | Notes                         |
+| --------------------------------- | ----------------------------- |
+| Docker 24+ (with Compose plugin)  | `docker compose version`      |
+| `kubectl` 1.28+                   | Pointed at the target cluster |
+| `helm` 3.12+                      | Kubernetes deploy only        |
+| cert-manager + Ingress controller | Cluster-side, for TLS         |
 
 ---
 
@@ -37,6 +37,25 @@ DEPLOYMENT_NAME / DEPLOYMENT_POSTFIX   # e.g. "bpa-demo" / "k8s" -> "bpa-demo-k8
                                         # from a Compose deployment on the same tenant
 APMIA_EM_HOST="placeholder"   # any non-empty value enables the agent sidecar
 ```
+
+#### (Optional) Download the DX O2 agent packages
+
+Download four packages from your **DX O2 interface** (not from
+support.broadcom.com): two from **Agents → Infrastructure Agent → Linux**,
+two more together from **Settings → Web Payload Capture Rules (Webserver) →
+Download** (top right). See **[DX-O2-AGENT-SETUP.md](DX-O2-AGENT-SETUP.md)** for full instructions.
+
+```bash
+# Required -- the build fails without these two:
+src/dx-o2-agents/installers/PHP_apmia_*.tar
+src/dx-o2-agents/installers/Business_Transaction_Listener.zip
+
+# Optional -- skipped gracefully if absent (no DB Monitor / no BPA plugin):
+src/dx-o2-agents/installers/Infrastructure_Agent_apmia_*.tar
+src/dx-o2-agents/installers/Business_Payload_Analyzer_WebServer_Plugins.zip
+```
+
+
 
 ---
 
@@ -119,13 +138,13 @@ accounts, including the `trouble`/`empty`/`locked` use-case users. Set
 
 Password for all accounts: **`demo123`**
 
-| Username | Role | Notes |
-|---|---|---|
-| `admin` | admin | Admin panel + diagnostics (`?page=dxo2`, `?page=info`, `?page=db`) |
-| `alice` … `jack` | user | Regular shoppers |
-| `trouble` | user | 5 000 DB reads per request (APM load demo) |
-| `empty` | user | Basket total always €0.00 |
-| `locked` | user | Login blocked |
+| Username         | Role  | Notes                                                              |
+| ---------------- | ----- | ------------------------------------------------------------------ |
+| `admin`          | admin | Admin panel + diagnostics (`?page=dxo2`, `?page=info`, `?page=db`) |
+| `alice` … `jack` | user  | Regular shoppers                                                   |
+| `trouble`        | user  | 5 000 DB reads per request (APM load demo)                         |
+| `empty`          | user  | Basket total always €0.00                                          |
+| `locked`         | user  | Login blocked                                                      |
 
 ---
 
