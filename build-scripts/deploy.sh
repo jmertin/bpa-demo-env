@@ -203,6 +203,7 @@ generate_values() {
 
     # Traffic generator – mirrors build-scripts/compose.sh's TRAFFIC_* defaults.
     local traffic_enabled="${TRAFFIC_ENABLED:-true}"
+    local traffic_target_url="${TRAFFIC_TARGET_URL:-http://php-demo:8080}"
     local traffic_min_action_delay="${TRAFFIC_MIN_ACTION_DELAY_SECS:-1}"
     local traffic_max_action_delay="${TRAFFIC_MAX_ACTION_DELAY_SECS:-4}"
     local traffic_min_session_delay="${TRAFFIC_MIN_SESSION_DELAY_SECS:-2}"
@@ -286,6 +287,7 @@ trafficGenerator:
   enabled: true
   env:
     enabled: "${traffic_enabled}"
+    target_url: "${traffic_target_url}"
     minActionDelaySecs: "${traffic_min_action_delay}"
     maxActionDelaySecs: "${traffic_max_action_delay}"
     minSessionDelaySecs: "${traffic_min_session_delay}"

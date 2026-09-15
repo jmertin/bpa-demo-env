@@ -269,6 +269,7 @@ trafficGenerator:
     required: true
   env:
     enabled: "true"
+    target_url: "http://your-service-name.namespace.svc.cluster.local:8080"
     minActionDelaySecs: "1"
     maxActionDelaySecs: "4"
     minSessionDelaySecs: "2"
@@ -281,8 +282,8 @@ trafficGenerator:
     logLevel: "INFO"
   resources:
     requests:
-      memory: "4Gi"
-      cpu: "1000m"
-    limits:
       memory: "2Gi"
       cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "1000m"

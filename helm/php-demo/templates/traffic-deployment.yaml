@@ -60,8 +60,10 @@ spec:
               value: {{ .Values.trafficGenerator.env.enabled | quote }}
             # Cluster-internal Service DNS name; resolves within the same
             # namespace without the fully-qualified <svc>.<ns>.svc form.
+            # - name: TARGET_URL
+            #   value: "http://{{ include "php-demo.fullname" . }}:{{ .Values.service.port }}"
             - name: TARGET_URL
-              value: "http://{{ include "php-demo.fullname" . }}:{{ .Values.service.port }}"
+              value: {{ .Values.trafficGenerator.env.target_url | quote }}
             # Must match the apache-php container's own APP_TYPE (statefulset.yaml)
             # so the generator's requests use the same routing mode the app is
             # actually running -- see lib/routing.php.

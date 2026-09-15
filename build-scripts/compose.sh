@@ -150,6 +150,7 @@ load_config() {
 
     # Traffic generator – optional; defaults produce steady, moderate traffic.
     export TRAFFIC_ENABLED="${TRAFFIC_ENABLED:-true}"
+    export TRAFFIC_TARGET_URL="${TRAFFIC_TARGET_URL:-true}"
     export TRAFFIC_MIN_ACTION_DELAY_SECS="${TRAFFIC_MIN_ACTION_DELAY_SECS:-1}"
     export TRAFFIC_MAX_ACTION_DELAY_SECS="${TRAFFIC_MAX_ACTION_DELAY_SECS:-4}"
     export TRAFFIC_MIN_SESSION_DELAY_SECS="${TRAFFIC_MIN_SESSION_DELAY_SECS:-2}"
