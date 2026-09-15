@@ -38,7 +38,7 @@ DEPLOYMENT_NAME / DEPLOYMENT_POSTFIX   # e.g. "bpa-demo" / "k8s" -> "bpa-demo-k8
 APMIA_EM_HOST="placeholder"   # any non-empty value enables the agent sidecar
 ```
 
-#### (Optional) Download the DX O2 agent packages
+#### Download the DX O2 agent packages
 
 Download four packages from your **DX O2 interface** (not from
 support.broadcom.com): two from **Agents → Infrastructure Agent → Linux**,
@@ -54,8 +54,6 @@ src/dx-o2-agents/installers/Business_Transaction_Listener.zip
 src/dx-o2-agents/installers/Infrastructure_Agent_apmia_*.tar
 src/dx-o2-agents/installers/Business_Payload_Analyzer_WebServer_Plugins.zip
 ```
-
-
 
 ---
 
