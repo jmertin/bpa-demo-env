@@ -8,7 +8,7 @@ USER root
 # the image during the apt-get step If your company has a transparent
 # application level firewall, copy the firewall's CA Certificate here
 # and uncomment the below line
-COPY cloud_services_root_CA.cer /usr/local/share/ca-certificates/corporate-ca.crt
+# COPY cloud_services_root_CA.cer /usr/local/share/ca-certificates/corporate-ca.crt
 
 # Install system dependencies and register the new CA certificate
 RUN apt-get update && apt-get install -y --no-install-recommends \
