@@ -334,6 +334,14 @@ _await_and_tail() {
 if [[ ! -x "${BTL_SCRIPT}" ]]; then
     echo "[entrypoint] WARNING: BTL script not found at ${BTL_SCRIPT} - BTL not started."
 else
+
+    # == To override the default application name, you can use the
+    # following property in the application.properties file that is
+    # available in the Business_Transaction_Listener.zip file. Enter
+    # the string to prepend to all the reporting applications of the
+    # BT Listener to segregate the Webservers.
+    sed -i "s|^btlistener\.app\.type\.prefix=.*|btlistener.app.type.prefix=${APMENV_INTROSCOPE_AGENT_APPLICATION_NAME}|" /opt/btlistener/conf/custom/application.properties
+
     # == Redirect BTL logs to the shared APMIA volume ==========================
     # /opt/btlistener/logs/ is local to this container; the apache-php container
     # mounts only /opt/apmia (the shared emptyDir/named volume) and cannot read
