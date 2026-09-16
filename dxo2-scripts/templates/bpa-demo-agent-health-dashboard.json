@@ -1957,7 +1957,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|BPA Demo\\|[^|]+:Average Page Load Time \\(ms\\)$"
+                    "pattern": "Business Segment\\|BPA Demo AXA ${deployment:regex}\\|[^|]+:Average Page Load Time \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
@@ -2120,7 +2120,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|BPA Demo\\|[^|]+:Page Hits Per Interval$"
+                    "pattern": "Business Segment\\|BPA Demo AXA ${deployment:regex}\\|[^|]+:Page Hits Per Interval$"
                   }
                 ],
                 "isNot": false,
@@ -2283,7 +2283,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|BPA Demo\\|.*:Average Time To First Byte \\(ms\\)$"
+                    "pattern": "Business Segment\\|BPA Demo AXA ${deployment:regex}\\|.*:Average Time To First Byte \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
@@ -2459,7 +2459,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Response Time \\(ms\\)$"
+                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Average Response Time \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
@@ -2622,7 +2622,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Backend Server Time \\(ms\\)$"
+                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Average Backend Server Time \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
@@ -2785,7 +2785,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Responses Per Interval$"
+                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Responses Per Interval$"
                   }
                 ],
                 "isNot": false,
@@ -2948,7 +2948,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Errors Per Interval$"
+                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Errors Per Interval$"
                   }
                 ],
                 "isNot": false,
@@ -3124,7 +3124,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Response Time \\(ms\\)$"
+                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Average Response Time \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
@@ -3217,7 +3217,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|\\[BPA Demo\\][^|]*\\|[^|]+:Average Backend Server Time \\(ms\\)$"
+                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Average Backend Server Time \\(ms\\)$"
                   }
                 ],
                 "isNot": false,
