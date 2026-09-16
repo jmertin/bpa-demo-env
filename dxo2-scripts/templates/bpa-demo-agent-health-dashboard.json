@@ -413,7 +413,7 @@
         "id": 5,
         "type": "grafana-polystat-panel",
         "title": "Browser Agent (RUM)",
-        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. This light rolls up every Browser RUM alert to its worst current severity.",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; This light rolls up every Browser RUM alert to its worst current severity.",
         "gridPos": {
           "x": 16,
           "y": 5,
@@ -868,7 +868,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -1031,7 +1031,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -1194,7 +1194,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -1370,7 +1370,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -1533,7 +1533,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -1696,7 +1696,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -1859,7 +1859,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -1917,7 +1917,7 @@
         "type": "graph",
         "id": 17,
         "title": "Page Load Time (ms)",
-        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. Full page load time per tracked URL, as timed by the browser (navigation start to load complete) -- includes network transit and rendering, not just server response.",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; Full page load time per tracked URL, as timed by the browser (navigation start to load complete) -- includes network transit and rendering, not just server response.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
@@ -2035,7 +2035,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -2080,7 +2080,7 @@
         "type": "graph",
         "id": 18,
         "title": "Page Hits (per interval)",
-        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. Real-browser page views per tracked URL per interval -- a direct count of actual RUM-instrumented page loads, distinct from the PHP Probe's server-side request count.",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; Real-browser page views per tracked URL per interval -- a direct count of actual RUM-instrumented page loads, distinct from the PHP Probe's server-side request count.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
@@ -2198,7 +2198,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -2243,7 +2243,7 @@
         "type": "graph",
         "id": 19,
         "title": "Resource Time To First Byte (ms)",
-        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; the traffic-generator's plain HTTP requests never populate this. Time-to-first-byte for individual page sub-resources (CSS, images, third-party scripts) as measured by the browser's own Resource Timing API -- the closest real \"time to first response\" signal the Browser Agent reports; it's per-resource, not per-page.",
+        "description": "Source: Browser Agent (the BA JavaScript snippet), executed inside a real visitor's browser. Client-perceived timing -- includes network transit and browser rendering, not just server processing. Requires an actual browser running the snippet; Time-to-first-byte for individual page sub-resources (CSS, images, third-party scripts) as measured by the browser's own Resource Timing API -- the closest real \"time to first response\" signal the Browser Agent reports; it's per-resource, not per-page.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
@@ -2361,7 +2361,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -2537,7 +2537,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -2700,7 +2700,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -2863,7 +2863,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -3026,7 +3026,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
@@ -3295,7 +3295,7 @@
           "current": true,
           "max": true,
           "min": false,
-          "rightSide": true,
+          "rightSide": false,
           "show": true,
           "total": false,
           "values": true
