@@ -20,16 +20,8 @@
 # to tell them apart. Split into two independent AXA applications, one per
 # platform, each with its own snippet and its own .config variable:
 #
-#   docker -> AXA application "BPA Demo AXA"        -> APMIA_BROWSER_SNIPPET_DOCKER
+#   docker -> AXA application "BPA Demo AXA Docker"        -> APMIA_BROWSER_SNIPPET_DOCKER
 #   k8s    -> AXA application "BPA Demo AXA K8s"     -> APMIA_BROWSER_SNIPPET_K8S
-#
-# The "docker" name intentionally keeps the original, pre-split name
-# ("BPA Demo AXA", not "BPA Demo AXA Docker") rather than being renamed to
-# match the new convention -- `axa` has no rename/update-application
-# command (confirmed via `dx-do help axa`), so the already-existing
-# application from before this split couldn't be renamed even if a
-# "Docker"-suffixed name were preferred; only a brand new one could be
-# created with the new naming, which is what happened for "k8s".
 #
 # compose.sh now exports APMIA_BROWSER_SNIPPET from
 # APMIA_BROWSER_SNIPPET_DOCKER only; deploy.sh's generate_values() now
@@ -116,7 +108,7 @@
 #   Persists each platform's application key to
 #   dxo2-scripts/.state/bpa-demo-axa-app-<docker|k8s>.env (git-ignored) so
 #   check/delete can find it again. If lost, `axa list-applications` finds
-#   it by name ("BPA Demo AXA" / "BPA Demo AXA K8s") regardless.
+#   it by name ("BPA Demo AXA Docker" / "BPA Demo AXA K8s") regardless.
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -406,7 +398,7 @@ shift
 
 case "${PLATFORM}" in
     docker)
-        readonly APP_NAME="BPA Demo AXA"
+        readonly APP_NAME="BPA Demo AXA Docker"
         readonly CONFIG_VAR="APMIA_BROWSER_SNIPPET_DOCKER"
         ;;
     k8s)
