@@ -89,7 +89,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Alerts\\|BPA-Demo:Infra Agent \\- .*"
+                    "pattern": "Alerts\\|bpa-demo-${deployment:regex}:Infra Agent \\- .*"
                   }
                 ],
                 "isNot": false,
@@ -271,7 +271,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Alerts\\|BPA-Demo:(Trouble User \\- High Response Time|PHP Probe \\- .*)"
+                    "pattern": "Alerts\\|bpa-demo-${deployment:regex}:(Trouble User \\- High Response Time|PHP Probe \\- .*)"
                   }
                 ],
                 "isNot": false,
@@ -453,7 +453,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Alerts\\|BPA-Demo:Browser RUM \\- .*"
+                    "pattern": "Alerts\\|bpa-demo-${deployment:regex}:Browser RUM \\- .*"
                   }
                 ],
                 "isNot": false,
@@ -2907,8 +2907,8 @@
       {
         "type": "graph",
         "id": 24,
-        "title": "Errors Per Interval",
-        "description": "Source: BPA WebServer Plugin, running inside our own Apache server (mod_caplugin). Server-side, per-business-transaction timing as seen at the web server tier -- distinct from the Browser Agent's client-side view of the same requests. Count of error responses per business transaction per interval, as seen at the web server tier.",
+        "title": "Response 200 Status Code Per Interval",
+        "description": "Source: BPA WebServer Plugin, running inside our own Apache server (mod_caplugin). Server-side, per-business-transaction timing as seen at the web server tier -- distinct from the Browser Agent's client-side view of the same requests. Count of 200 code responses per business transaction per interval, as seen at the web server tier.",
         "datasource": "AIOps_Metrics",
         "gridPos": {
           "h": 8,
@@ -2948,7 +2948,7 @@
                     "isNot": false,
                     "logicalOperator": "AND",
                     "op": "REGEX",
-                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Errors Per Interval$"
+                    "pattern": "Business Segment\\|\\[bpa-demo-${deployment:regex}\\][^|]*\\|[^|]+:Response Status Code Per Interval - 200$"
                   }
                 ],
                 "isNot": false,
