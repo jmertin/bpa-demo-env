@@ -72,9 +72,9 @@
 # landed in the console. Split into two independent Services, one per
 # platform, each with a literal (not wildcarded) identity pattern:
 #
-#   docker -> Service "BPA-Demo"        -- unchanged name, repointed to a
+#   docker -> Service "bpa-demo-docker"        -- unchanged name, repointed to a
 #                                           docker-only literal pattern
-#   k8s    -> Service "BPA-Demo K8s"    -- new
+#   k8s    -> Service "bpa-demo-k8s"    -- new
 #
 # Each pattern still tolerates an optional `%N` disambiguation suffix
 # (`bpa-demo-docker(%\d+)?`) in case DX O2 ever needs to disambiguate a
@@ -270,11 +270,11 @@ shift
 case "${PLATFORM}" in
     docker)
         readonly IDENTITY="bpa-demo-docker"
-        readonly SERVICE_NAME="BPA-Demo"
+        readonly SERVICE_NAME="bpa-demo-docker"
         ;;
     k8s)
         readonly IDENTITY="bpa-demo-k8s"
-        readonly SERVICE_NAME="BPA-Demo K8s"
+        readonly SERVICE_NAME="bpa-demo-k8s"
         ;;
 esac
 readonly APP_NAME_PATTERN="^${IDENTITY}(%\\d+)?\$"
