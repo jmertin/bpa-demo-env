@@ -173,9 +173,9 @@ readonly SLI_KEYS=(response-time error-rate page-load)
 # page-load has no per-platform identity today (see this script's header)
 # and carries no __APP_ID__ placeholder.
 declare -A SLI_GROUP_NAME_TEMPLATE=(
-    [response-time]="BPA-Demo Frontend Response Time__NAME_SUFFIX__"
-    [error-rate]="BPA-Demo Frontend Error Rate__NAME_SUFFIX__"
-    [page-load]="BPA-Demo Client-Side Page Load Time__NAME_SUFFIX__"
+    [response-time]="bpa-demo-__NAME_SUFFIX__ Frontend Response Time"
+    [error-rate]="bpa-demo-__NAME_SUFFIX__ Frontend Error Rate"
+    [page-load]="bpa-demo-__NAME_SUFFIX__ Client-Side Page Load Time"
 )
 
 declare -rA SLI_TYPE=(
@@ -206,7 +206,8 @@ declare -A SOURCE_PATTERN_TEMPLATE=(
 declare -A ATTRIBUTE_PATTERN_TEMPLATE=(
     [response-time]='Frontends\|Apps\|__APP_ID__\|URLs\|[^|]+:Average Response Time \(ms\)'
     [error-rate]='Frontends\|Apps\|__APP_ID__\|URLs\|[^|]+:Errors Per Interval'
-    [page-load]='Business Segment\|BPA Demo\|[^|]+:Average Page Load Time \(ms\)'
+    [page-load]='Business Segment\|BPA Demo AXA __NAME_SUFFIX__\|/admin:Average Page Load Time \(ms\)'
+    #[metric_name]='metric_name:Average Page Load Time \(ms\)'
 )
 
 declare -rA SLO_OBJECTIVE_VALUE=(
@@ -355,6 +356,7 @@ create_one() {
         info "'${name}' already exists (sliGroupId ${group_id}) -- re-applying its group filter (idempotent)."
         run_dx_do sli set-group-filter \
             "sliGroupId=${group_id}" \
+    _pattern="${_pattern//__NAME_SUFFIX__/${NAME_SUFFIX}}"
             "groupFilter.sourceName.${SOURCE_CONDITION[${key}]}=${SOURCE_PATTERN[${key}]}" \
             "groupFilter.attributeName.regex=${ATTRIBUTE_PATTERN[${key}]}" \
             dry-run=false
@@ -549,13 +551,13 @@ shift
 case "${PLATFORM}" in
     docker)
         readonly APP_ID="bpa-demo-docker"
-        readonly NAME_SUFFIX=""
-        readonly SERVICE_NAME="BPA-Demo"
+        readonly NAME_SUFFIX="docker"
+        readonly SERVICE_NAME="bpa-demo-docker"
         ;;
     k8s)
         readonly APP_ID="bpa-demo-k8s"
-        readonly NAME_SUFFIX=" K8s"
-        readonly SERVICE_NAME="BPA-Demo K8s"
+        readonly NAME_SUFFIX="k8s"
+        readonly SERVICE_NAME="bpa-demo-k8s"
         ;;
 esac
 readonly STATE_FILE="${STATE_DIR}/bpa-demo-sli-${PLATFORM}.env"
@@ -574,6 +576,7 @@ for _key in "${SLI_KEYS[@]}"; do
 
     _pattern="${ATTRIBUTE_PATTERN_TEMPLATE[${_key}]}"
     _pattern="${_pattern//__APP_ID__/${APP_ID}}"
+    _pattern="${_pattern//__NAME_SUFFIX__/${NAME_SUFFIX}}"
     ATTRIBUTE_PATTERN[${_key}]="${_pattern}"
 done
 unset _key _name _pattern
