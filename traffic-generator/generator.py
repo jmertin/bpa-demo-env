@@ -384,7 +384,7 @@ def run_session(p, kind: str, ident: str) -> None:
         )
     finally:
         session.context.close()
-
+        session.browser.close()  # <--- Cleanly disconnect & terminate Chromium process
 
 def _build_cycle_tasks() -> list[tuple[str, str]]:
     auth_tasks = [("auth", username) for username in USERS]
