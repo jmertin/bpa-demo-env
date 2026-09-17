@@ -303,8 +303,8 @@ declare -rA ALERT_ATTR_PATTERN_TEMPLATE=(
     [php-concurrency]='Frontends\|Apps\|__APP_ID__:Concurrent Invocations$'
     [php-db-resp-time]='Backends\|phpapp on __DB_HOST__-3306 \(MySQL DB\):Average Response Time \(ms\)$'
     [php-db-query-storm]='Backends\|phpapp on __DB_HOST__-3306 \(MySQL DB\):Responses Per Interval$'
-    [browser-page-load]='Business Segment\|BPA Demo\|.*:Average Page Load Time \(ms\)$'
-    [browser-page-hits]='Business Segment\|BPA Demo\|.*:Page Hits Per Interval$'
+    [browser-page-load]='Business Segment\|BPA Demo __AXACFG__\|.*:Average Page Load Time \(ms\)$'
+    [browser-page-hits]='Business Segment\|BPA Demo __AXACFG__\|.*:Page Hits Per Interval$'
 )
 
 declare -rA ALERT_OPERATOR=(
@@ -730,8 +730,12 @@ if [[ -z "${1:-}" ]]; then
 fi
 
 case "${1}" in
-    docker) readonly PLATFORM="docker" ;;
-    k8s)    readonly PLATFORM="k8s" ;;
+    docker) readonly PLATFORM="docker"
+	    readonly AXACFG="AXA docker"
+	    ;;
+    k8s)    readonly PLATFORM="k8s"
+	    readonly AXACFG="AXA k8s"
+	    ;;
     *)
         usage
         fatal "Invalid first argument '${1}' -- must be 'docker' or 'k8s'."
@@ -758,6 +762,7 @@ for _key in "${ALERT_KEYS[@]}"; do
     _pattern="${ALERT_ATTR_PATTERN_TEMPLATE[${_key}]}"
     _pattern="${_pattern//__APP_ID__/${APP_ID}}"
     _pattern="${_pattern//__DB_HOST__/${DB_HOST}}"
+    _pattern="${_pattern//__AXACFG__/${AXACFG}}"
     ALERT_ATTR_PATTERN[${_key}]="${_pattern}"
 done
 for _agent in infra php browser; do

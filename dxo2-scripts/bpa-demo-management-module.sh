@@ -128,7 +128,7 @@ set -euo pipefail
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly ROOT_DIR="${SCRIPT_DIR}/.."
 readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
-readonly METRIC_GROUPING_NAME="BPA-Demo Frontend Response Time"
+readonly METRIC_GROUPING_NAME="BPA Demo Frontend Response Time"
 readonly ALERT_NAME="Trouble User - High Response Time"
 readonly WARNING_THRESHOLD_MS="100"
 readonly ERROR_THRESHOLD_MS="250"
@@ -395,11 +395,11 @@ shift
 case "${PLATFORM}" in
     docker)
         readonly IDENTITY="bpa-demo-docker"
-        readonly MODULE_NAME="BPA-Demo"
+        readonly MODULE_NAME="bpa-demo-docker"
         ;;
     k8s)
         readonly IDENTITY="bpa-demo-k8s"
-        readonly MODULE_NAME="BPA-Demo K8s"
+        readonly MODULE_NAME="bpa-demo-k8s"
         ;;
 esac
 readonly ATTRIBUTE_NAME_PATTERN="Frontends\\|Apps\\|${IDENTITY}\\|URLs\\|.*:Average Response Time \\(ms\\)"
