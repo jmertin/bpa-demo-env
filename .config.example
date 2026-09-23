@@ -130,6 +130,8 @@ DEPLOYMENT_POSTFIX=""
 #   extension cannot authenticate or gather metrics without this login.
 #
 # Set APMIA_EM_HOST to a non-empty value to enable the DX O2 monitoring stack.
+# Adapt the URL to your region. As this prototype runs in the EU, it connects
+# to an eu tenant!
 # Leave it empty to deploy without APM; all containers start cleanly without
 # the agent volume mounted.
 APMIA_DEPLOY="true"
