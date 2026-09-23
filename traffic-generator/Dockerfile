@@ -8,7 +8,7 @@ USER root
 # the image during the apt-get step If your company has a transparent
 # application level firewall, copy the firewall's CA Certificate here
 # and uncomment the below line
-COPY cloud_services_root_CA.cer /usr/local/share/ca-certificates/corporate-ca.crt
+# COPY cloud_services_root_CA.cer /usr/local/share/ca-certificates/corporate-ca.crt
 
 # Install system dependencies and register the new CA certificate
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,11 +31,11 @@ ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-#RUN pip install --no-cache-dir playwright
+RUN pip install --no-cache-dir playwright
 # Replace the index URL with your company's Artifactory / Nexus PyPI mirror
-RUN pip install --no-cache-dir \
-    --index-url https://packages.vcfd.broadcom.net/artifactory/api/pypi/pypi-remote/simple \
-    playwright
+#RUN pip install --no-cache-dir \
+#    --index-url https://packages.vcfd.broadcom.net/artifactory/api/pypi/pypi-remote/simple \
+#    playwright
 
 
 # Copy application files
