@@ -133,8 +133,8 @@ DEPLOYMENT_POSTFIX=""
 # Leave it empty to deploy without APM; all containers start cleanly without
 # the agent volume mounted.
 APMIA_DEPLOY="true"
-APMIA_EM_HOST=""
-APMIA_EM_PORT="8443"
+APMIA_EM_HOST="wss://apmgw.dxi-eu1.saas.broadcom.com"
+APMIA_EM_PORT="443"
 APMIA_AGENT_NAME=""
 APMIA_APP_NAME=""
 APMIA_HOST_NAME=""
