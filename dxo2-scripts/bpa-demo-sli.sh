@@ -110,6 +110,12 @@
 #
 # Usage:
 #   dxo2-scripts/bpa-demo-sli.sh <docker|k8s> create   - create that
+declare -rA ATTRIBUTE_CONDITION=(
+    [response-time]=regex
+    [error-rate]=regex
+    [page-load]=equals
+)
+
 #                                            platform's 3 SLI groups (with
 #                                            their SLO and alert). Safe to
 #                                            re-run: for an already-created
@@ -198,16 +204,15 @@ declare -rA SOURCE_CONDITION=(
 
 # No trailing $ -- see the "Landmine" header comment above.
 declare -A SOURCE_PATTERN_TEMPLATE=(
-    [response-time]='SuperDomain\|__APP_ID__\|php-probes\|__APP_ID__(%\d+)?(\(/usr/sbin/apache2\))?'
-    [error-rate]='SuperDomain\|__APP_ID__\|php-probes\|__APP_ID__(%\d+)?(\(/usr/sbin/apache2\))?'
-    [page-load]='SuperDomain|Experience Collector Host|DxC Agent|Logstash-APM-Plugin'
+    [response-time]='SuperDomain\|__APP_ID__\|php-probes\|__APP_ID__(%\d+)?'
+    [error-rate]='SuperDomain\|__APP_ID__\|php-probes\|__APP_ID__(%\d+)?'
+    [page-load]='SuperDomain|Custom Metric Host (Virtual)|Custom Metric Process (Virtual)|Custom Business Application Agent (Virtual)'
 )
 
 declare -A ATTRIBUTE_PATTERN_TEMPLATE=(
     [response-time]='Frontends\|Apps\|__APP_ID__\|URLs\|[^|]+:Average Response Time \(ms\)'
     [error-rate]='Frontends\|Apps\|__APP_ID__\|URLs\|[^|]+:Errors Per Interval'
-    [page-load]='Business Segment\|BPA Demo AXA __NAME_SUFFIX__\|/admin:Average Page Load Time \(ms\)'
-    #[metric_name]='metric_name:Average Page Load Time \(ms\)'
+    [page-load]='By Business Service|BPA Demo AXA __NAME_SUFFIX__|/shop|Browser:Average Page Load Time (ms)'
 )
 
 declare -rA SLO_OBJECTIVE_VALUE=(
@@ -356,9 +361,8 @@ create_one() {
         info "'${name}' already exists (sliGroupId ${group_id}) -- re-applying its group filter (idempotent)."
         run_dx_do sli set-group-filter \
             "sliGroupId=${group_id}" \
-    _pattern="${_pattern//__NAME_SUFFIX__/${NAME_SUFFIX}}"
             "groupFilter.sourceName.${SOURCE_CONDITION[${key}]}=${SOURCE_PATTERN[${key}]}" \
-            "groupFilter.attributeName.regex=${ATTRIBUTE_PATTERN[${key}]}" \
+            "groupFilter.attributeName.${ATTRIBUTE_CONDITION[${key}]}=${ATTRIBUTE_PATTERN[${key}]}" \
             dry-run=false
 
         local heal_check has_slo has_alert
@@ -390,7 +394,7 @@ create_one() {
         "sliType=${SLI_TYPE[${key}]}" \
         "sliDescription=${SLI_DESCRIPTION[${key}]}" \
         "groupFilter.sourceName.${SOURCE_CONDITION[${key}]}=${SOURCE_PATTERN[${key}]}" \
-        "groupFilter.attributeName.regex=${ATTRIBUTE_PATTERN[${key}]}" \
+        "groupFilter.attributeName.${ATTRIBUTE_CONDITION[${key}]}=${ATTRIBUTE_PATTERN[${key}]}" \
         dry-run=false 2>&1 | grep -v -e '^ℹ' -e '^☒' -e '^…' -e '^☐' -e 'Authorization')
     echo "${create_json}"
     group_id=$(printf '%s' "${create_json}" | grep -o '"groupId": *[0-9]*' | head -1 | grep -o '[0-9]*$')
