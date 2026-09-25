@@ -59,11 +59,11 @@
 # Split into two independent Universes, one per platform, each scoped to
 # that platform's own Service:
 #
-#   docker -> Universe "BPA Demo service universe"     -- unchanged
+#   docker -> Universe "BPA Demo docker srv"     -- unchanged
 #                                                           name, scoped
 #                                                           to Service
 #                                                           "BPA-Demo"
-#   k8s    -> Universe "BPA Demo K8s service universe" -- new, scoped to
+#   k8s    -> Universe "BPA Demo k8s srv" -- new, scoped to
 #                                                           Service
 #                                                           "BPA-Demo K8s"
 #
@@ -357,12 +357,12 @@ shift
 
 case "${PLATFORM}" in
     docker)
-        readonly UNIVERSE_LABEL="BPA Demo service universe"
-        readonly SERVICE_NAME="BPA-Demo"
+        readonly UNIVERSE_LABEL="BPA Demo docker srv"
+        readonly SERVICE_NAME="bpa-demo-docker"
         ;;
     k8s)
-        readonly UNIVERSE_LABEL="BPA Demo K8s service universe"
-        readonly SERVICE_NAME="BPA-Demo K8s"
+        readonly UNIVERSE_LABEL="BPA Demo k8s srv"
+        readonly SERVICE_NAME="bpa-demo-k8s"
         ;;
 esac
 readonly STATE_FILE="${STATE_DIR}/bpa-demo-services-universe-${PLATFORM}.env"
