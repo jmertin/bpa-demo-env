@@ -22,7 +22,9 @@ BTL_SCRIPT="${BTL_HOME}/bin/BTListener.sh"
 
 # Use the JRE bundled in the PHP_apmia archive.
 # The BTListener.sh start script checks JAVA_HOME; it must be set before launch.
-export JAVA_HOME="${APMIA_HOME}/jre"
+# APMIA java won't fit the version requirements of btlistener, so we have to deploy
+# out own java.
+export JAVA_HOME=$(dirname $(dirname $(readlink -f /usr/bin/java)))
 export PATH="${JAVA_HOME}/bin:${PATH}"
 
 # == Agent identity (APMENV_* - native APMIA Docker mechanism) =================

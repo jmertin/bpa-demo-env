@@ -69,7 +69,8 @@ RUN apt-get update && \
         less \
         net-tools \
         procps \
-        mariadb-client && \
+        mariadb-client \
+	openjdk-25-jre-headless && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
