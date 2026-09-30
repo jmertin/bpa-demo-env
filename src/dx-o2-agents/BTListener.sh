@@ -14,7 +14,7 @@ collect_javaenv_vars() {
     # cut: drops the key name and retains only the value (everything after the first '=')
     # tr: converts newlines into spaces to combine all values into a single string
     # sed: strips the trailing space at the end of the string
-    combined_content=$(env | grep '^JAVAENV_' | cut -d= -f2- | tr '\n' ' ' | sed 's/ *$//')
+    combined_content=$(env | grep '^APMENV_BTL_JVM' | cut -d= -f2- | tr '\n' ' ' | sed 's/ *$//')
     
     echo "$combined_content"
 }
