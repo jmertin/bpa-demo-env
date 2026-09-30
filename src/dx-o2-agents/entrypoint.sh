@@ -346,8 +346,8 @@ else
     # available in the Business_Transaction_Listener.zip file. Enter
     # the string to prepend to all the reporting applications of the
     # BT Listener to segregate the Webservers.
-    sed -i "s|^btlistener\.app\.type\.prefix=.*|btlistener.app.type.prefix=${APMENV_INTROSCOPE_AGENT_APPLICATION_NAME}|" /opt/btlistener/conf/custom/application.properties
-
+    sed -i "s|^btlistener\.app\.type\.prefix=.*|btlistener.app.type.prefix=${APMENV_INTROSCOPE_AGENT_APPLICATION_NAME}\n|" /opt/btlistener/conf/custom/application.properties
+    sed -i '/^btListener\.input\.channel\.port=8000$/a btListener.input.channel.hostname=0.0.0.0' /opt/btlistener/conf/custom/application.properties
     # == Redirect BTL logs to the shared APMIA volume ==========================
     # /opt/btlistener/logs/ is local to this container; the apache-php container
     # mounts only /opt/apmia (the shared emptyDir/named volume) and cannot read
