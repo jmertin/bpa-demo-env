@@ -253,7 +253,8 @@ RUN set -euo pipefail && \
 RUN rm -rf /tmp/installers
 
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod 0755 /entrypoint.sh
+COPY BTlistener.sh /opt/btlistener/bin/BTListener.sh
+RUN chmod 0755 /entrypoint.sh /opt/btlistener/bin/BTListener.sh
 
 # Declare /opt/apmia as a shareable volume.  The dxo2-init initContainer copies
 # this tree (including probe .so, BPA .so, and the pre-configured profile) to a

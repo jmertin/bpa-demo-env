@@ -37,6 +37,10 @@ export APMENV_INTROSCOPE_AGENT_APPLICATION_NAME="${APMENV_INTROSCOPE_AGENT_APPLI
 export APMENV_INTROSCOPE_AGENT_HOSTNAME="${APMENV_INTROSCOPE_AGENT_HOSTNAME:-${APMIA_HOST_NAME:-bpa-demo-host}}"
 export APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME="${APMENV_INTROSCOPE_AGENT_CUSTOMPROCESSNAME:-${APMIA_PROCESS_NAME:-bpa-demo}}"
 
+# As the BTL requires a new JAVA version, and new JAVA versions absolutely want to go to IPv6 which
+# does not work well in Docker, we tell it to not use docker
+export APMENV_BTL_JVM_ARGS="${APMENV_BTL_JVM_ARGS}"
+
 # == Deploy mode ===============================================================
 # APMIA_DEPLOY=false creates a passive volume: the named volume (apmia_data in
 # Compose, apmia-share emptyDir in Kubernetes) is seeded with the agent tree
