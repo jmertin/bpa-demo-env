@@ -106,6 +106,6 @@ case "$1" in
         stop
         ;;
   *)
-        echo $"Usage: $0 {start|stop|encrypt}"
+        echo $"Usage: $0 {start|stop|encrypt|status}"
         exit 1
 esac
